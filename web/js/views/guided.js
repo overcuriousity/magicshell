@@ -231,7 +231,7 @@ export function createGuidedView() {
       panel ??= createWhyPanel({
         client: ctx.client,
         entry,
-        save: model.saveWhy,
+        save: (why) => model.saveWhy(entry, why),
         onBack: model.closeWhy,
         onAuth: () => ctx.navigate(HREF.signIn),
       });

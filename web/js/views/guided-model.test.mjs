@@ -390,7 +390,7 @@ test('saveWhy saves the entry again with the part', async () => {
   model.setQuestion('Is it raining?');
   await model.ask();
   const why = { words: 2, done: 1, rows: [] };
-  await model.saveWhy(why);
+  await model.saveWhy(model.state.result.entry, why);
   assert.equal(store.entries.length, 2);
   assert.equal(store.entries[1].id, store.entries[0].id);
   assert.deepEqual(store.entries[1].why, why);
@@ -403,7 +403,7 @@ test('saveWhy does not notify listeners', async () => {
   await model.ask();
   let heard = 0;
   model.subscribe(() => { heard += 1; });
-  await model.saveWhy({ words: 1, done: 1 });
+  await model.saveWhy(model.state.result.entry, { words: 1, done: 1 });
   assert.equal(heard, 0);
 });
 
@@ -432,4 +432,47 @@ test('asking another or starting over closes Why?', async () => {
   model.startOver();
   assert.equal(model.state.whyOpen, false);
   assert.equal(model.state.result, null);
+});
+
+test('a late saveWhy after asking another lands on its own entry', async () => {
+  const { model, store } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  const first = model.state.result.entry;
+  model.askAnother();
+  model.setQuestion('Is it cold?');
+  await model.ask();
+  const second = model.state.result.entry;
+  const why = { words: 2, done: 1 };
+  await model.saveWhy(first, why);
+  assert.equal(store.entries.at(-1).id, first.id);
+  assert.deepEqual(store.entries.at(-1).why, why);
+  assert.equal(second.why, undefined);
+  model.askAnother();
+  await model.saveWhy(first, why);
+});
+
+test('a slow save does not tag a newer result with its entry', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const saved = [];
+  let slow = true;
+  const store = {
+    async saveEntry(e) {
+      if (slow) { slow = false; await gate; }
+      saved.push(e.id);
+    },
+  };
+  const { model } = make({ store });
+  model.setQuestion('Is it raining?');
+  const first = model.ask();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(model.state.step, 'result');
+  model.askAnother();
+  model.setQuestion('Is it cold?');
+  await model.ask();
+  const second = model.state.result.entry;
+  release();
+  await first;
+  assert.equal(model.state.result.entry, second);
 });

@@ -164,6 +164,7 @@ export function createGuidedModel({
 
     ask() {
       const run = model.toRun();
+      let mine = null;
       return runner.send(run, {
         start() {
           state.busy = true;
@@ -172,7 +173,8 @@ export function createGuidedModel({
         },
         done(result) {
           state.busy = false;
-          state.result = { question: run.questions[0], answer: result.answers[KEY], entry: null };
+          mine = { question: run.questions[0], answer: result.answers[KEY], entry: null };
+          state.result = mine;
           state.step = 'result';
           changed();
         },
@@ -182,7 +184,9 @@ export function createGuidedModel({
           changed();
         },
         saved(entry) {
-          if (state.result) state.result.entry = entry;
+          // Only for the result this ask produced; a slow save must not tag a newer result.
+          if (state.result !== mine) return;
+          mine.entry = entry;
           changed();
         },
       });
@@ -198,8 +202,9 @@ export function createGuidedModel({
       state.whyOpen = false;
       changed();
     },
-    saveWhy(why) {
-      const entry = state.result.entry;
+    // The entry is the one the panel was opened for, so a late save from a closed panel still
+    // lands on its own entry, never on a newer one.
+    saveWhy(entry, why) {
       entry.why = why;
       return store.saveEntry(entry);
     },
