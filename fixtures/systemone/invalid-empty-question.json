@@ -1,0 +1,13 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "noul",
+        "text": "   "
+      }
+    ]
+  },
+  "expected_error": "Type a question first."
+}

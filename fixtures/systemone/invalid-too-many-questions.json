@@ -1,0 +1,53 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q2",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q3",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q4",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q5",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q6",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q7",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q8",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "q9",
+        "type": "noul",
+        "text": "Is it so?"
+      }
+    ]
+  },
+  "expected_error": "Use at most 8 questions."
+}

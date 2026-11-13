@@ -1,0 +1,20 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "choice",
+        "text": "",
+        "options": [
+          {
+            "id": "o1",
+            "name": "opt1",
+            "description": "d"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Type a question first."
+}

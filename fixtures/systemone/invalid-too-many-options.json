@@ -1,0 +1,60 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "choice",
+        "text": "Which one?",
+        "options": [
+          {
+            "id": "o1",
+            "name": "opt1",
+            "description": "d"
+          },
+          {
+            "id": "o2",
+            "name": "opt2",
+            "description": "d"
+          },
+          {
+            "id": "o3",
+            "name": "opt3",
+            "description": "d"
+          },
+          {
+            "id": "o4",
+            "name": "opt4",
+            "description": "d"
+          },
+          {
+            "id": "o5",
+            "name": "opt5",
+            "description": "d"
+          },
+          {
+            "id": "o6",
+            "name": "opt6",
+            "description": "d"
+          },
+          {
+            "id": "o7",
+            "name": "opt7",
+            "description": "d"
+          },
+          {
+            "id": "o8",
+            "name": "opt8",
+            "description": "d"
+          },
+          {
+            "id": "o9",
+            "name": "opt9",
+            "description": "d"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Use at most 8 options."
+}

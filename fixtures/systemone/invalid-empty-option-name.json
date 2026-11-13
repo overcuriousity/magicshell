@@ -1,0 +1,30 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "choice",
+        "text": "Which one?",
+        "options": [
+          {
+            "id": "o1",
+            "name": "opt1",
+            "description": "d"
+          },
+          {
+            "id": "o2",
+            "name": "opt2",
+            "description": "d"
+          },
+          {
+            "id": "o9",
+            "name": "  ",
+            "description": "d"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Name every option."
+}

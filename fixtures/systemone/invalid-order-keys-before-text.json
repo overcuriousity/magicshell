@@ -1,0 +1,18 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "same",
+        "type": "noul",
+        "text": ""
+      },
+      {
+        "key": "same",
+        "type": "noul",
+        "text": "Is it so?"
+      }
+    ]
+  },
+  "expected_error": "Name each question differently."
+}

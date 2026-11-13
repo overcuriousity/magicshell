@@ -1,0 +1,13 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "Bad Key",
+        "type": "noul",
+        "text": "Is it so?"
+      }
+    ]
+  },
+  "expected_error": "Name each question with 1 to 30 lower-case letters, digits or _."
+}

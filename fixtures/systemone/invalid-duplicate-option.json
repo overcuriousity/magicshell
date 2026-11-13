@@ -1,0 +1,25 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "choice",
+        "text": "Which one?",
+        "options": [
+          {
+            "id": "o1",
+            "name": "Yes",
+            "description": "a"
+          },
+          {
+            "id": "o2",
+            "name": "Yes",
+            "description": "b"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Use each option only once: \"Yes\"."
+}

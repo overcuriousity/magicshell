@@ -1,0 +1,19 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "score",
+        "text": "How much?",
+        "levels": [
+          {
+            "id": "l0",
+            "text": "level 0"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Add at least 2 levels."
+}

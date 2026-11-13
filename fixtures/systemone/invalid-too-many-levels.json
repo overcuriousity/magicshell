@@ -1,0 +1,59 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "score",
+        "text": "How much?",
+        "levels": [
+          {
+            "id": "l0",
+            "text": "level 0"
+          },
+          {
+            "id": "l1",
+            "text": "level 1"
+          },
+          {
+            "id": "l2",
+            "text": "level 2"
+          },
+          {
+            "id": "l3",
+            "text": "level 3"
+          },
+          {
+            "id": "l4",
+            "text": "level 4"
+          },
+          {
+            "id": "l5",
+            "text": "level 5"
+          },
+          {
+            "id": "l6",
+            "text": "level 6"
+          },
+          {
+            "id": "l7",
+            "text": "level 7"
+          },
+          {
+            "id": "l8",
+            "text": "level 8"
+          },
+          {
+            "id": "l9",
+            "text": "level 9"
+          },
+          {
+            "id": "l10",
+            "text": "level 10"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Use at most 10 levels."
+}

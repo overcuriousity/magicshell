@@ -1,0 +1,27 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "q1",
+        "type": "score",
+        "text": "How much?",
+        "levels": [
+          {
+            "id": "l0",
+            "text": "level 0"
+          },
+          {
+            "id": "l1",
+            "text": "level 1"
+          },
+          {
+            "id": "l9",
+            "text": " "
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Describe every level."
+}

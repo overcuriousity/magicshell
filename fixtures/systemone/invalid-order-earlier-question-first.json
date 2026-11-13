@@ -1,0 +1,29 @@
+{
+  "run": {
+    "state": "x",
+    "questions": [
+      {
+        "key": "a",
+        "type": "noul",
+        "text": "Is it so?"
+      },
+      {
+        "key": "b",
+        "type": "noul",
+        "text": ""
+      },
+      {
+        "key": "c",
+        "type": "score",
+        "text": "How much?",
+        "levels": [
+          {
+            "id": "l0",
+            "text": "level 0"
+          }
+        ]
+      }
+    ]
+  },
+  "expected_error": "Type a question first."
+}
