@@ -130,3 +130,15 @@ async fn a_foreign_origin_may_not_post() {
     assert_eq!(res.status(), 403);
     assert!(fake.requests.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn an_oversized_request_is_refused_with_one_sentence() {
+    let fake = fake_upstream(vec![fixture_reply("response-triage")]).await;
+    let app = spawn_against(support::OPEN, &fake).await;
+    let mut run = triage_run();
+    run["questions"] = json!("x".repeat(65 * 1024));
+    let res = post_run(&app, &run).await;
+    assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
+    assert!(fake.requests.lock().unwrap().is_empty());
+}

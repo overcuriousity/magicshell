@@ -17,6 +17,12 @@ pub enum AppError {
     /// The model endpoint did not answer in time (504).
     #[error("The model took too long to answer. Try again.")]
     UpstreamTimeout,
+    /// A sign-in that matched no user and password (401).
+    #[error("Wrong username or password.")]
+    WrongLogin,
+    /// A body over the size limit (413).
+    #[error("This request is too large. Shorten it and try again.")]
+    TooLarge,
     /// One client asked too often (429).
     #[error("Too many questions. Wait a minute and try again.")]
     RateLimited,
@@ -29,6 +35,8 @@ impl AppError {
             Self::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::UpstreamTimeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::WrongLogin => StatusCode::UNAUTHORIZED,
+            Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }

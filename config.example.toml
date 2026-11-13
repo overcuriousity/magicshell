@@ -18,8 +18,8 @@ model = "decision-model"
 # Bearer key for the endpoint; leave out if it needs none. "file:///run/secrets/key" reads it from a file.
 # Environment: MAGICSHELL__APP__API_KEY or MAGICSHELL__APP__API_KEY_FILE
 # api_key = "file:///run/secrets/magicshell-key"
-# SQLite file for accounts mode; leave out for open mode (no sign-in). Environment: MAGICSHELL__APP__DATABASE
-# database = "/var/lib/magicshell/magicshell.db"
+# SQLite file name inside the data directory for accounts mode; leave out for open mode (no sign-in). Add users with `magicshell user add NAME`. Environment: MAGICSHELL__APP__DATABASE
+# database = "magicshell.db"
 # Questions one client may ask per minute (burst is the same number). Environment: MAGICSHELL__APP__RUNS_PER_MINUTE
 runs_per_minute = 60
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS

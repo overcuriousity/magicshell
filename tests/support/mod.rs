@@ -10,12 +10,30 @@ use magicshell::kit::config::OcConfig;
 /// No configuration: open mode on loopback.
 pub const OPEN: &str = "[app]\nendpoint = \"{ENDPOINT}\"\nmodel = \"test-model\"\n";
 
+/// Accounts mode: a database in a temporary data directory.
+pub const ACCOUNTS: &str =
+    "data_dir = \"{DATA}\"\n[app]\nendpoint = \"{ENDPOINT}\"\nmodel = \"test-model\"\ndatabase = \"magicshell.db\"\n";
+
 /// An address nothing listens on, for tests that never reach the model.
 const NOWHERE: &str = "http://127.0.0.1:9/v1";
 
 pub struct TestApp {
     pub base: String,
     pub client: reqwest::Client,
+    /// The data directory; it lives as long as the app.
+    pub dir: tempfile::TempDir,
+    /// The accounts database; `None` in open mode.
+    pub pool: Option<sqlx::SqlitePool>,
+}
+
+/// The TOML for `ACCOUNTS` with the data directory and an unreachable endpoint filled in.
+pub fn accounts_toml(dir: &std::path::Path) -> String {
+    ACCOUNTS.replace("{DATA}", dir.to_str().unwrap()).replace("{ENDPOINT}", NOWHERE)
+}
+
+/// Starts the app on an existing data directory (for example one prepared with the `user` commands).
+pub async fn spawn_in(cfg_toml: &str, dir: tempfile::TempDir) -> TestApp {
+    start(cfg_toml, NOWHERE, dir).await
 }
 
 /// Starts the app on `127.0.0.1:0` with the given TOML; `bind` is replaced by the port the OS picked.
@@ -29,17 +47,62 @@ pub async fn spawn_against(cfg_toml: &str, fake: &FakeUpstream) -> TestApp {
 }
 
 async fn spawn_with(cfg_toml: &str, endpoint: &str) -> TestApp {
-    let cfg_toml = &cfg_toml.replace("{ENDPOINT}", endpoint);
+    start(cfg_toml, endpoint, tempfile::tempdir().unwrap()).await
+}
+
+async fn start(cfg_toml: &str, endpoint: &str, dir: tempfile::TempDir) -> TestApp {
+    let cfg_toml = &cfg_toml.replace("{ENDPOINT}", endpoint).replace("{DATA}", dir.path().to_str().unwrap());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let mut cfg: OcConfig = Figment::new().merge(Toml::string(cfg_toml)).extract().unwrap();
     cfg.bind = addr;
     let app_cfg: AppConfig = AppConfig::from_config(&cfg).unwrap();
-    let router = magicshell::app::build(&cfg, app_cfg, None).unwrap();
+    let pool = magicshell::app::open_pool(&cfg, &app_cfg).await.unwrap();
+    let router = magicshell::app::build(&cfg, app_cfg, pool.clone()).await.unwrap();
     tokio::spawn(async move {
         axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     });
-    TestApp { base: format!("http://{addr}"), client: reqwest::Client::new() }
+    TestApp { base: format!("http://{addr}"), client: reqwest::Client::new(), dir, pool }
+}
+
+/// Creates a user straight in the database, with a password.
+pub async fn add_user(app: &TestApp, name: &str, password: &str) {
+    let pool = app.pool.as_ref().unwrap();
+    magicshell::kit::identity::users::create(pool, name, Some(password), time::OffsetDateTime::now_utc())
+        .await
+        .unwrap();
+}
+
+/// `name=value` of the session cookie a response sets. The cookie is Secure, so over plain
+/// http the tests send it back by hand instead of trusting a cookie jar.
+pub fn cookie_of(res: &reqwest::Response) -> String {
+    let set = res.headers().get("set-cookie").expect("a Set-Cookie header").to_str().unwrap();
+    set.split(';').next().unwrap().to_owned()
+}
+
+pub async fn post_json(app: &TestApp, path: &str, body: &serde_json::Value, cookie: Option<&str>) -> reqwest::Response {
+    // A browser names its own origin on every post; the app refuses cookie posts that do not.
+    let mut req = app.client.post(format!("{}{path}", app.base)).header("origin", &app.base).json(body);
+    if let Some(c) = cookie {
+        req = req.header("cookie", c);
+    }
+    req.send().await.unwrap()
+}
+
+pub async fn get_with(app: &TestApp, path: &str, cookie: Option<&str>) -> reqwest::Response {
+    let mut req = app.client.get(format!("{}{path}", app.base));
+    if let Some(c) = cookie {
+        req = req.header("cookie", c);
+    }
+    req.send().await.unwrap()
+}
+
+/// Signs in and returns the session cookie.
+pub async fn sign_in(app: &TestApp, name: &str, password: &str) -> String {
+    let res =
+        post_json(app, "/api/auth/sign-in", &serde_json::json!({"username": name, "password": password}), None).await;
+    assert_eq!(res.status(), 204);
+    cookie_of(&res)
 }
 
 /// One canned answer of the fake model endpoint.
