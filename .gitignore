@@ -1,0 +1,4 @@
+/target
+# Agent working files are never committed.
+.superpowers/
+.claude/

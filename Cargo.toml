@@ -1,0 +1,57 @@
+[package]
+name = "magicshell"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/overcuriousity/magicshell"
+description = "Experiment with decision models over the System One format."
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[lib]
+name = "magicshell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "magicshell"
+path = "src/main.rs"
+
+[dependencies]
+argon2 = { version = "0.5", features = ["std"] }
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+ipnet = { version = "2", features = ["serde"] }
+rand = "0.9"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rpassword = "7"
+rust-embed = { version = "8", features = ["debug-embed", "include-exclude"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "time"] }
+thiserror = "2"
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tower-http = { version = "0.6", features = ["compression-gzip", "compression-br", "limit", "timeout", "trace", "sensitive-headers"] }
+tower-sessions = "0.15"
+tower-sessions-sqlx-store = { version = "0.16", features = ["sqlite"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+temp-env = "0.3"
+tower = { version = "0.5", features = ["util"] }
+
+# Every sign-in in the account tests hashes a password; argon2 unoptimised takes most of a second.
+[profile.dev.package.argon2]
+opt-level = 2
+[profile.dev.package.blake2]
+opt-level = 2

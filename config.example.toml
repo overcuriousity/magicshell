@@ -1,0 +1,13 @@
+# Every key is optional. Environment variables override it as MAGICSHELL__SECTION__KEY,
+# for example MAGICSHELL__BIND=127.0.0.1:9000.
+# A key ending in _FILE reads the value from a file: MAGICSHELL__APP__API_KEY_FILE=/run/secrets/key.
+
+# The https address users see. Required unless magicshell is reached via localhost.
+# public_url = "https://magicshell.example.org"
+
+bind = "127.0.0.1:8080"
+trusted_proxies = ["127.0.0.1/32", "::1/128"]
+# data_dir = "/var/lib/magicshell"
+
+# [app]
+# Settings that belong to magicshell.

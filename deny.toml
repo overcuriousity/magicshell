@@ -1,0 +1,43 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Every ignore needs a written reachability argument next to it.
+# Drop the RUSTSEC-2026-0459 ignore once sqlx allows libsqlite3-sys >= 0.39 (sqlx-sqlite 0.9.0 pins <0.38).
+ignore = [
+  { id = "RUSTSEC-2026-0459", reason = "Exposure needs an attacker-written database file plus -wal file opened by the process; magicshell opens only its own database inside its private data directory (created 0700, UMask=0077 under DynamicUser)." },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "0BSD",
+  "CC0-1.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "MPL-2.0",
+  "OFL-1.1",
+  "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
