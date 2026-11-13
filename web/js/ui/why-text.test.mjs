@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// Like the DOM's NodeList: indexable and iterable, with forEach, but no array methods.
+const NodeListProto = {
+  item(i) { return this[i] ?? null; },
+  forEach(fn) { for (let i = 0; i < this.length; i += 1) fn(this[i], i, this); },
+  *[Symbol.iterator]() { for (let i = 0; i < this.length; i += 1) yield this[i]; },
+};
+const nodeList = (arr) => Object.assign(Object.create(NodeListProto), arr, { length: arr.length });
+
 class FakeNode {
   constructor(tag, text) {
     this.tagName = tag;
     this.attributes = new Map();
-    this.childNodes = [];
+    this.kids = [];
     this.parentNode = null;
     this.listeners = {};
     this.text = text ?? '';
@@ -16,13 +24,14 @@ class FakeNode {
     for (const n of nodes) {
       const node = typeof n === 'string' ? new FakeNode('#text', n) : n;
       node.parentNode = this;
-      this.childNodes.push(node);
+      this.kids.push(node);
     }
   }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   dispatch(type, extra = {}) { for (const fn of this.listeners[type] ?? []) fn({ type, target: this, preventDefault() {}, ...extra }); }
   focus() { globalThis.document.activeElement = this; }
-  get textContent() { return this.tagName === '#text' ? this.text : this.childNodes.map((c) => c.textContent).join(''); }
+  get childNodes() { return nodeList(this.kids); }
+  get textContent() { return this.tagName === '#text' ? this.text : this.kids.map((c) => c.textContent).join(''); }
 }
 globalThis.document = {
   createElement: (tag) => new FakeNode(tag),
@@ -35,7 +44,7 @@ const { emptyWhy } = await import('../why.js');
 
 const all = (n, pred, out = []) => { if (pred(n)) out.push(n); for (const c of n.childNodes) all(c, pred, out); return out; };
 const cls = (n) => n.getAttribute('class') ?? '';
-const words = (el) => el.childNodes.filter((n) => n.tagName !== '#text');
+const words = (el) => [...el.childNodes].filter((n) => n.tagName !== '#text');
 const buttons = (el) => all(el, (n) => n.tagName === 'button');
 
 // Two spaces and a newline on purpose: the whitespace must survive as typed.
@@ -144,7 +153,7 @@ test('exactly one word button is in the tab order', () => {
 test('the table lists the strongest words with before, after and change', () => {
   const table = whyTable({ run, base, why: measuredWhy(), key: 'dinner' });
   assert.equal(table.tagName, 'table');
-  const rows = all(table, (n) => n.tagName === 'tr').slice(1).map((tr) => tr.childNodes.map((td) => td.textContent));
+  const rows = all(table, (n) => n.tagName === 'tr').slice(1).map((tr) => [...tr.childNodes].map((td) => td.textContent));
   assert.deepEqual(rows, [
     ['vegetarian ⇄ pizza', '47 % → 21 %', '−26'],
     ['four', '47 % → 43 %', '−4'],

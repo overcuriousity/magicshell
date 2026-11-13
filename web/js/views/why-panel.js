@@ -26,7 +26,7 @@ const HEAD_RUNNING = 'Leaving out one word at a time';
 const HEAD_DONE = 'What each word did to the answer';
 
 const wordButtons = (text) =>
-  text.childNodes.filter((n) => typeof n.getAttribute === 'function' && n.getAttribute('data-i') !== null);
+  [...text.childNodes].filter((n) => typeof n.getAttribute === 'function' && n.getAttribute('data-i') !== null);
 
 export function createWhyPanel({ client, entry, save, onBack, onAuth }) {
   const { run } = entry;

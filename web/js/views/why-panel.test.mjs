@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// Like the DOM's NodeList: indexable and iterable, with forEach, but no array methods.
+const NodeListProto = {
+  item(i) { return this[i] ?? null; },
+  forEach(fn) { for (let i = 0; i < this.length; i += 1) fn(this[i], i, this); },
+  *[Symbol.iterator]() { for (let i = 0; i < this.length; i += 1) yield this[i]; },
+};
+const nodeList = (arr) => Object.assign(Object.create(NodeListProto), arr, { length: arr.length });
+
 class FakeNode {
   constructor(tag, text) {
     this.tagName = tag;
     this.attributes = new Map();
-    this.childNodes = [];
+    this.kids = [];
     this.parentNode = null;
     this.listeners = {};
     this.text = text ?? '';
@@ -27,24 +35,25 @@ class FakeNode {
     for (const n of nodes) {
       const node = typeof n === 'string' ? new FakeNode('#text', n) : n;
       node.parentNode = this;
-      this.childNodes.push(node);
+      this.kids.push(node);
     }
   }
   replaceChildren(...nodes) {
-    for (const c of this.childNodes) c.parentNode = null;
-    this.childNodes = [];
+    for (const c of this.kids) c.parentNode = null;
+    this.kids = [];
     this.append(...nodes);
   }
   contains(node) {
     for (let n = node; n; n = n.parentNode) if (n === this) return true;
     return false;
   }
-  get options() { return this.childNodes.filter((c) => c.tagName === 'option'); }
+  get options() { return this.kids.filter((c) => c.tagName === 'option'); }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn); }
   dispatch(type, extra = {}) { for (const fn of this.listeners[type] ?? []) fn({ type, target: this, preventDefault() {}, ...extra }); }
   focus() { globalThis.document.activeElement = this; }
-  get textContent() { return this.tagName === '#text' ? this.text : this.childNodes.map((c) => c.textContent).join(''); }
+  get childNodes() { return nodeList(this.kids); }
+  get textContent() { return this.tagName === '#text' ? this.text : this.kids.map((c) => c.textContent).join(''); }
 }
 globalThis.document = {
   activeElement: null,
@@ -65,7 +74,7 @@ const visible = (root, node) => {
   return true;
 };
 const shownText = (root) => {
-  const walk = (n) => (n.hidden ? '' : n.tagName === '#text' ? n.text : n.childNodes.map(walk).join(''));
+  const walk = (n) => (n.hidden ? '' : n.tagName === '#text' ? n.text : [...n.childNodes].map(walk).join(''));
   return walk(root);
 };
 const buttonNamed = (root, name) => all(root, (n) => n.tagName === 'button' && n.textContent === name && visible(root, n))[0];
@@ -257,4 +266,25 @@ test('activating a word writes its numbers under the text', () => {
   const detail = byClass(el, 'ms-why__detail')[0];
   assert.equal(detail.getAttribute('aria-live'), 'polite');
   assert.equal(detail.textContent, 'without it: yes 70 % → 40 % (−30), answer becomes No');
+});
+
+test('focus on a word button survives a runner update and the rest is still drawn', async () => {
+  let release;
+  const client = fakeClient((i) => (i === 2 ? new Promise((r) => (release = () => r(reduced))) : reduced));
+  const { el } = panel(entryOf('a b c'), client);
+  await settle();
+  const text = () => byClass(el, 'ms-why__text')[0];
+  const b = all(text(), (n) => n.tagName === 'button' && n.textContent === 'b')[0];
+  b.focus();
+  release();
+  await settle();
+  const now = document.activeElement;
+  assert.notEqual(now, b, 'the text was redrawn');
+  assert.ok(text().contains(now));
+  assert.equal(now.getAttribute('data-i'), '1');
+  assert.equal(now.getAttribute('tabindex'), '0');
+  assert.equal(head(el), 'What each word did to the answer');
+  assert.ok(buttonNamed(el, 'Ask again'));
+  assert.equal(buttonNamed(el, 'Stop'), undefined);
+  assert.ok(visible(el, byClass(el, 'ms-why__legend')[0]));
 });
