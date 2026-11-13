@@ -109,6 +109,11 @@ impl Run {
     /// The first problem wins: run-level checks, then each question in order with its own
     /// checks in list order.
     pub fn validate(&self) -> Result<(), AppError> {
+        self.validate_questions(false)
+    }
+
+    /// `validate`, optionally allowing a question with no text (a saved setup may keep one).
+    pub fn validate_questions(&self, allow_empty_text: bool) -> Result<(), AppError> {
         let count = self.questions.len();
         if count < 1 {
             return invalid("Add at least one question.");
@@ -130,14 +135,14 @@ impl Run {
         if !self.questions.iter().all(|q| key_ok(&q.key)) {
             return invalid("Name each question with 1 to 30 lower-case letters, digits or _.");
         }
-        self.questions.iter().try_for_each(Question::validate)
+        self.questions.iter().try_for_each(|q| q.validate(allow_empty_text))
     }
 }
 
 impl Question {
-    fn validate(&self) -> Result<(), AppError> {
+    fn validate(&self, allow_empty_text: bool) -> Result<(), AppError> {
         let text = trim(&self.text);
-        if text.is_empty() {
+        if text.is_empty() && !allow_empty_text {
             return invalid("Type a question first.");
         }
         if len(text) > MAX_QUESTION_TEXT {

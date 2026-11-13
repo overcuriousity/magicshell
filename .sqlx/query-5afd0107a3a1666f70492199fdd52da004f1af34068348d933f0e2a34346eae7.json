@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM history WHERE user_id = ?1 AND id NOT IN (SELECT id FROM history WHERE user_id = ?1 ORDER BY at DESC, id DESC LIMIT ?2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "5afd0107a3a1666f70492199fdd52da004f1af34068348d933f0e2a34346eae7"
+}

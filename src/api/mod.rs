@@ -1,11 +1,14 @@
 pub mod auth;
 mod config;
+mod history;
 mod run;
+mod setups;
+mod storage;
 
 use std::sync::Arc;
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use sqlx::SqlitePool;
 
 use crate::kit::security::rate_limit;
@@ -26,7 +29,11 @@ pub fn router(state: Arc<ApiState>) -> Router {
         router = router
             .route("/api/auth/sign-in", post(auth::sign_in).layer(rate_limit(10, 5)))
             .route("/api/auth/sign-out", post(auth::sign_out))
-            .route("/api/auth/password", post(auth::change_password).layer(rate_limit(10, 5)));
+            .route("/api/auth/password", post(auth::change_password).layer(rate_limit(10, 5)))
+            .route("/api/setups", get(setups::list))
+            .route("/api/setups/{id}", put(setups::put).delete(setups::delete))
+            .route("/api/history", get(history::list).delete(history::clear))
+            .route("/api/history/{id}", put(history::put).delete(history::delete));
     }
     router.with_state(state)
 }

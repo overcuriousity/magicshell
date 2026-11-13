@@ -12,6 +12,10 @@ use crate::kit::OcError;
 struct Web;
 
 pub async fn serve(method: Method, uri: Uri) -> Response {
+    // An API route that is not mounted (storage in open mode) does not exist, whatever the method.
+    if uri.path().starts_with("/api/") {
+        return OcError::NotFound.into_response();
+    }
     if method != Method::GET && method != Method::HEAD {
         return axum::http::StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
