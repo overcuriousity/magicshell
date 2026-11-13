@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.3] - 2026-11-13
+
 ### Security
 
 - Changing a password, in the app or with `magicshell user passwd`, ends every other session of that user; the session that changed it stays signed in under a new id. Sessions from before this version end once, at the first request after the upgrade.
