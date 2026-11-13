@@ -2,7 +2,8 @@
 # Posts the expected_json of every fixtures/systemone/request-*.json to <endpoint>/systemone
 # and prints "# <name> <status>" followed by the body. The key is read from the environment and
 # handed to curl on stdin, so it appears in no argument list and no output.
-# Needs MAGICSHELL_ENDPOINT and MAGICSHELL_MODEL; MAGICSHELL_KEY is optional.
+# Needs jq, curl, MAGICSHELL_ENDPOINT and MAGICSHELL_MODEL; MAGICSHELL_KEY is optional and the
+# Authorization header is left out when it is empty.
 set -eu
 
 : "${MAGICSHELL_ENDPOINT:?set MAGICSHELL_ENDPOINT}"
@@ -15,9 +16,14 @@ for f in "$dir"/request-*.json; do
   name=$(basename "$f" .json)
   fixture_model=$(jq -r '.model' "$f")
   jq -r '.expected_json' "$f" | sed "s|\"model\":\"$fixture_model\"|\"model\":\"$MAGICSHELL_MODEL\"|" > "$tmp/body"
-  status=$(printf 'Authorization: Bearer %s\n' "${MAGICSHELL_KEY:-}" |
-    curl -sS -o "$tmp/out" -w '%{http_code}' -X POST "$MAGICSHELL_ENDPOINT/systemone" \
-      -H 'Content-Type: application/json' -H @- --data-binary "@$tmp/body")
+  if [ -n "${MAGICSHELL_KEY:-}" ]; then
+    status=$(printf 'Authorization: Bearer %s\n' "$MAGICSHELL_KEY" |
+      curl -sS -o "$tmp/out" -w '%{http_code}' -X POST "$MAGICSHELL_ENDPOINT/systemone" \
+        -H 'Content-Type: application/json' -H @- --data-binary "@$tmp/body")
+  else
+    status=$(curl -sS -o "$tmp/out" -w '%{http_code}' -X POST "$MAGICSHELL_ENDPOINT/systemone" \
+      -H 'Content-Type: application/json' --data-binary "@$tmp/body")
+  fi
   printf '# %s %s\n' "$name" "$status"
   cat "$tmp/out"
   printf '\n'

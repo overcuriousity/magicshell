@@ -39,6 +39,17 @@ sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.t
 
 The installer checks every file against the bundle's `SHA256SUMS`. If any file has changed, it stops with "Checksum mismatch".
 
+## The model key
+
+Keep the key out of `config.toml`; it is world-readable so the service's dynamic user can read it. Put it in a root-only file and hand it to the service as a credential:
+
+```sh
+printf '%s' 'the-key' | install -m 0600 /dev/stdin /etc/magicshell/api-key
+systemctl edit magicshell   # add: [Service] LoadCredential=api-key:/etc/magicshell/api-key
+```
+
+and in `config.toml` under `[app]`: `api_key = "file:///run/credentials/magicshell.service/api-key"`. The endpoint must be reachable from the server; no other outbound connection is made.
+
 ## TLS on an airgapped network
 
 magicshell never terminates TLS itself. It listens on `127.0.0.1:8080`, and nginx on the same machine serves https. Plain http over the network is not supported, because secure cookies require https.

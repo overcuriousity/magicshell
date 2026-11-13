@@ -8,13 +8,33 @@ This app follows the overcuriousity dev manifest **v2026.11.1**:
 https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/manifest
 
 - Profile: everyday.
-- The stack rule for server-rendered Askama and htmx is set aside: the UI is plain ES modules under `web/`.
+- Read the manifest files in number order before changing UI, security or ops. Before declaring work done, run `manifest/99-review-checklist.md` and `oc-check .`.
 - Never commit `.superpowers/` or `.claude/`.
+
+### Knowing departures
+
+- Browser-first app of plain ES modules under `web/` instead of server-rendered Askama + htmx.
+- No MCP endpoint, OpenAPI document or PWA install (spec non-goals).
+- The manifest's categorical chart colours colour choice options and its ordered ramp colours score levels; always paired with a name, a number or a symbol.
+- Kit code is copied into `src/kit/` from oc-kit v2026.11.1 instead of depending on oc-kit, so the build has no git dependency (see `src/kit/mod.rs`).
+- `web/index.html` carries a CSP meta tag for the static Pages site: `connect-src 'self' https: http://localhost:* http://127.0.0.1:*` so a visitor can reach their own endpoint. The localhost sources are written as `http&#58;//` so `oc-check`'s external-URL rule does not flag them; they are permissions, not connections. `frame-ancestors` is only in the server's header, because it is ignored in a meta tag. The server's own CSP stays `connect-src 'self'`.
+- Below 48rem the top bar carries the title and one action (the Bench/Guided switch); the theme and text-size toggles live in Settings there and in the top bar from 48rem.
+- `deny.toml` ignores RUSTSEC-2026-0459 (SQLite, `libsqlite3-sys`) with a written reachability argument, until sqlx allows `libsqlite3-sys >= 0.39`.
+
+### Review checklist items that do not apply
+
+- 3, copy buttons: the only copyable values are the request and response JSON, which have them; there are no tokens or secrets to show.
+- 9, destructive actions: deleting a setup or a history entry, and clearing the history, act at once with a 6 s undo notice. Deleting a user is a shell command (`user remove`).
+- 12, airgap bundle: built by `scripts/bundle.sh` in the release workflow only; checked locally with a stand-in for `cargo-about`.
+- Passkey, OIDC, SSE and htmx rules: the app has none of these.
 
 ## Layout
 
-- `src/` the server; `src/kit/` is copied from oc-kit v2026.11.1 (see `src/kit/mod.rs`).
+- `src/` the server; `src/kit/` is copied from oc-kit v2026.11.1.
+- `web/` the browser app, also the Pages site; `web/js/**/*.test.mjs` are its tests and are not deployed.
 - `tests/` integration tests; `tests/support` starts the app on `127.0.0.1:0`.
+- `scripts/` `bundle.sh` (release bundles), `install-online.sh`, `check-contrast.mjs`, `probe.sh`.
+- `deploy/` systemd unit and nginx template.
 
 ## Commands
 
@@ -22,5 +42,7 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo fmt --check`
 - `cargo deny check`
-- `node --test 'web/**/*.test.mjs'` (Node 22, no npm dependencies)
+- `node --test 'web/js/**/*.test.mjs'` (Node 22, no npm dependencies)
 - `node scripts/check-contrast.mjs`
+- `oc-check .`
+- `shellcheck install.sh scripts/*.sh`
