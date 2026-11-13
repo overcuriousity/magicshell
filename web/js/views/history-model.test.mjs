@@ -107,3 +107,27 @@ test('a pick that is not among the options is shown neutral, not in option 1\'s 
   entry.reply.answers.q.choice = 'Blue';
   assert.notEqual(headline(entry).cls, 'ms-neutral');
 });
+
+test('saveWhy keeps the part on the entry and saves it, without notifying', async () => {
+  const store = memoryStore(three());
+  const m = createHistoryModel(store);
+  await m.load();
+  let heard = 0;
+  m.subscribe(() => { heard += 1; });
+  const why = { words: 3, done: 2, rows: [] };
+  await m.saveWhy('b', why);
+  assert.equal(heard, 0);
+  assert.deepEqual(m.find('b').why, why);
+  assert.deepEqual((await store.listHistory()).find((e) => e.id === 'b').why, why);
+  await m.saveWhy('nope', why);
+});
+
+test('an undo after delete puts the entry back with its part', async () => {
+  const why = { words: 3, done: 3, rows: [] };
+  const store = memoryStore([entry('a', '2026-11-10T10:00:00Z', { why })]);
+  const m = createHistoryModel(store);
+  await m.load();
+  const undo = await m.remove('a');
+  await undo();
+  assert.deepEqual(m.find('a').why, why);
+});
