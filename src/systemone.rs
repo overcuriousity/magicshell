@@ -79,22 +79,30 @@ pub struct Outcome {
 /// Trims like JavaScript's `String.prototype.trim` (ECMAScript WhiteSpace and LineTerminator),
 /// which differs from `str::trim` at U+FEFF and U+0085.
 fn trim(s: &str) -> &str {
-    s.trim_matches(|c: char| {
-        matches!(
-            c,
-            '\u{9}'..='\u{D}'
-                | '\u{20}'
-                | '\u{A0}'
-                | '\u{1680}'
-                | '\u{2000}'..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-        )
-    })
+    s.trim_matches(is_js_space)
+}
+
+/// ECMAScript WhiteSpace and LineTerminator.
+fn is_js_space(c: char) -> bool {
+    matches!(
+        c,
+        '\u{9}'..='\u{D}'
+            | '\u{20}'
+            | '\u{A0}'
+            | '\u{1680}'
+            | '\u{2000}'..='\u{200A}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202F}'
+            | '\u{205F}'
+            | '\u{3000}'
+            | '\u{FEFF}'
+    )
+}
+
+/// The words of `s` as the page counts them: runs between JavaScript whitespace.
+pub fn word_count(s: &str) -> usize {
+    s.split(is_js_space).filter(|w| !w.is_empty()).count()
 }
 
 fn len(s: &str) -> usize {
@@ -330,4 +338,19 @@ pub fn parse_response(body: Option<&Value>, run: &Run) -> Result<Outcome, AppErr
         .and_then(|n| n.as_u64().or_else(|| n.as_f64().filter(|f| *f >= 0.0).map(|f| f as u64)))
         .unwrap_or(0);
     Ok(Outcome { answers, model, input_tokens })
+}
+
+#[cfg(test)]
+mod word_tests {
+    use super::word_count;
+
+    #[test]
+    fn words_are_counted_like_javascript_splits_them() {
+        assert_eq!(word_count(""), 0);
+        assert_eq!(word_count(" \n\t "), 0);
+        assert_eq!(word_count("We are four people, one is vegetarian, and it is raining."), 11);
+        assert_eq!(word_count("  a  b\nc\u{A0}d "), 4);
+        assert_eq!(word_count("a\u{FEFF}b"), 2);
+        assert_eq!(word_count("a\u{85}b"), 1);
+    }
 }

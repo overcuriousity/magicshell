@@ -60,6 +60,8 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] api_key` | bearer key; `file://` reads it from a file |
 | `[app] database` | SQLite file name; setting it turns accounts on |
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
+| `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
+| `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 
 Without `database` the server is open: everyone who can reach it can run questions. Use that only on a trusted network.

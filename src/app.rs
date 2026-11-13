@@ -10,7 +10,7 @@ use axum::response::Response;
 use axum::routing::get;
 use sqlx::SqlitePool;
 
-use crate::api::{self, ApiState};
+use crate::api::{self, ApiState, Why};
 use crate::assets;
 use crate::config::AppConfig;
 use crate::error::AppError;
@@ -38,11 +38,14 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         Some(pool) => Some(session::session_layer(pool, "magicshell").await?),
         None => None,
     };
+    let why = (pool.is_some() && app.why_max_words > 0)
+        .then(|| Why { limiter: Limiter::new(app.why_per_minute), max_words: app.why_max_words });
     let state = Arc::new(ApiState {
         upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?,
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
         pool,
+        why,
     });
     let mut api = api::router(state);
     if let Some(sessions) = sessions {

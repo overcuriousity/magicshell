@@ -10,8 +10,10 @@ use axum::http::request::Parts;
 use super::ApiState;
 use super::auth::SignedIn;
 use crate::error::AppError;
+use crate::kit::OcError;
 use crate::kit::security::{ClientIp, client_key};
-use crate::systemone::Run;
+use crate::limit::Limiter;
+use crate::systemone::{Run, word_count};
 use crate::upstream::Reply;
 
 /// Who the rate limit counts: the signed-in user in accounts mode, the client address in open mode.
@@ -40,7 +42,34 @@ pub async fn post(
     Caller(caller): Caller,
     body: Result<Json<Run>, JsonRejection>,
 ) -> Result<Json<Reply>, AppError> {
-    if !st.limiter.take(&caller) {
+    let run = read_run(&st.limiter, &caller, body)?;
+    Ok(Json(st.upstream.run(&run).await?))
+}
+
+/// "Why?": the same run, asked again with a word left out; accounts only, with its own allowance
+/// and a limit on the words of the situation.
+pub async fn post_why(
+    State(st): State<Arc<ApiState>>,
+    SignedIn(user): SignedIn,
+    body: Result<Json<Run>, JsonRejection>,
+) -> Result<Json<Reply>, AppError> {
+    let Some(why) = &st.why else {
+        return Err(OcError::NotFound.into());
+    };
+    let run = read_run(&why.limiter, &format!("user:{}", user.id), body)?;
+    let words = word_count(&run.state);
+    if words > why.max_words as usize {
+        return Err(AppError::Invalid(format!(
+            "Why? works up to {} words; this situation has {words}.",
+            why.max_words
+        )));
+    }
+    Ok(Json(st.upstream.run(&run).await?))
+}
+
+/// Takes from `limiter`, then reads and validates the body.
+fn read_run(limiter: &Limiter, caller: &str, body: Result<Json<Run>, JsonRejection>) -> Result<Run, AppError> {
+    if !limiter.take(caller) {
         return Err(AppError::RateLimited);
     }
     let Json(run) = body.map_err(|e| {
@@ -51,7 +80,7 @@ pub async fn post(
         }
     })?;
     run.validate()?;
-    Ok(Json(st.upstream.run(&run).await?))
+    Ok(run)
 }
 
 #[cfg(test)]

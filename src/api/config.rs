@@ -12,5 +12,8 @@ use crate::kit::OcError;
 pub async fn get(State(st): State<Arc<ApiState>>, mut parts: Parts) -> Result<Json<Value>, OcError> {
     let mode = if st.pool.is_some() { "accounts" } else { "open" };
     let user = auth::current(&st, &mut parts).await?.map(|u| json!({ "username": u.username }));
-    Ok(Json(json!({ "mode": mode, "model": st.model, "user": user, "version": env!("CARGO_PKG_VERSION") })))
+    let why = st.why.as_ref().map(|w| json!({ "maxWords": w.max_words }));
+    Ok(Json(json!({
+        "mode": mode, "model": st.model, "user": user, "why": why, "version": env!("CARGO_PKG_VERSION")
+    })))
 }
