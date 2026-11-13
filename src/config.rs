@@ -2,7 +2,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::kit::OcError;
-use crate::kit::config::{OcConfig, Secret};
+use crate::kit::config::{OcConfig, OidcConfig, Secret};
 
 fn runs_per_minute() -> u32 {
     60
@@ -40,6 +40,9 @@ pub struct AppConfig {
     pub why_per_minute: u32,
     #[serde(default = "upstream_timeout_secs")]
     pub upstream_timeout_secs: u64,
+    /// From `[auth.oidc]`, filled by [`AppConfig::from_config`].
+    #[serde(skip)]
+    pub oidc: Option<OidcConfig>,
 }
 
 impl AppConfig {
@@ -48,10 +51,22 @@ impl AppConfig {
         let Some(app) = &cfg.app else {
             return Err(OcError::Config("Invalid [app] configuration: missing field `endpoint`.".into()));
         };
-        let app: Self = app.deserialize().map_err(|e| OcError::Config(format!("Invalid [app] configuration: {e}.")))?;
+        let mut app: Self =
+            app.deserialize().map_err(|e| OcError::Config(format!("Invalid [app] configuration: {e}.")))?;
         if app.model.trim().is_empty() {
             return Err(OcError::Config("Invalid [app] configuration: `model` must not be empty.".into()));
         }
+        if let Some(oidc) = &cfg.auth.oidc {
+            if app.database.is_none() {
+                return Err(OcError::Config(
+                    "Sign-in through [auth.oidc] needs accounts. Set database under [app].".into(),
+                ));
+            }
+            if Url::parse(&oidc.issuer).is_err() {
+                return Err(OcError::Config(format!("auth.oidc.issuer is not a URL: {}.", oidc.issuer)));
+            }
+        }
+        app.oidc = cfg.auth.oidc.clone();
         Ok(app)
     }
 }

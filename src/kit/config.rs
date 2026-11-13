@@ -19,6 +19,7 @@ pub struct OcConfig {
     pub data_dir: Option<PathBuf>,
     /// The app's own settings under `[app]`, read with [`OcConfig::app`].
     pub app: Option<figment::value::Value>,
+    pub auth: AuthConfig,
 }
 
 impl Default for OcConfig {
@@ -29,8 +30,39 @@ impl Default for OcConfig {
             trusted_proxies: ["127.0.0.1/32", "::1/128"].iter().filter_map(|s| s.parse().ok()).collect(),
             data_dir: None,
             app: None,
+            auth: AuthConfig::default(),
         }
     }
+}
+
+/// The `[auth]` section; without `[auth.oidc]` sign-in stays with local passwords.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct AuthConfig {
+    pub oidc: Option<OidcConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OidcConfig {
+    /// Kept verbatim: discovery and token validation compare it byte for byte, trailing slash included.
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: Secret,
+    #[serde(default = "default_scopes")]
+    pub scopes: Vec<String>,
+    #[serde(default)]
+    pub auto_provision: bool,
+    #[serde(default = "default_display_name")]
+    pub display_name: String,
+}
+
+fn default_scopes() -> Vec<String> {
+    vec!["openid".into(), "profile".into()]
+}
+
+fn default_display_name() -> String {
+    "Sign in with SSO".into()
 }
 
 #[derive(Clone, Default)]
