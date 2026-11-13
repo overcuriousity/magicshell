@@ -34,6 +34,11 @@ const PATHS = {
   danger: [['circle', { cx: 12, cy: 12, r: 10 }], p('m15 9-6 6'), p('m9 9 6 6')],
   info: [['circle', { cx: 12, cy: 12, r: 10 }], p('M12 16v-4'), p('M12 8h.01')],
   plus: [p('M5 12h14'), p('M12 5v14')],
+  // The kinds of question in the guide. Lucide toggle-right, list-checks, gauge, sliders-horizontal.
+  'kind-noul': [['circle', { cx: 15, cy: 12, r: 3 }], ['rect', { width: 20, height: 14, x: 2, y: 5, rx: 7 }]],
+  'kind-choice': [p('M13 5h8'), p('M13 12h8'), p('M13 19h8'), p('m3 17 2 2 4-4'), p('m3 7 2 2 4-4')],
+  'kind-score': [p('m12 14 4-4'), p('M3.34 19a10 10 0 1 1 17.32 0')],
+  'kind-other': [p('M10 5H3'), p('M12 19H3'), p('M14 3v4'), p('M16 17v4'), p('M21 12h-9'), p('M21 19h-5'), p('M21 5h-7'), p('M8 10v4'), p('M8 12H3')],
   x: [p('M18 6 6 18'), p('m6 6 12 12')],
   copy: [['rect', { width: 14, height: 14, x: 8, y: 8, rx: 2, ry: 2 }], p('M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2')],
   // Lucide trash-2

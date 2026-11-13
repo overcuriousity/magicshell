@@ -59,9 +59,11 @@ test('the question text has a real label, with ids and focus ids unique per edit
   const [a] = questionCards(run(), ops, { idPrefix: 'bench-a' });
   const [b] = questionCards(run(), ops, { idPrefix: 'bench-b', fidPrefix: 'b', locked: true });
   for (const [card, id, fq] of [[a, 'bench-a-q0-text', 'q0'], [b, 'bench-b-bq0-text', 'bq0']]) {
-    const label = all(card, (n) => n.tagName === 'label')[0];
+    const label = all(card, (n) => n.tagName === 'label' && n.textContent === 'Question')[0];
     assert.equal(label?.getAttribute('for'), id);
-    assert.equal(label.textContent, 'Question');
+    const keyLabel = all(card, (n) => n.tagName === 'label' && n.textContent === 'Key')[0];
+    assert.equal(keyLabel?.getAttribute('for'), id.replace(/-text$/, '-key'));
+    assert.equal(byFid(card, `${fq}:key`).getAttribute('id'), id.replace(/-text$/, '-key'));
     const input = byFid(card, `${fq}:text`);
     assert.equal(input.getAttribute('id'), id);
     assert.equal(input.getAttribute('aria-label'), null);

@@ -19,7 +19,7 @@ import { createGuidedView } from './views/guided.js';
 import { createHistoryView } from './views/history.js';
 import { createSettingsView, LOOK_EVENT, NOT_SAVING } from './views/settings.js';
 import { createSetupsView } from './views/setups.js';
-import { forget } from './views/session.js';
+import { forget, sessionStore } from './views/session.js';
 import { createSignInView } from './views/sign-in.js';
 
 const DESTINATIONS = [
@@ -158,9 +158,16 @@ function mountShell(shell, services = {}) {
   const topnav = h('nav', { class: 'oc-topnav', 'aria-label': 'Main' }, navLinks(false));
   const tabbar = h('nav', { class: 'oc-tabbar', 'aria-label': 'Main' }, navLinks(true));
   const main = h('main', { class: 'oc-main', id: 'main' });
+  // One quiet line at the end of every page, as in bitvault: the app and its version.
+  const footer = services.version ? h('footer', { class: 'ms-footer' }, `magicshell ${services.version}`) : null;
   shell.append(
     h('header', { class: 'oc-topbar' },
-      h('span', { class: 'oc-topbar__title' }, 'magicshell'),
+      h('a', { class: 'oc-topbar__title', href: HREF.ask, 'data-fid': 'home', onclick: (e) => {
+        // A modifier-click opens a new tab and must leave this one as it is.
+        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        startOver();
+      } }, 'magicshell'),
       topnav,
       h('div', { class: 'oc-topbar__end' }, modeSwitch, themeToggle(), textSizeToggle()),
     ),
@@ -197,7 +204,7 @@ function mountShell(shell, services = {}) {
     }
     document.title = r.view === 'ask' ? (isBench(r) ? 'Bench · magicshell' : 'magicshell') : `${TITLES[r.view]} · magicshell`;
     const el = h('div', { class: 'oc-columns', 'data-view': r.view });
-    main.replaceChildren(el);
+    main.replaceChildren(...[el, footer].filter(Boolean));
     current = viewFor(r.view);
     current.mount(el, { ...services, route: r, navigate, notify, modeSwitch });
     if (!first) {
@@ -210,6 +217,32 @@ function mountShell(shell, services = {}) {
   const redirect = (hash) => {
     history.replaceState(null, '', hash);
     return route(hash);
+  };
+  // The title starts over: the drafts of the guide and the bench, and any run waiting for them,
+  // go, and the guide opens at step 1. History and setups stay. Undo puts the drafts back.
+  const startOver = () => {
+    const from = location.hash || HREF.ask;
+    const kept = ENTERED.map((key) => [key, sessionStore().getItem(key)]).filter(([, value]) => value !== null);
+    forget(ENTERED);
+    takeRun();
+    takeGuidedRun();
+    navigate(HREF.ask);
+    if (kept.length === 0) return;
+    notify(STARTED_OVER, {
+      action: {
+        label: 'Undo',
+        run: () => {
+          for (const [key, value] of kept) {
+            try {
+              sessionStore().setItem(key, value);
+            } catch {
+              // Nothing to put back into.
+            }
+          }
+          navigate(from);
+        },
+      },
+    });
   };
   window.addEventListener('hashchange', show);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncThemeColor);
@@ -240,6 +273,7 @@ export const showsNotSaving = ({ mode, storage, store }) => mode !== 'accounts' 
 export const trimmedSentence = (n) =>
   `This browser is out of room, so History removed its ${n === 1 ? 'oldest entry' : `${n} oldest entries`}. It keeps making room this way.`;
 
+const STARTED_OVER = 'Started over. What you entered is cleared.';
 const NO_COOKIE = 'This browser did not keep the sign-in. Open the app over https or localhost.';
 const ENTERED = ['magicshell.bench', 'magicshell.guided'];
 const NO_SERVER = 'This app needs its magicshell server. Start it and reload the page.';
@@ -257,7 +291,7 @@ async function boot(shell) {
   }
   const storage = localStore();
   const kept = storage ?? memoryStorage();
-  const services = { mode, model: config.model, user: config.user };
+  const services = { mode, model: config.model, user: config.user, version: config.version };
   let shellApi = null;
   // The not-saving notice, once per page: at boot, or when storage stops taking writes later.
   let warned = false;

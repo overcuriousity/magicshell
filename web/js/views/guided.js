@@ -31,7 +31,6 @@ export function createGuidedView() {
   let ctx = null;
   let off = null;
   let quiet = false;
-  let other = false;
   let spinner = false;
   let spinnerTimer = null;
   let lastBusy = false;
@@ -75,23 +74,34 @@ export function createGuidedView() {
     return labelled ? area : h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL), area);
   }
 
+  // One button per kind, two by two: choosing one goes on to the question; "something else"
+  // opens the bench. Coming back to a draft, its kind is marked.
+  function choose(id) {
+    if (model.state.busy) return;
+    if (id === 'other') {
+      ctx.toBench();
+      return;
+    }
+    model.setKind(id);
+    model.next();
+  }
+
   function kindStep(state) {
-    const current = other ? 'other' : state.kind;
-    const select = h('select', {
-      'aria-label': LEADS[1],
-      onchange: (e) => {
-        other = e.target.value === 'other';
-        if (other) render(model.state, { rebuild: true });
-        else model.setKind(e.target.value);
-      },
-    }, ASK_KINDS.map((k) => h('option', { value: k.id, selected: k.id === current, 'data-hint': k.hint }, k.label)));
-    const control = picker(select);
-    (control.querySelector?.('button') ?? control).setAttribute('data-fid', 'kind');
     return [
       stepLine(1),
       heading(LEADS[1]),
-      h('div', { class: 'ms-guide__kind' }, control),
-      h('p', { class: 'ms-guide__hint' }, ASK_KINDS.find((k) => k.id === current).hint),
+      h('div', { class: 'ms-kinds', role: 'group', 'aria-labelledby': 'guide-lead' },
+        ASK_KINDS.map((k) => h('button', {
+          type: 'button',
+          class: 'oc-btn ms-kind',
+          'data-fid': `kind-${k.id}`,
+          'aria-current': k.id === state.kind && model.holdsSomething() ? 'true' : null,
+          'aria-describedby': `kind-${k.id}-hint`,
+          onclick: () => choose(k.id),
+        },
+          icon(`kind-${k.id}`, 'tab'),
+          h('span', { class: 'ms-kind__label' }, k.label),
+          h('span', { class: 'ms-kind__hint', id: `kind-${k.id}-hint` }, k.hint)))),
     ];
   }
 
@@ -111,7 +121,7 @@ export function createGuidedView() {
   }
 
   function optionsPart(state) {
-    const input = h('input', { type: 'text', class: 'oc-input', 'aria-label': 'New option', 'data-fid': 'option-new', autocomplete: 'off', maxlength: String(LIMITS.optionName) });
+    const input = h('input', { type: 'text', class: 'oc-input', id: 'guide-option-new', 'data-fid': 'option-new', autocomplete: 'off', maxlength: String(LIMITS.optionName) });
     const add = () => {
       model.addOption(input.value);
       root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
@@ -143,7 +153,9 @@ export function createGuidedView() {
           ),
         ),
       ),
-      full ? null : h('div', { class: 'oc-row ms-guide__add' }, input, h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'option-add', onclick: add }, icon('plus'), 'Add')),
+      full ? null : h('div', { class: 'oc-field' },
+        h('label', { for: 'guide-option-new' }, 'New option'),
+        h('div', { class: 'oc-row ms-guide__add' }, input, h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'option-add', onclick: add }, icon('plus'), 'Add'))),
     ];
   }
 
@@ -163,6 +175,7 @@ export function createGuidedView() {
     const levels = state.levels;
     const setText = (id, text) => model.setLevels(model.state.levels.map((l) => (l.id === id ? { ...l, text } : l)));
     parts.push(
+      h('p', { class: 'oc-field__label ms-guide__levels-lead', 'aria-hidden': 'true' }, 'Levels, lowest first'),
       h('ol', { class: 'ms-guide__levels', 'aria-label': 'Levels, lowest first' },
         levels.map((l, i) =>
           h('li', { class: 'oc-row' },
@@ -214,13 +227,11 @@ export function createGuidedView() {
     if (state.step === 'result') {
       return [button('Start over', () => model.startOver(), { fid: 'start-over' }), button('Ask another', () => model.askAnother(), { primary: true, fid: 'ask-another' })];
     }
-    const back = state.step === 1 ? null : button('Back', () => model.back(), { fid: 'back', disabled: state.busy });
+    // Step 1 has no Next: each kind button goes on by itself.
+    if (state.step === 1) return [];
+    const back = button('Back', () => model.back(), { fid: 'back', disabled: state.busy });
     if (state.step === 3) return [back, button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy })];
-    const next = () => {
-      if (state.step === 1 && other) ctx.toBench();
-      else model.next();
-    };
-    return [back, button('Next', next, { primary: true, fid: 'next' })];
+    return [back, button('Next', () => model.next(), { primary: true, fid: 'next' })];
   }
 
   function renderBody(state) {
@@ -271,7 +282,6 @@ export function createGuidedView() {
     const ended = trackBusy(state);
     const fid = root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null;
     if (stepChanged) {
-      if (state.step !== 1) other = false;
       rebuild = true;
     }
     if (!quiet || rebuild) {
@@ -295,14 +305,14 @@ export function createGuidedView() {
     if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || !model) return;
     e.preventDefault();
     if (model.state.step === 3) model.ask();
-    else if (model.state.step === 1 || model.state.step === 2) root.querySelector('[data-fid="next"]')?.click();
+    else if (model.state.step === 1) choose(model.state.kind);
+    else if (model.state.step === 2) root.querySelector('[data-fid="next"]')?.click();
   };
 
   return {
     mount(el, context) {
       root = el;
       ctx = context;
-      other = false;
       spinner = false;
       lastBusy = false;
       lastStep = null;

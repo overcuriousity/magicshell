@@ -17,6 +17,9 @@
   z-index: var(--z-sticky);
 }
 .oc-topbar__title { font-size: var(--text-prose); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+/* The title is a link that starts over; it looks like the title, not like a link. */
+a.oc-topbar__title { display: inline-flex; align-items: center; min-height: var(--target-tool); color: inherit; text-decoration: none; border-radius: var(--radius-md); }
+a.oc-topbar__title:hover { color: var(--color-accent); }
 .oc-topbar__end { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; }
 .oc-topbar__slot { display: flex; align-items: center; margin-right: var(--space-2); }
 .oc-topbar__slot:empty { display: none; }
@@ -58,3 +61,4 @@
 @container app (min-width: 90rem) {
   .ms-output { padding-top: var(--space-5); }
 }
+@media (pointer: coarse) { a.oc-topbar__title { min-height: var(--target-touch); } }

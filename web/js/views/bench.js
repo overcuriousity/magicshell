@@ -120,7 +120,7 @@ export function createBenchView(deps = {}) {
         hosts.saveAs.querySelector('input')?.focus({ preventScroll: true });
       } }, 'Save as setup');
     }
-    const input = h('input', { type: 'text', class: 'oc-input', 'aria-label': 'Setup name', 'data-fid': 'save-as-name', autocomplete: 'off' });
+    const input = h('input', { type: 'text', class: 'oc-input', id: 'save-as-name', 'data-fid': 'save-as-name', autocomplete: 'off' });
     const close = () => {
       hosts.saveAs.replaceChildren(saveAsControl());
       hosts.saveAs.querySelector('button')?.focus({ preventScroll: true });
@@ -154,6 +154,7 @@ export function createBenchView(deps = {}) {
       deps.notify?.(`Saved '${setup.name}'`);
     };
     return h('form', { class: 'ms-save-as', onsubmit: submit },
+      h('label', { for: 'save-as-name', class: 'oc-field__label' }, 'Setup name'),
       h('div', { class: 'oc-row' },
         input,
         h('button', { type: 'submit', class: 'oc-btn' }, 'Save'),

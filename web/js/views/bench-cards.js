@@ -13,6 +13,9 @@ const TYPES = [
   { id: 'noul', label: 'noul' },
 ];
 
+// What an option means to the model; empty, its name stands in.
+const DESCRIPTION = 'Description (optional)';
+
 const iconButton = (name, label, onclick, { disabled = false, fid } = {}) =>
   h('button', {
     type: 'button',
@@ -65,7 +68,10 @@ function listRow(kind, ref, item, i, count, ops, fq, slot) {
   const fields = kind === 'option'
     ? [
         h('div', { class: 'ms-row__name' }, textInput(item.name, `Option ${i + 1}`, `${f}:name`, (v) => edit({ name: v }))),
-        h('div', { class: 'ms-row__desc' }, textInput(item.description, `Description ${i + 1}`, `${f}:desc`, (v) => edit({ description: v }))),
+        // The lead shows only where the rows stack and the head above the columns is gone.
+        h('div', { class: 'ms-row__desc' },
+          h('span', { class: 'ms-row__desc-lead', 'aria-hidden': 'true' }, DESCRIPTION),
+          textInput(item.description, `Description ${i + 1} (optional)`, `${f}:desc`, (v) => edit({ description: v }))),
       ]
     : [h('div', { class: 'ms-row__name ms-row__name--wide' }, textInput(item.text, `Level ${i}`, `${f}:text`, (v) => edit({ text: v })))];
   return h('div', { class: kind === 'option' ? 'ms-row' : 'ms-row ms-row--level' },
@@ -83,7 +89,7 @@ function list(kind, q, ref, ops, fq, slots) {
   const { many, max, add } = KINDS[kind];
   const items = q[many];
   const head = kind === 'option'
-    ? [h('span', { class: 'ms-row__name' }, 'Option'), h('span', { class: 'ms-row__desc' }, 'Description')]
+    ? [h('span', { class: 'ms-row__name' }, 'Options'), h('span', { class: 'ms-row__desc' }, DESCRIPTION)]
     : [h('span', { class: 'ms-row__name' }, 'Levels, lowest first')];
   return h('div', { class: 'ms-rows' },
     h('div', { class: kind === 'option' ? 'ms-rows__head' : 'ms-rows__head ms-rows__head--level', 'aria-hidden': 'true' }, head),
@@ -107,6 +113,7 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
   const ref = { key: q.key };
   const fq = `${fidPrefix}q${index}`;
   const textId = `${idPrefix}-${fq}-text`;
+  const keyId = `${idPrefix}-${fq}-key`;
   const commitKey = (input) => {
     const next = input.value.trim();
     if (next === ref.key) input.value = ref.key;
@@ -116,8 +123,8 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
   const keyInput = h('input', {
     type: 'text',
     class: 'oc-input ms-mono ms-card__key',
+    id: keyId,
     value: q.key,
-    'aria-label': 'Key',
     'data-fid': `${fq}:key`,
     autocomplete: 'off',
     spellcheck: 'false',
@@ -131,8 +138,11 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
   });
   return h('div', { class: 'ms-card' },
     h('div', { class: 'ms-card__head' },
-      locked ? h('span', { class: 'ms-type' }, q.type) : typePicker(q, ref, ops, `${fq}:type`),
-      keyInput,
+      // The picker names itself ("Type"); the lead above it is for the eye.
+      h('div', { class: 'oc-field ms-card__type' },
+        h('span', { class: 'oc-field__label', 'aria-hidden': 'true' }, 'Type'),
+        locked ? h('span', { class: 'ms-type' }, q.type) : typePicker(q, ref, ops, `${fq}:type`)),
+      h('div', { class: 'oc-field ms-card__keyfield' }, h('label', { for: keyId }, 'Key'), keyInput),
       locked ? null : iconButton('trash', 'Remove question', () => ops.removeQuestion(ref.key), { disabled: count <= 1, fid: `${fq}:drop` }),
     ),
     h('div', { class: 'oc-field' },

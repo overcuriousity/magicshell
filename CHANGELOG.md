@@ -4,6 +4,16 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Changed
+
+- The guide's first step offers the four kinds of question as buttons with an icon and a hint, two by two, instead of a dropdown; a button goes straight on to the question.
+- Every field has a visible lead: type and key on each bench card, "Description (optional)" for each option (also where the rows stack on narrow screens), "Levels, lowest first", the name in Save as setup, and the guide's new option and own levels.
+- The magicshell title in the top bar starts over: it clears what was entered in the guide and the bench and opens the guide at step 1, with an Undo. History and setups stay.
+
+### Added
+
+- A footer with the app's version on every page; `/api/config` reports the version.
+
 ## [2026.11.3] - 2026-11-13
 
 ### Security

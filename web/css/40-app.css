@@ -162,10 +162,14 @@
   border-radius: var(--radius-md);
   background: var(--color-bg-elevated);
 }
-.ms-card__head { display: flex; align-items: center; gap: var(--space-2); }
+/* Leads line up at the top; the remove button sits level with the controls below them. */
+.ms-card__head { display: flex; align-items: flex-start; gap: var(--space-2); }
+.ms-card__head > .oc-btn--row { align-self: flex-end; margin-bottom: 0.375rem; }
+.ms-card__type, .ms-card__keyfield { gap: var(--space-1); }
+.ms-card__keyfield { flex: 1 1 auto; min-width: 0; max-width: 14rem; }
 .ms-card__head .oc-menu-button { min-width: 7rem; }
 .ms-card__head > select { width: 7rem; }
-.ms-card__key { flex: 1 1 auto; width: 0; max-width: 14rem; }
+.ms-card__key { width: 100%; }
 .ms-card__head > .oc-btn--row { margin-left: auto; }
 .ms-type {
   padding: 0 var(--space-2);
@@ -185,7 +189,8 @@
   gap: var(--space-2);
   align-items: center;
 }
-.ms-rows__head { color: var(--color-fg-muted); font-size: var(--text-micro); font-weight: 500; }
+.ms-rows__head { color: var(--color-fg-secondary); font-weight: 500; }
+.ms-row__desc-lead { display: none; }
 .ms-rows__head > .ms-row__name { grid-column: 2; }
 .ms-rows__head > .ms-row__desc { grid-column: 3; }
 .ms-rows__head--level > .ms-row__name { grid-column: 2 / 4; }
@@ -197,7 +202,12 @@
 .ms-row .oc-input { width: 100%; }
 .ms-row__index { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
 @container setup (max-width: 34rem) {
-  .ms-rows__head { display: none; }
+  /* Stacked rows: the head names the list, and each description carries its own lead. */
+  .ms-rows__head { grid-template-columns: 1rem minmax(0, 1fr); }
+  .ms-rows__head > .ms-row__desc { display: none; }
+  .ms-rows__head--level > .ms-row__name { grid-column: 2; }
+  .ms-row__desc { display: flex; flex-direction: column; gap: var(--space-1); }
+  .ms-row__desc-lead { display: block; color: var(--color-fg-muted); font-size: var(--text-micro); }
   .ms-row {
     grid-template-columns: 1rem minmax(0, 1fr) auto;
     grid-template-areas: "lead name acts" ". desc desc";
@@ -260,10 +270,39 @@
 .ms-guide__step { margin: 0; color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-mono); }
 .ms-guide__lead { margin: 0 0 var(--space-1); }
 .ms-guide__lead:focus, .ms-guide__asked:focus { outline: none; }
-.ms-guide__hint { margin: 0; color: var(--color-fg-secondary); font-size: var(--text-dense); }
 .ms-guide__kind, .ms-guide__kind > .oc-menu-wrap { display: block; }
 .ms-guide__kind > select, .ms-guide__kind .oc-menu-button { width: 100%; }
 .ms-guide__kind .oc-menu { width: 100%; }
+/* Step 1: the kinds of question as four buttons, two by two (one column when very narrow).
+   The icon sits plainly beside the label, the hint under it; the kind chosen last has an accent edge. */
+.ms-kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.ms-kind {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  justify-content: stretch;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  height: auto;
+  min-height: 5.5rem;
+  padding: var(--space-3);
+  text-align: left;
+  white-space: normal;
+}
+.ms-kind > .oc-icon { grid-row: span 2; align-self: start; margin-top: 0.125rem; color: var(--color-fg-secondary); }
+.ms-kind__label { font-size: var(--text-prose); font-weight: 600; color: var(--color-fg-primary); }
+.ms-kind__hint { font-weight: 400; color: var(--color-fg-secondary); }
+.ms-kind[aria-current="true"] { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); }
+.ms-kind[aria-current="true"] > .oc-icon { color: var(--color-accent); }
+/* On a phone the icon goes above the text, so the words keep the button's width. */
+@container app (max-width: 34rem) {
+  .ms-kind { grid-template-columns: minmax(0, 1fr); }
+  .ms-kind > .oc-icon { grid-row: auto; margin: 0 0 var(--space-1); }
+  .ms-kind__label { font-size: var(--text-dense); }
+}
+@container app (max-width: 20rem) {
+  .ms-kinds { grid-template-columns: minmax(0, 1fr); }
+}
 .ms-guide__body textarea { width: 100%; }
 .ms-guide__chips { margin: 0; padding: 0; list-style: none; }
 .ms-guide__add .oc-input { flex: 1 1 auto; min-width: 0; }
@@ -377,3 +416,7 @@
 .ms-segmented input:checked + span { background: var(--color-accent-dim); color: var(--color-accent); }
 .ms-segmented input:focus-visible + span { outline: var(--focus-ring); outline-offset: calc(-1 * var(--focus-offset) - 2px); }
 @media (pointer: coarse) { .ms-segmented span { min-height: var(--target-touch); padding: 0 var(--space-4); } }
+
+/* Footer: one quiet line at the end of the page, as in bitvault. */
+.ms-footer { margin-top: var(--space-6); padding-block: var(--space-3); color: var(--color-fg-muted); font-size: var(--text-micro); text-align: center; }
+.ms-guide__levels-lead { margin: 0; }

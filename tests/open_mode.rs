@@ -29,7 +29,10 @@ async fn the_configuration_names_the_mode_and_the_model() {
     let res = app.client.get(format!("{}/api/config", app.base)).send().await.unwrap();
     assert_eq!(res.status(), 200);
     let body: Value = res.json().await.unwrap();
-    assert_eq!(body, json!({"mode": "open", "model": "test-model", "user": null}));
+    assert_eq!(
+        body,
+        json!({"mode": "open", "model": "test-model", "user": null, "version": env!("CARGO_PKG_VERSION")})
+    );
 }
 
 #[tokio::test]
