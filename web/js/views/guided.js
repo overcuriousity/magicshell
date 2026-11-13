@@ -6,7 +6,7 @@ import { LIMITS } from '../limits.js';
 import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
 import { levelClass, optionClass } from '../ui/colors.js';
-import { h } from '../ui/dom.js';
+import { h, present } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
@@ -259,11 +259,11 @@ export function createGuidedView() {
 
   function renderBody(state) {
     const steps = { 1: kindStep, 2: questionStep, 3: detailsStep, result: resultStep };
-    hosts.body.replaceChildren(...steps[state.step](state));
+    hosts.body.replaceChildren(...present(steps[state.step](state)));
   }
 
   function renderActions(state) {
-    hosts.actions.replaceChildren(...actions(state).filter(Boolean));
+    hosts.actions.replaceChildren(...present(actions(state)));
   }
 
   function renderError(state, force) {
@@ -304,6 +304,9 @@ export function createGuidedView() {
     const stepChanged = state.step !== lastStep;
     const ended = trackBusy(state);
     const fid = root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null;
+    // The heading is rebuilt with the body (the history save lands after the result shows), so
+    // focus on it has to follow to the new one.
+    const headingFocused = document.activeElement === root.querySelector('h1');
     if (stepChanged) {
       rebuild = true;
     }
@@ -326,6 +329,8 @@ export function createGuidedView() {
       root.querySelector('h1')?.focus({ preventScroll: true });
     } else if (fid && !root.contains(document.activeElement)) {
       refocus(fid);
+    } else if (headingFocused && !root.contains(document.activeElement)) {
+      root.querySelector('h1')?.focus({ preventScroll: true });
     }
   }
 

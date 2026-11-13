@@ -89,15 +89,20 @@ export function createWhyPanel({ client, entry, save, onBack, onAuth }) {
     buttons[i].focus();
   }
 
+  // A live region is told only what changed: the same text is left as it is.
+  const setText = (el, text) => {
+    if (el.textContent !== text) el.replaceChildren(text);
+  };
+
   function draw() {
     if (closed) return;
     const isRunning = view.phase === 'running';
     const done = view.why?.done ?? 0;
     const question = run.questions.find((q) => q.key === key);
-    head.replaceChildren(isRunning ? HEAD_RUNNING : view.phase === 'done' ? HEAD_DONE : `Stopped after ${done} of ${total} words`);
+    setText(head, isRunning ? HEAD_RUNNING : view.phase === 'done' ? HEAD_DONE : `Stopped after ${done} of ${total} words`);
     drawText(isRunning);
     running.hidden = !isRunning;
-    progress.replaceChildren(`word ${Math.min((view.at ?? done) + 1, total)} of ${total}`);
+    setText(progress, `word ${Math.min((view.at ?? done) + 1, total)} of ${total}`);
     legendHost.hidden = isRunning;
     legendHost.replaceChildren(whyLegend(question, base[key]));
     errorHost.replaceChildren(...(view.error ? [inlineError(view.error)] : []));

@@ -17,7 +17,8 @@ class FakeNode {
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   append(...nodes) {
     for (const n of nodes) {
-      const node = typeof n === 'string' ? new FakeNode('#text', n) : n;
+      // Like a browser: anything that is not a node becomes a text node (null as "null").
+      const node = n !== null && typeof n === 'object' ? n : new FakeNode('#text', String(n));
       node.parentNode = this;
       this.childNodes.push(node);
     }

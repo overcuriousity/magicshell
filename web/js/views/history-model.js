@@ -76,14 +76,29 @@ export function createHistoryModel(store) {
     },
     // Both resolve to an undo that saves the removed entries back.
     async remove(id) {
+      const before = list;
       const gone = list.filter((e) => e.id === id);
-      for (const e of gone) await store.deleteEntry(e.id);
+      // Out of the list first: a Why? save still on its way finds no entry and does not put it back.
+      list = list.filter((e) => e.id !== id);
+      try {
+        for (const e of gone) await store.deleteEntry(e.id);
+      } catch (e) {
+        list = before;
+        throw e;
+      }
       await model.load();
       return restorer(gone);
     },
     async clear() {
+      const before = list;
       const gone = list.slice();
-      await store.clearHistory();
+      list = [];
+      try {
+        await store.clearHistory();
+      } catch (e) {
+        list = before;
+        throw e;
+      }
       await model.load();
       return restorer(gone);
     },

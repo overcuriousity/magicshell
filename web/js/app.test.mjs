@@ -39,8 +39,8 @@ const fakeEl = (tag) => {
     setAttribute(k, v) { el.attrs[k] = v; },
     getAttribute: (k) => el.attrs[k] ?? null,
     addEventListener(type, fn) { (el.listeners[type] ??= []).push(fn); },
-    append(...c) { el.children.push(...c); },
-    replaceChildren(...c) { el.children = c; },
+    append(...c) { el.children.push(...c.map((n) => (n !== null && typeof n === 'object' ? n : String(n)))); },
+    replaceChildren(...c) { el.children = c.map((n) => (n !== null && typeof n === 'object' ? n : String(n))); },
     click(extra = {}) { for (const fn of el.listeners.click ?? []) fn({ button: 0, ...extra }); },
   };
   return el;

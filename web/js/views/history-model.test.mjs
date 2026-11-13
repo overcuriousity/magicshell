@@ -131,3 +131,60 @@ test('an undo after delete puts the entry back with its part', async () => {
   await undo();
   assert.deepEqual(m.find('a').why, why);
 });
+
+test('a Why? save arriving while a delete is awaited does not bring the entry back', async () => {
+  const store = memoryStore(three());
+  let release;
+  const real = store.deleteEntry;
+  store.deleteEntry = async (id) => {
+    await real(id);
+    await new Promise((r) => { release = r; });
+  };
+  const m = createHistoryModel(store);
+  await m.load();
+  const removing = m.remove('b');
+  await Promise.resolve();
+  await m.saveWhy('b', { words: 3, done: 1, rows: [] });
+  release();
+  await removing;
+  assert.deepEqual((await store.listHistory()).map((e) => e.id), ['c', 'a']);
+  assert.equal(m.find('b'), null);
+});
+
+test('a Why? save arriving while the history is cleared does not bring an entry back', async () => {
+  const store = memoryStore(three());
+  let release;
+  const real = store.clearHistory;
+  store.clearHistory = async () => {
+    await real();
+    await new Promise((r) => { release = r; });
+  };
+  const m = createHistoryModel(store);
+  await m.load();
+  const clearing = m.clear();
+  await Promise.resolve();
+  await m.saveWhy('a', { words: 3, done: 1, rows: [] });
+  release();
+  await clearing;
+  assert.deepEqual(await store.listHistory(), []);
+});
+
+test('undo after a delete that overlapped a Why? save still restores the entry with its part', async () => {
+  const why = { words: 3, done: 3, rows: [] };
+  const store = memoryStore([entry('a', '2026-11-10T10:00:00Z', { why })]);
+  const m = createHistoryModel(store);
+  await m.load();
+  const undo = await m.remove('a');
+  await m.saveWhy('a', { words: 3, done: 1, rows: [] });
+  await undo();
+  assert.deepEqual(m.find('a').why, why);
+});
+
+test('a failed delete leaves the list as it was', async () => {
+  const store = memoryStore(three());
+  store.deleteEntry = async () => { throw new Error('nope'); };
+  const m = createHistoryModel(store);
+  await m.load();
+  await assert.rejects(m.remove('b'), /nope/);
+  assert.deepEqual(m.entries().map((e) => e.id), ['c', 'b', 'a']);
+});

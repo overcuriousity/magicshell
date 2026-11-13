@@ -336,6 +336,9 @@ export function createBenchView(deps = {}) {
   }
 
   function render(state) {
+    // Back from the panel puts focus on the Why? button; a close from elsewhere (Run, a loaded
+    // setup) leaves it where the user is.
+    const focusWasInPanel = Boolean(panel?.el.contains(document.activeElement));
     keepFocus(() => {
       const ended = trackBusy(state);
       renderActions(state);
@@ -349,7 +352,7 @@ export function createBenchView(deps = {}) {
     if (state.whyOpen !== lastWhyOpen) {
       lastWhyOpen = state.whyOpen;
       if (state.whyOpen) panel?.el.focus({ preventScroll: true });
-      else root.querySelector('.ms-why-ask button')?.focus({ preventScroll: true });
+      else if (focusWasInPanel) root.querySelector('.ms-why-ask button')?.focus({ preventScroll: true });
     }
   }
 

@@ -33,7 +33,8 @@ class FakeNode {
   removeAttribute(k) { this.attributes.delete(k); }
   append(...nodes) {
     for (const n of nodes) {
-      const node = typeof n === 'string' ? new FakeNode('#text', n) : n;
+      // Like a browser: anything that is not a node becomes a text node (null as "null").
+      const node = n !== null && typeof n === 'object' ? n : new FakeNode('#text', String(n));
       node.parentNode = this;
       this.kids.push(node);
     }
@@ -287,4 +288,23 @@ test('focus on a word button survives a runner update and the rest is still draw
   assert.ok(buttonNamed(el, 'Ask again'));
   assert.equal(buttonNamed(el, 'Stop'), undefined);
   assert.ok(visible(el, byClass(el, 'ms-why__legend')[0]));
+});
+
+test('the live heading is replaced only when its text changes', async () => {
+  const gates = [];
+  const client = fakeClient((i) => (i === 1 || i === 2 ? new Promise((r) => gates.push(() => r(reduced))) : reduced));
+  const { el } = panel(entryOf('a b c'), client);
+  await settle();
+  const headEl = byClass(el, 'ms-why__head')[0];
+  const textNode = headEl.childNodes[0];
+  assert.equal(textNode.text, 'Leaving out one word at a time');
+  // The next word is asked: the runner updates, the heading text is still the same node.
+  gates.shift()();
+  await settle();
+  assert.match(shownText(el), /word 3 of 3/);
+  assert.equal(headEl.childNodes[0], textNode);
+  gates.shift()();
+  await settle();
+  assert.equal(head(el), 'What each word did to the answer');
+  assert.notEqual(headEl.childNodes[0], textNode);
 });

@@ -446,7 +446,8 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  line-height: inherit;
+  /* Tight: a button is inline-block, and the line's 2.25 would shade the whole line height. */
+  line-height: 1.25;
   transition: background-color var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 button.ms-why__w { cursor: pointer; }
