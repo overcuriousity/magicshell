@@ -277,6 +277,7 @@ export function createBenchModel({
       let mine = null;
       return send('a', run, (result) => {
         mine = result;
+        state.whyOpen = false;
         state.ranA = run;
         state.resultA = result;
         state.entryA = null;
@@ -295,7 +296,7 @@ export function createBenchModel({
     // changes, so saveWhy stays quiet. It saves the entry it is given, never state.entryA: the
     // panel's last save arrives after it was closed, when entryA may be gone or a newer run's.
     openWhy() {
-      if (!state.resultA || !state.entryA || state.whyOpen) return;
+      if (state.busy || !state.resultA || !state.entryA || state.whyOpen) return;
       state.whyOpen = true;
       changed();
     },

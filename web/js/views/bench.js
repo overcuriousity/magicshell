@@ -272,10 +272,12 @@ export function createBenchView(deps = {}) {
     const entry = state.entryA;
     if (state.whyOpen && entry && state.resultA) {
       if (!panel) {
+        // Bound now: the final save of a closed panel arrives after unmount has dropped `model`.
+        const m = model;
         panel = createWhyPanel({
           client: ctx.client,
           entry,
-          save: (why) => model.saveWhy(entry, why),
+          save: (why) => m.saveWhy(entry, why),
           onBack: model.closeWhy,
           onAuth: () => ctx.navigate(HREF.signIn),
         });
@@ -287,7 +289,7 @@ export function createBenchView(deps = {}) {
     closePanel();
     hosts.results.replaceChildren(...resultsSection(state, model.diff(), {
       showIO,
-      why: whyButton({ entry, why: ctx.why, onOpen: model.openWhy }),
+      why: whyButton({ entry, why: state.busy ? null : ctx.why, onOpen: model.openWhy }),
       notify: deps.notify,
       toggleIO: () => {
         showIO = !showIO;

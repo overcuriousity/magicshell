@@ -595,3 +595,21 @@ test('a slow save of run 1 does not attach its entry to run 2', async () => {
   await second;
   assert.ok(m.state.entryA);
 });
+
+test('Why? cannot be opened during a run and does not open itself for the new result', async () => {
+  const releases = [];
+  const store = { async listSetups() { return []; }, saveEntry: () => new Promise((r) => releases.push(r)) };
+  const m = make({ store });
+  m.loadRun(handedOver.run, handedOver.result, handedOver.entry);
+  m.openWhy();
+  const pending = m.run();
+  assert.equal(m.state.busy, 'a');
+  m.openWhy();
+  assert.equal(m.state.whyOpen, false);
+  m.state.whyOpen = true; // as if opened in a way the guard missed
+  await new Promise((r) => setTimeout(r, 0));
+  releases[0]();
+  await pending;
+  assert.equal(m.state.whyOpen, false);
+  assert.ok(m.state.entryA);
+});
