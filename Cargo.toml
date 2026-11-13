@@ -28,7 +28,7 @@ axum = "0.8"
 clap = { version = "4", features = ["derive"] }
 figment = { version = "0.10", features = ["toml", "env"] }
 ipnet = { version = "2", features = ["serde"] }
-rand = "0.9"
+rand = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 rpassword = "7"
 rust-embed = { version = "8", features = ["debug-embed", "include-exclude"] }
@@ -38,7 +38,7 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 thiserror = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
-tower-http = { version = "0.6", features = ["compression-gzip", "compression-br", "limit", "timeout", "trace", "sensitive-headers"] }
+tower-http = { version = "0.7", features = ["compression-gzip", "compression-br", "limit", "timeout", "trace", "sensitive-headers"] }
 tower-sessions = "0.15"
 tower-sessions-sqlx-store = { version = "0.16", features = ["sqlite"] }
 tracing = "0.1"
