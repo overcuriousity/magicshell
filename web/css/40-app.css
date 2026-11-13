@@ -362,3 +362,28 @@
 .ms-hempty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 .ms-hentry__when { color: var(--color-fg-muted); font-size: var(--text-dense); }
 .ms-hentry__state { margin: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-elevated); font-family: var(--font-mono); font-size: var(--text-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Settings and Sign in: parts separated by hairlines, labels above fields. */
+.ms-settings__part { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) 0; border-top: 1px solid var(--color-border); }
+.ms-settings__part:first-of-type { border-top: 0; padding-top: 0; }
+.ms-settings__part > h2, .ms-settings__sub { margin: 0; }
+.ms-settings__sub { font-size: var(--text-ui); font-weight: 600; }
+.ms-field-hint { margin: 0; color: var(--color-fg-secondary); font-size: var(--text-dense); }
+.ms-secret { display: flex; gap: var(--space-1); align-items: center; }
+.ms-secret > .oc-input { flex: 1 1 auto; }
+.ms-signed-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.ms-signed-in > .oc-btn { margin-left: auto; }
+.ms-sign-in .oc-form { max-width: 24rem; }
+
+/* Theme and text size: a segmented radio group. */
+.ms-segmented { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.ms-segmented > legend { padding: 0; margin-bottom: var(--space-1); }
+.ms-segmented__group { display: inline-flex; align-self: flex-start; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); overflow: hidden; }
+.ms-segmented__group > label { position: relative; display: flex; }
+.ms-segmented__group > label + label { border-left: 1px solid var(--color-border-strong); }
+.ms-segmented input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.ms-segmented span { display: inline-flex; align-items: center; min-height: var(--target-tool); padding: 0 var(--space-3); background: var(--color-bg-elevated); color: var(--color-fg-secondary); font-size: var(--text-dense); font-weight: 500; }
+.ms-segmented label:hover span { background: var(--color-bg-hover); color: var(--color-fg-primary); }
+.ms-segmented input:checked + span { background: var(--color-accent-dim); color: var(--color-accent); }
+.ms-segmented input:focus-visible + span { outline: var(--focus-ring); outline-offset: calc(-1 * var(--focus-offset) - 2px); }
+@media (pointer: coarse) { .ms-segmented span { min-height: var(--target-touch); padding: 0 var(--space-4); } }
