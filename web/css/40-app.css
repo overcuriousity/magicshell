@@ -118,6 +118,7 @@
   align-items: center;
   font-size: var(--text-dense);
 }
+.ms-bars--delta { grid-template-columns: fit-content(40%) minmax(0, 1fr) auto auto; }
 .ms-bar { display: contents; }
 .ms-bar__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-bar__fill {
@@ -137,6 +138,7 @@
 .ms-scale > span { height: 0.625rem; background: var(--k); outline: 1px solid var(--k-outline, transparent); outline-offset: -1px; }
 .ms-scale > span:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
 .ms-scale > span:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ms-answer > .ms-bars { margin-top: var(--space-3); }
 .ms-mark { position: relative; height: 0.75rem; }
 .ms-mark::after {
   content: "";
