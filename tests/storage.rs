@@ -65,6 +65,16 @@ fn entry(id: &str, at: &str) -> Value {
     })
 }
 
+fn entry_with_why(id: &str, at: &str, why: Value) -> Value {
+    let mut e = entry(id, at);
+    e["why"] = why;
+    e
+}
+
+fn fitting_why() -> Value {
+    json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"0": false}}}})
+}
+
 #[tokio::test]
 async fn a_saved_setup_is_listed() {
     let (app, ada, _bob) = two_users().await;
@@ -303,4 +313,87 @@ async fn storage_needs_a_signed_in_user() {
         assert_eq!(res.status(), 401);
         assert_eq!(res.text().await.unwrap(), "Sign in first.");
     }
+}
+
+#[tokio::test]
+async fn an_entry_keeps_its_why_part() {
+    let (app, ada, _bob) = two_users().await;
+    let e = entry_with_why("e1", "2026-11-13T10:00:00Z", fitting_why());
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+    assert_eq!(list(&app, "/api/history", &ada).await[0]["why"], fitting_why());
+}
+
+#[tokio::test]
+async fn an_entry_without_a_why_part_lists_without_one() {
+    let (app, ada, _bob) = two_users().await;
+    put(&app, "/api/history/e1", &entry("e1", "2026-11-13T10:00:00Z"), Some(&ada)).await;
+    assert!(list(&app, "/api/history", &ada).await[0].get("why").is_none());
+}
+
+#[tokio::test]
+async fn a_why_part_that_does_not_fit_is_refused() {
+    let (app, ada, _bob) = two_users().await;
+    let cases: Vec<(&str, Value)> = vec![
+        ("version", json!({"v": 2, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {}}}})),
+        ("done over words", json!({"v": 1, "words": 1, "done": 2, "q": {"k": {"vals": [0.5, 0.5], "flips": {}}}})),
+        ("words differ", json!({"v": 1, "words": 2, "done": 1, "q": {"k": {"vals": [0.5], "flips": {}}}})),
+        (
+            "foreign key",
+            json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {}}, "z": {"vals": [0.5], "flips": {}}}}),
+        ),
+        ("question missing", json!({"v": 1, "words": 1, "done": 1, "q": {}})),
+        ("vals too short", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [], "flips": {}}}})),
+        ("vals too long", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5, 0.5], "flips": {}}}})),
+        ("null val", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [null], "flips": {}}}})),
+        (
+            "flip index out of range",
+            json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"7": true}}}}),
+        ),
+        (
+            "flip key not a number",
+            json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"x": true}}}}),
+        ),
+        ("flip string", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"0": "a"}}}})),
+        ("flip object", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"0": {}}}}})),
+        ("flip negative", json!({"v": 1, "words": 1, "done": 1, "q": {"k": {"vals": [0.5], "flips": {"0": -1}}}})),
+        ("unknown field", json!({"v": 1, "words": 1, "done": 1, "extra": 1, "q": {"k": {"vals": [0.5], "flips": {}}}})),
+    ];
+    for (name, why) in cases {
+        let res = put(&app, "/api/history/e1", &entry_with_why("e1", "2026-11-13T10:00:00Z", why), Some(&ada)).await;
+        assert_eq!(res.status(), 422, "{name}");
+        assert_eq!(res.text().await.unwrap(), "The kept Why? result of this entry is not valid.", "{name}");
+    }
+    assert!(list(&app, "/api/history", &ada).await.is_empty());
+}
+
+/// A part of exactly `len` bytes (as `serde_json::to_string` writes it), with its run.
+fn why_of_length(len: usize) -> (Value, Value) {
+    let words = 1700;
+    let vals = vec![0.1234567; words];
+    let flips: serde_json::Map<String, Value> = (0..words).map(|i| (i.to_string(), json!(false))).collect();
+    let part = |key: &str| json!({"v": 1, "words": words, "done": words, "q": {key: {"vals": vals, "flips": flips}}});
+    let base = serde_json::to_string(&part("k")).unwrap().len();
+    assert!(base <= len, "the base part is already {base} bytes");
+    let key = format!("k{}", "x".repeat(len - base));
+    let run =
+        json!({"state": vec!["a"; words].join(" "), "questions": [{"key": key, "type": "noul", "text": "Anything?"}]});
+    let why = part(&key);
+    assert_eq!(serde_json::to_string(&why).unwrap().len(), len);
+    (why, run)
+}
+
+#[tokio::test]
+async fn a_why_part_at_the_size_cap_is_kept_and_one_over_is_refused() {
+    let (app, ada, _bob) = two_users().await;
+    let cap = 40 * 1024;
+    let (why, run) = why_of_length(cap);
+    let mut e = entry_with_why("e1", "2026-11-13T10:00:00Z", why);
+    e["run"] = run;
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+    let (why, run) = why_of_length(cap + 1);
+    let mut e = entry_with_why("e1", "2026-11-13T10:00:00Z", why);
+    e["run"] = run;
+    let res = put(&app, "/api/history/e1", &e, Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "The kept Why? result of this entry is too large to keep.");
 }
