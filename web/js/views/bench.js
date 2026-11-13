@@ -2,6 +2,7 @@
 // 90rem). Typing edits the model quietly; structural changes rebuild the form and focus finds its way
 // back by data-fid. Results always come from the run that produced them (state.ranA / ranB).
 import { LIMITS } from '../limits.js';
+import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { h } from '../ui/dom.js';
@@ -14,6 +15,7 @@ import { createBenchModel, takeRun } from './bench-model.js';
 import { fromRun } from './setup-model.js';
 import { questionCards } from './bench-cards.js';
 import { colorSlots, resultsSection, variantLabel } from './bench-results.js';
+import { createWhyPanel, whyButton } from './why-panel.js';
 
 const SPINNER_AFTER_MS = 400;
 
@@ -71,6 +73,9 @@ export function createBenchView(deps = {}) {
   let lastBusy = null;
   let setups = [...BUILTIN];
   let store = null;
+  let ctx = null;
+  let panel = null;
+  let lastWhyOpen = false;
   const hosts = {};
 
   // Typing goes through here: the model changes, the form is left alone.
@@ -256,9 +261,33 @@ export function createBenchView(deps = {}) {
     if (hosts.variant.firstChild !== hosts.variantEditor) hosts.variant.replaceChildren(hosts.variantEditor);
   }
 
+  // The panel is made once per opening and kept across re-renders; it is closed whenever it goes
+  // away (it saves its partial result to the entry it was made for).
+  function closePanel() {
+    panel?.close();
+    panel = null;
+  }
+
   function renderResults(state) {
+    const entry = state.entryA;
+    if (state.whyOpen && entry && state.resultA) {
+      if (!panel) {
+        panel = createWhyPanel({
+          client: ctx.client,
+          entry,
+          save: (why) => model.saveWhy(entry, why),
+          onBack: model.closeWhy,
+          onAuth: () => ctx.navigate(HREF.signIn),
+        });
+        panel.el.setAttribute('tabindex', '-1');
+      }
+      if (hosts.results.firstChild !== panel.el || hosts.results.childNodes.length !== 1) hosts.results.replaceChildren(panel.el);
+      return;
+    }
+    closePanel();
     hosts.results.replaceChildren(...resultsSection(state, model.diff(), {
       showIO,
+      why: whyButton({ entry, why: ctx.why, onOpen: model.openWhy }),
       notify: deps.notify,
       toggleIO: () => {
         showIO = !showIO;
@@ -315,6 +344,11 @@ export function createBenchView(deps = {}) {
       }
       renderErrors(state, ended);
     });
+    if (state.whyOpen !== lastWhyOpen) {
+      lastWhyOpen = state.whyOpen;
+      if (state.whyOpen) panel?.el.focus({ preventScroll: true });
+      else root.querySelector('.ms-why-ask button')?.focus({ preventScroll: true });
+    }
   }
 
   const onKey = (e) => {
@@ -325,17 +359,20 @@ export function createBenchView(deps = {}) {
   };
 
   return {
-    mount(el, ctx) {
+    mount(el, c) {
       root = el;
       showIO = false;
       setups = [...BUILTIN];
       root.classList.add('oc-columns--split', 'ms-bench');
-      deps = { ...deps, notify: ctx.notify };
+      deps = { ...deps, notify: c.notify };
+      ctx = c;
       store = ctx.store;
+      panel = null;
+      lastWhyOpen = false;
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
       // A run handed over (by the guide, Setups or History) replaces the one kept from last time.
       const queued = takeRun();
-      if (queued) model.loadRun(queued.run, queued.result);
+      if (queued) model.loadRun(queued.run, queued.result, queued.entry);
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());
       hosts.saveAs = h('div', { class: 'ms-save-as-host' }, saveAsControl());
       hosts.form = h('div', { class: 'oc-stack' });
@@ -375,6 +412,7 @@ export function createBenchView(deps = {}) {
     currentRun: () => (model?.holdsSomething() ? JSON.parse(JSON.stringify(model.state.a)) : null),
     unmount() {
       off?.();
+      closePanel();
       clearTimeout(spinnerTimer);
       root?.removeEventListener('keydown', onKey);
       root = null;

@@ -8,11 +8,11 @@ import { sessionStore } from './session.js';
 
 export const SESSION_KEY = 'magicshell.bench';
 
-// A run (with its result, from History) left for the bench that mounts next, by every view that
+// A run (with its result and History entry, from History) left for the bench that mounts next, by every view that
 // hands one over: Setups, History and the guided view. In memory, so it works without storage.
 // Taken once.
 let pending = null;
-export const queueRun = (run, result = null) => { pending = { run, result }; };
+export const queueRun = (run, result = null, entry = null) => { pending = { run, result, entry }; };
 export function takeRun() {
   const taken = pending;
   pending = null;
@@ -132,7 +132,7 @@ export function createBenchModel({
   // A, then what depends on it: A's result, the variant B, B's result. A part that does not fit
   // drops what depends on it.
   const restore = () => {
-    const none = { a: emptyRun(), ranA: null, resultA: null, b: null, variant: null, ranB: null, resultB: null };
+    const none = { a: emptyRun(), ranA: null, resultA: null, entryA: null, b: null, variant: null, ranB: null, resultB: null };
     let saved;
     try {
       saved = JSON.parse(session?.getItem(SESSION_KEY) ?? 'null');
@@ -144,26 +144,29 @@ export function createBenchModel({
     const ranA = keptRun(saved.ranA);
     const resultA = keptResult(saved.resultA, ranA);
     if (!resultA) return { ...none, a };
+    // The entry belongs to the result: kept with it, dropped without it.
+    const entryA = isObject(saved.entryA) && typeof saved.entryA.id === 'string' ? saved.entryA : null;
     const b = keptRun(saved.b);
-    if (!b) return { ...none, a, ranA, resultA };
+    if (!b) return { ...none, a, ranA, resultA, entryA };
     const variant = VARIANTS.some((v) => v.id === saved.variant) ? saved.variant : null;
     const ranB = keptRun(saved.ranB);
     const resultB = keptResult(saved.resultB, ranB);
-    return { a, ranA, resultA, b, variant, ranB: resultB ? ranB : null, resultB };
+    return { a, ranA, resultA, entryA, b, variant, ranB: resultB ? ranB : null, resultB };
   };
 
   const state = {
     ...restore(),
     busy: null,
+    whyOpen: false,
     error: null,
     // Which run the error belongs to: 'a' or 'b', so the view can show it beside that run.
     errorFor: null,
   };
 
   const persist = () => {
-    const { a, ranA, resultA, b, variant, ranB, resultB } = state;
+    const { a, ranA, resultA, entryA, b, variant, ranB, resultB } = state;
     try {
-      session?.setItem(SESSION_KEY, JSON.stringify({ a, ranA, resultA, b, variant, ranB, resultB }));
+      session?.setItem(SESSION_KEY, JSON.stringify({ a, ranA, resultA, entryA, b, variant, ranB, resultB }));
     } catch {
       // Without session storage the bench still works; it just does not survive a reload.
     }
@@ -180,8 +183,9 @@ export function createBenchModel({
   const runner = createRunOnce({ client, store, now, uuid, mode, navigate, guided: false });
 
   // Validates, calls the model, and on success hands the result to `done`; run-once records it.
-  const send = (which, run, done) =>
+  const send = (which, run, done, saved) =>
     runner.send(run, {
+      saved,
       start() {
         state.busy = which;
         state.error = null;
@@ -252,12 +256,15 @@ export function createBenchModel({
       ),
 
     loadSetup(setup) {
+      model.closeWhy();
       state.a = runOf(setup.sampleState ?? '', copy(setup.questions));
       state.error = null;
       state.errorFor = null;
       changed();
     },
-    loadRun(run, result = null) {
+    loadRun(run, result = null, entry = null) {
+      model.closeWhy();
+      state.entryA = result ? entry : null;
       state.a = runOf(run.state, copy(run.questions));
       state.ranA = result ? copy(state.a) : null;
       state.resultA = result;
@@ -265,18 +272,46 @@ export function createBenchModel({
     },
 
     run() {
+      model.closeWhy();
       const run = copy(state.a);
+      let mine = null;
       return send('a', run, (result) => {
+        mine = result;
         state.ranA = run;
         state.resultA = result;
+        state.entryA = null;
         state.b = null;
         state.variant = null;
         state.ranB = null;
         state.resultB = null;
+      }, (entry) => {
+        // Only while the result it belongs to is still A's.
+        if (state.resultA !== mine) return;
+        state.entryA = entry;
+        changed();
       });
+    },
+    // Why? is for run A only, and needs its saved entry. The panel is kept by the view across
+    // changes, so saveWhy stays quiet. It saves the entry it is given, never state.entryA: the
+    // panel's last save arrives after it was closed, when entryA may be gone or a newer run's.
+    openWhy() {
+      if (!state.resultA || !state.entryA || state.whyOpen) return;
+      state.whyOpen = true;
+      changed();
+    },
+    closeWhy() {
+      if (!state.whyOpen) return;
+      state.whyOpen = false;
+      changed();
+    },
+    saveWhy(entry, why) {
+      entry.why = why;
+      if (entry === state.entryA) persist();
+      return store.saveEntry(entry);
     },
     startVariant(variantId) {
       if (state.busy || !state.ranA) return;
+      model.closeWhy();
       const ready = VARIANTS.find((v) => v.id === variantId);
       state.b = ready ? ready.apply(state.ranA) : copy(state.ranA);
       state.variant = ready ? ready.id : null;
@@ -293,6 +328,7 @@ export function createBenchModel({
     },
     runVariant() {
       if (!state.b) return Promise.resolve();
+      model.closeWhy();
       const run = copy(state.b);
       return send('b', run, (result) => {
         state.ranB = run;

@@ -10,6 +10,7 @@ import { resultsSection } from './bench-results.js';
 import { queueRun } from './bench-model.js';
 import { loadable, queueGuidedRun } from './guided-model.js';
 import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
+import { createWhyPanel, whyButton } from './why-panel.js';
 
 const LIST = HREF.history;
 
@@ -22,6 +23,9 @@ export function createHistoryView({ now = () => new Date() } = {}) {
   let openId = null;
   let showIO = false;
   let loaded = false;
+  // The entry whose Why? panel is open, and the panel: made once per opening, kept across re-renders.
+  let whyId = null;
+  let panel = null;
 
   const notify = (text, opts) => ctx.notify(text, opts);
   const fail = (e) => notify(messageOf(e), { kind: 'danger' });
@@ -41,7 +45,15 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     });
   }
 
+  // Every way the panel goes away ends here: it stops its run and saves the partial result.
+  function closeWhy() {
+    panel?.close();
+    panel = null;
+    whyId = null;
+  }
+
   async function remove(entry) {
+    closeWhy();
     let undo;
     try {
       undo = await model.remove(entry.id);
@@ -95,12 +107,14 @@ export function createHistoryView({ now = () => new Date() } = {}) {
   }
 
   function openInBench(entry) {
-    queueRun(entry.run, benchResult(entry));
+    closeWhy();
+    queueRun(entry.run, benchResult(entry), entry);
     ctx.navigate(HREF.bench);
   }
 
   // A run the guide cannot take (more than one question) opens in the bench instead.
   function askAgain(entry) {
+    closeWhy();
     if (!loadable(entry.run)) {
       openInBench(entry);
       return;
@@ -120,15 +134,45 @@ export function createHistoryView({ now = () => new Date() } = {}) {
         root.querySelector('[data-fid="io"]')?.focus({ preventScroll: true });
       },
     };
+    const open = whyId === entry.id && Boolean(ctx.why);
+    if (open) {
+      panel ??= createWhyPanel({
+        client: ctx.client,
+        entry,
+        save: (why) => model.saveWhy(entry.id, why),
+        onBack: () => {
+          closeWhy();
+          renderEntry(entry);
+          root.querySelector('.ms-why-ask button')?.focus({ preventScroll: true });
+        },
+        onAuth: () => ctx.navigate(HREF.signIn),
+      });
+      panel.el.setAttribute('tabindex', '-1');
+    } else {
+      closeWhy();
+      view.why = whyButton({
+        entry,
+        why: ctx.why,
+        onOpen() {
+          whyId = entry.id;
+          renderEntry(entry);
+          panel?.el.focus({ preventScroll: true });
+        },
+      });
+    }
     root.replaceChildren(
       h('header', { class: 'oc-page-head' },
         h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'History'),
-        h('a', { class: 'oc-btn', href: LIST }, 'Back'),
+        h('a', { class: 'oc-btn', href: LIST, onclick: closeWhy }, 'Back'),
       ),
       h('div', { class: 'oc-stack ms-hentry' },
         h('div', { class: 'ms-hentry__when' }, formatWhen(entry.at, now())),
-        entry.run.state.trim() ? h('pre', { class: 'ms-hentry__state' }, entry.run.state) : null,
-        ...resultsSection(state, null, view),
+        ...(open
+          ? [panel.el]
+          : [
+              entry.run.state.trim() ? h('pre', { class: 'ms-hentry__state' }, entry.run.state) : null,
+              ...resultsSection(state, null, view),
+            ]),
         h('div', { class: 'oc-row ms-actions' },
           act('Open in bench', () => openInBench(entry), 'oc-btn oc-btn--primary'),
           entry.guided ? act('Ask again', () => askAgain(entry)) : null,
@@ -163,7 +207,10 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     if (!root || !loaded) return;
     const entry = openId ? model.find(openId) : null;
     if (entry) renderEntry(entry);
-    else renderList();
+    else {
+      closeWhy();
+      renderList();
+    }
   }
 
   return {
@@ -173,6 +220,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       openId = c.route?.id ?? null;
       showIO = false;
       loaded = false;
+      closeWhy();
       // One model per store: an undo that finishes after leaving still updates the next mount.
       if (!model || modelStore !== ctx.store) {
         model = createHistoryModel(ctx.store);
@@ -184,6 +232,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     unmount() {
       // ctx stays: an Undo still in flight finishes against the store after leaving.
       off?.();
+      closeWhy();
       root = null;
     },
   };

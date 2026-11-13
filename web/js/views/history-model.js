@@ -66,6 +66,14 @@ export function createHistoryModel(store) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    // The part Why? kept, on the entry in the list and in the store. Quiet: the open entry screen
+    // keeps its panel and must not be rebuilt under it.
+    async saveWhy(id, why) {
+      const entry = model.find(id);
+      if (!entry) return;
+      entry.why = why;
+      await store.saveEntry(entry);
+    },
     // Both resolve to an undo that saves the removed entries back.
     async remove(id) {
       const gone = list.filter((e) => e.id === id);
