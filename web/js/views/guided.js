@@ -3,6 +3,7 @@
 // Typing edits the model quietly; other changes rebuild the step, and focus finds its way back by
 // data-fid (or to the heading when the step changed).
 import { LIMITS } from '../limits.js';
+import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
 import { levelClass, optionClass } from '../ui/colors.js';
 import { h } from '../ui/dom.js';
@@ -11,6 +12,7 @@ import { picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
 import { answerResult, guidedVerdict } from '../ui/results.js';
 import { createGuidedModel, takeGuidedRun } from './guided-model.js';
+import { createWhyPanel, whyButton } from './why-panel.js';
 
 const SPINNER_AFTER_MS = 400;
 
@@ -37,6 +39,8 @@ export function createGuidedView() {
   let lastStep = null;
   let shownError = null;
   let refused = false;
+  let lastWhyOpen = false;
+  let panel = null;
   const hosts = {};
 
   const typing = (fn) => (...args) => {
@@ -214,12 +218,31 @@ export function createGuidedView() {
     return body;
   }
 
+  // The panel is made once per opening and kept across re-renders; it is closed whenever it goes away.
+  function closePanel() {
+    panel?.close();
+    panel = null;
+  }
+
   function resultStep(state) {
-    const { question, answer } = state.result;
+    const { question, answer, entry } = state.result;
+    const asked = h('h1', { class: 'ms-guide__asked', tabindex: '-1' }, question.text);
+    if (state.whyOpen && entry) {
+      panel ??= createWhyPanel({
+        client: ctx.client,
+        entry,
+        save: model.saveWhy,
+        onBack: model.closeWhy,
+        onAuth: () => ctx.navigate(HREF.signIn),
+      });
+      return [asked, panel.el];
+    }
+    closePanel();
     return [
-      h('h1', { class: 'ms-guide__asked', tabindex: '-1' }, question.text),
+      asked,
       guidedVerdict(question, answer),
       answerResult(question, answer, { percent: true, pick: false }),
+      whyButton({ entry, why: ctx.why, onOpen: model.openWhy }),
     ];
   }
 
@@ -284,6 +307,7 @@ export function createGuidedView() {
     if (stepChanged) {
       rebuild = true;
     }
+    if (state.step !== 'result') closePanel();
     if (!quiet || rebuild) {
       renderBody(state);
       renderActions(state);
@@ -293,7 +317,11 @@ export function createGuidedView() {
     renderError(state, ended);
     const first = lastStep === null;
     lastStep = state.step;
-    if (stepChanged && !first) {
+    const whyChanged = state.whyOpen !== lastWhyOpen;
+    lastWhyOpen = state.whyOpen;
+    if (whyChanged && !stepChanged) {
+      root.querySelector('h1')?.focus({ preventScroll: true });
+    } else if (stepChanged && !first) {
       window.scrollTo(0, 0);
       root.querySelector('h1')?.focus({ preventScroll: true });
     } else if (fid && !root.contains(document.activeElement)) {
@@ -316,6 +344,7 @@ export function createGuidedView() {
       spinner = false;
       lastBusy = false;
       lastStep = null;
+      lastWhyOpen = false;
       shownError = null;
       root.classList.add('ms-guide');
       model = createGuidedModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
@@ -342,6 +371,7 @@ export function createGuidedView() {
     unmount() {
       off?.();
       clearTimeout(spinnerTimer);
+      closePanel();
       root?.removeEventListener('keydown', onKey);
       root = null;
       model = null;
