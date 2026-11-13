@@ -106,7 +106,7 @@ function jsonPane(head, text, notify) {
   );
 }
 
-// view: { showIO, toggleIO(), notify }
+// view: { showIO, toggleIO(), notify, why? }; why is an element (the Why? button) for run A.
 export function resultsSection(state, diff, view) {
   if (!state.resultA) return [];
   const withB = Boolean(state.resultB);
@@ -123,6 +123,7 @@ export function resultsSection(state, diff, view) {
     : null;
   return [
     h('div', { class: 'ms-results' }, blocks),
+    view.why ?? null,
     h('div', { class: 'ms-runinfo' }, lines),
     h('div', { class: 'ms-io-toggle' },
       h('button', {

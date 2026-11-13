@@ -18,6 +18,7 @@ A decision model does not write text. It takes a situation and typed questions, 
 
 - **Guided view** (opens by default): pick a kind of question, write it, add the details, read the answer as a verdict and bars.
 - **Bench**: one situation, up to 8 typed questions, distributions per question, the exact request and response, and a variant run beside a baseline (without descriptions, neutral option names, reversed order).
+- **Why?** (accounts mode): after a result, ask the model again once per word of the situation with that word left out. Words are marked by how far their absence moved the answer: shade for strength, two colours for direction, ⇄ where the answer flips; the numbers show on hover, tap or focus. It costs one extra call per word, can be stopped, and is kept with the run in History. Offered in the guided view, the bench (baseline only) and a History entry.
 - **Setups**: ready-made and your own, exported and imported as JSON. **History**: every run, reopened, run again or loaded as baseline.
 
 ## Two modes
@@ -26,6 +27,7 @@ A decision model does not write text. It takes a situation and typed questions, 
 |---|---|---|
 | Sign-in | none | username and password |
 | History and setups | browser storage | server database, per user |
+| Why? | no | yes |
 
 In both, the endpoint, key and model are server configuration, and the browser talks only to its own server, which calls the endpoint. The browser never sees the key.
 
@@ -60,6 +62,8 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] api_key` | bearer key; `file://` reads it from a file |
 | `[app] database` | SQLite file name; setting it turns accounts on |
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
+| `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
+| `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 
 Without `database` the server is open: everyone who can reach it can run questions. Use that only on a trusted network.

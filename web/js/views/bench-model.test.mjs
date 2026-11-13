@@ -360,7 +360,7 @@ test('an error says which run it belongs to', async () => {
 test('a queued run is taken once', () => {
   const run = { state: '', questions: [] };
   queueRun(run, { totalMs: 1 });
-  assert.deepEqual(takeRun(), { run, result: { totalMs: 1 } });
+  assert.deepEqual(takeRun(), { run, result: { totalMs: 1 }, entry: null });
   assert.equal(takeRun(), null);
 });
 
@@ -442,4 +442,174 @@ test('a kept result that no longer answers its run is dropped with what depends 
   assert.equal(back.state.ranA, null);
   assert.equal(back.state.resultA, null);
   assert.equal(back.state.b, null);
+});
+
+const why = { words: 2, done: 1, rows: [] };
+const handedOver = {
+  run: { state: 'Old.', questions: [{ key: 'ok', type: 'noul', text: 'Fine?' }] },
+  result: { answers: { ok: { type: 'noul', noul: 0.9 } }, model: 'm', inputTokens: 3, totalMs: 9, upstreamMs: null, request: '', response: '' },
+  entry: { id: 'e1', at: '2026-11-13T09:00:00Z', guided: false, run: { state: 'Old.', questions: [{ key: 'ok', type: 'noul', text: 'Fine?' }] }, reply: {}, totalMs: 9 },
+};
+
+test('run A learns its entry once saved', async () => {
+  const m = make();
+  m.loadSetup(triage);
+  assert.equal(m.state.entryA, null);
+  await m.run();
+  assert.ok(m.state.entryA.id);
+  assert.deepEqual(m.state.entryA.run, m.state.ranA);
+});
+
+test('a run handed over from History brings its entry and kept part', () => {
+  const m = make();
+  const entry = { ...handedOver.entry, why };
+  m.loadRun(handedOver.run, handedOver.result, entry);
+  assert.equal(m.state.entryA, entry);
+  m.loadRun(handedOver.run);
+  assert.equal(m.state.entryA, null);
+  queueRun(handedOver.run, handedOver.result, entry);
+  assert.equal(takeRun().entry, entry);
+  queueRun(handedOver.run);
+  assert.equal(takeRun().entry, null);
+});
+
+test('a new run A closes Why? and forgets the old entry', async () => {
+  const m = make();
+  m.loadRun(handedOver.run, handedOver.result, handedOver.entry);
+  m.openWhy();
+  assert.equal(m.state.whyOpen, true);
+  const pending = m.run();
+  assert.equal(m.state.whyOpen, false);
+  await pending;
+  assert.notEqual(m.state.entryA, handedOver.entry);
+  assert.equal(m.state.entryA.run.state, 'Old.');
+});
+
+test('the old entry is gone before the new save lands', async () => {
+  let release;
+  const store = { async listSetups() { return []; }, saveEntry: () => new Promise((r) => { release = r; }) };
+  const m = make({ store });
+  m.loadRun(handedOver.run, handedOver.result, handedOver.entry);
+  const done = m.run();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(m.state.entryA, null);
+  release();
+  await done;
+  assert.ok(m.state.entryA.id);
+});
+
+test('openWhy needs an entry and a result; closeWhy closes', () => {
+  const m = make();
+  m.openWhy();
+  assert.equal(m.state.whyOpen, false);
+  m.loadRun(handedOver.run, handedOver.result, handedOver.entry);
+  m.openWhy();
+  assert.equal(m.state.whyOpen, true);
+  m.closeWhy();
+  assert.equal(m.state.whyOpen, false);
+});
+
+test('loading a setup or a run, or starting a variant, closes Why?', () => {
+  const m = make();
+  const reopen = () => { m.loadRun(handedOver.run, handedOver.result, handedOver.entry); m.openWhy(); };
+  reopen();
+  m.loadSetup(triage);
+  assert.equal(m.state.whyOpen, false);
+  reopen();
+  m.startVariant('bare');
+  assert.equal(m.state.whyOpen, false);
+  reopen();
+  m.loadRun(handedOver.run);
+  assert.equal(m.state.whyOpen, false);
+});
+
+test('the entry survives a reload with its result and not without', async () => {
+  const session = memory();
+  const m = make({ session });
+  m.loadSetup(triage);
+  await m.run();
+  assert.equal(make({ session }).state.entryA.id, m.state.entryA.id);
+  const saved = JSON.parse(session.getItem(SESSION_KEY));
+  saved.entryA = { nope: true };
+  session.setItem(SESSION_KEY, JSON.stringify(saved));
+  assert.equal(make({ session }).state.entryA, null);
+  saved.entryA = m.state.entryA;
+  saved.resultA = null;
+  session.setItem(SESSION_KEY, JSON.stringify(saved));
+  assert.equal(make({ session }).state.entryA, null);
+});
+
+test('run B never gets an entry for Why?', async () => {
+  const m = make();
+  m.loadSetup(triage);
+  await m.run();
+  const entry = m.state.entryA;
+  m.startVariant('bare');
+  await m.runVariant();
+  assert.equal(m.state.entryA, entry);
+});
+
+test('saveWhy saves entry A again with the part', async () => {
+  const store = memoryStore();
+  const session = memory();
+  const m = make({ store, session });
+  m.loadSetup(triage);
+  await m.run();
+  let heard = 0;
+  m.subscribe(() => { heard += 1; });
+  await m.saveWhy(m.state.entryA, why);
+  assert.equal(heard, 0);
+  assert.equal(store.entries.length, 2);
+  assert.equal(store.entries[1].id, store.entries[0].id);
+  assert.deepEqual(store.entries[1].why, why);
+  assert.deepEqual(m.state.entryA.why, why);
+  assert.deepEqual(make({ session }).state.entryA.why, why);
+});
+
+test('saveWhy after a new run A saves the old entry and leaves the new one alone', async () => {
+  const store = memoryStore();
+  const m = make({ store });
+  m.loadSetup(triage);
+  await m.run();
+  const old = m.state.entryA;
+  await m.run();
+  const fresh = m.state.entryA;
+  await m.saveWhy(old, why);
+  assert.deepEqual(store.entries.at(-1), { ...old, why });
+  assert.equal(fresh.why, undefined);
+});
+
+test('a slow save of run 1 does not attach its entry to run 2', async () => {
+  const releases = [];
+  const store = { async listSetups() { return []; }, saveEntry: () => new Promise((r) => releases.push(r)) };
+  const m = make({ store });
+  m.loadSetup(triage);
+  const first = m.run();
+  await new Promise((r) => setTimeout(r, 0));
+  const second = m.run();
+  await new Promise((r) => setTimeout(r, 0));
+  releases[0]();
+  await first;
+  assert.equal(m.state.entryA, null);
+  releases[1]();
+  await second;
+  assert.ok(m.state.entryA);
+});
+
+test('Why? cannot be opened during a run and does not open itself for the new result', async () => {
+  const releases = [];
+  const store = { async listSetups() { return []; }, saveEntry: () => new Promise((r) => releases.push(r)) };
+  const m = make({ store });
+  m.loadRun(handedOver.run, handedOver.result, handedOver.entry);
+  m.openWhy();
+  const pending = m.run();
+  assert.equal(m.state.busy, 'a');
+  m.openWhy();
+  assert.equal(m.state.whyOpen, false);
+  m.state.whyOpen = true; // as if opened in a way the guard missed
+  await new Promise((r) => setTimeout(r, 0));
+  releases[0]();
+  await pending;
+  assert.equal(m.state.whyOpen, false);
+  assert.ok(m.state.entryA);
 });

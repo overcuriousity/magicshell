@@ -78,7 +78,7 @@ export function createGuidedModel({
     }
   };
 
-  const state = { ...restore(), busy: false, result: null, error: null };
+  const state = { ...restore(), busy: false, result: null, whyOpen: false, error: null };
 
   const persist = () => {
     const { step, kind, question, options, scaleId, levels, context } = state;
@@ -164,6 +164,7 @@ export function createGuidedModel({
 
     ask() {
       const run = model.toRun();
+      let mine = null;
       return runner.send(run, {
         start() {
           state.busy = true;
@@ -172,7 +173,8 @@ export function createGuidedModel({
         },
         done(result) {
           state.busy = false;
-          state.result = { question: run.questions[0], answer: result.answers[KEY] };
+          mine = { question: run.questions[0], answer: result.answers[KEY], entry: null };
+          state.result = mine;
           state.step = 'result';
           changed();
         },
@@ -181,7 +183,30 @@ export function createGuidedModel({
           state.error = sentence;
           changed();
         },
+        saved(entry) {
+          // Only for the result this ask produced; a slow save must not tag a newer result.
+          if (state.result !== mine) return;
+          mine.entry = entry;
+          changed();
+        },
       });
+    },
+    // Why? needs the saved entry; the panel is kept across changes, so saveWhy stays quiet.
+    openWhy() {
+      if (state.step !== 'result' || !state.result?.entry || state.whyOpen) return;
+      state.whyOpen = true;
+      changed();
+    },
+    closeWhy() {
+      if (!state.whyOpen) return;
+      state.whyOpen = false;
+      changed();
+    },
+    // The entry is the one the panel was opened for, so a late save from a closed panel still
+    // lands on its own entry, never on a newer one.
+    saveWhy(entry, why) {
+      entry.why = why;
+      return store.saveEntry(entry);
     },
     askAnother() {
       if (state.busy) return;
@@ -189,11 +214,12 @@ export function createGuidedModel({
         state.step = 2;
         state.question = '';
         state.result = null;
+        state.whyOpen = false;
       });
     },
     startOver() {
       if (state.busy) return;
-      edit(() => Object.assign(state, fresh(), { result: null }));
+      edit(() => Object.assign(state, fresh(), { result: null, whyOpen: false }));
     },
 
     // The reverse of toRun for a run of one question; lands on step 2. Returns false otherwise.
@@ -201,7 +227,7 @@ export function createGuidedModel({
       if (!loadable(run)) return false;
       const q = run.questions[0];
       edit(() => {
-        Object.assign(state, fresh(), { result: null });
+        Object.assign(state, fresh(), { result: null, whyOpen: false });
         state.step = 2;
         state.kind = q.type;
         state.question = q.text;

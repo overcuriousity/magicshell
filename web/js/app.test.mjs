@@ -39,8 +39,8 @@ const fakeEl = (tag) => {
     setAttribute(k, v) { el.attrs[k] = v; },
     getAttribute: (k) => el.attrs[k] ?? null,
     addEventListener(type, fn) { (el.listeners[type] ??= []).push(fn); },
-    append(...c) { el.children.push(...c); },
-    replaceChildren(...c) { el.children = c; },
+    append(...c) { el.children.push(...c.map((n) => (n !== null && typeof n === 'object' ? n : String(n)))); },
+    replaceChildren(...c) { el.children = c.map((n) => (n !== null && typeof n === 'object' ? n : String(n))); },
     click(extra = {}) { for (const fn of el.listeners.click ?? []) fn({ button: 0, ...extra }); },
   };
   return el;
@@ -196,4 +196,11 @@ test('the sentence for a trimmed history names how many entries went', async () 
   const { trimmedSentence } = await import('./app.js');
   assert.equal(trimmedSentence(1), 'This browser is out of room, so History removed its oldest entry. It keeps making room this way.');
   assert.equal(trimmedSentence(3), 'This browser is out of room, so History removed its 3 oldest entries. It keeps making room this way.');
+});
+
+test('services carry the why limit in accounts mode only', async () => {
+  const { servicesFor } = await import('./app.js');
+  const why = { maxWords: 300 };
+  assert.deepEqual(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why }).why, why);
+  assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why }).why, null);
 });

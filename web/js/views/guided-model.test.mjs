@@ -365,3 +365,114 @@ test('a run queued for the guide is taken once', () => {
   assert.equal(takeGuidedRun(), run);
   assert.equal(takeGuidedRun(), null);
 });
+
+test('the result learns its entry once it is saved', async () => {
+  const { model, store } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  assert.equal(model.state.result.entry.id, store.entries[0].id);
+  assert.equal(model.state.whyOpen, false);
+});
+
+test('a result whose save failed has no entry', async () => {
+  const store = { async saveEntry() { throw new Error('disk full'); } };
+  const { model } = make({ store });
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  assert.equal(model.state.step, 'result');
+  assert.equal(model.state.result.entry, null);
+  model.openWhy();
+  assert.equal(model.state.whyOpen, false);
+});
+
+test('saveWhy saves the entry again with the part', async () => {
+  const { model, store } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  const why = { words: 2, done: 1, rows: [] };
+  await model.saveWhy(model.state.result.entry, why);
+  assert.equal(store.entries.length, 2);
+  assert.equal(store.entries[1].id, store.entries[0].id);
+  assert.deepEqual(store.entries[1].why, why);
+  assert.deepEqual(model.state.result.entry.why, why);
+});
+
+test('saveWhy does not notify listeners', async () => {
+  const { model } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  let heard = 0;
+  model.subscribe(() => { heard += 1; });
+  await model.saveWhy(model.state.result.entry, { words: 1, done: 1 });
+  assert.equal(heard, 0);
+});
+
+test('openWhy opens once saved, and does nothing without a saved entry', async () => {
+  const { model } = make();
+  model.openWhy();
+  assert.equal(model.state.whyOpen, false);
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  model.openWhy();
+  assert.equal(model.state.whyOpen, true);
+  model.closeWhy();
+  assert.equal(model.state.whyOpen, false);
+});
+
+test('asking another or starting over closes Why?', async () => {
+  const { model } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  model.openWhy();
+  model.askAnother();
+  assert.equal(model.state.whyOpen, false);
+  assert.equal(model.state.result, null);
+  await model.ask();
+  model.openWhy();
+  model.startOver();
+  assert.equal(model.state.whyOpen, false);
+  assert.equal(model.state.result, null);
+});
+
+test('a late saveWhy after asking another lands on its own entry', async () => {
+  const { model, store } = make();
+  model.setQuestion('Is it raining?');
+  await model.ask();
+  const first = model.state.result.entry;
+  model.askAnother();
+  model.setQuestion('Is it cold?');
+  await model.ask();
+  const second = model.state.result.entry;
+  const why = { words: 2, done: 1 };
+  await model.saveWhy(first, why);
+  assert.equal(store.entries.at(-1).id, first.id);
+  assert.deepEqual(store.entries.at(-1).why, why);
+  assert.equal(second.why, undefined);
+  model.askAnother();
+  await model.saveWhy(first, why);
+});
+
+test('a slow save does not tag a newer result with its entry', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const saved = [];
+  let slow = true;
+  const store = {
+    async saveEntry(e) {
+      if (slow) { slow = false; await gate; }
+      saved.push(e.id);
+    },
+  };
+  const { model } = make({ store });
+  model.setQuestion('Is it raining?');
+  const first = model.ask();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(model.state.step, 'result');
+  model.askAnother();
+  model.setQuestion('Is it cold?');
+  await model.ask();
+  const second = model.state.result.entry;
+  release();
+  await first;
+  assert.equal(model.state.result.entry, second);
+});

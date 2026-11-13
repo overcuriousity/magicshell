@@ -22,5 +22,9 @@ model = "decision-model"
 # database = "magicshell.db"
 # Questions one client may ask per minute (burst is the same number). Environment: MAGICSHELL__APP__RUNS_PER_MINUTE
 runs_per_minute = 60
+# Longest situation "Why?" accepts, in words; 0 turns "Why?" off. Well above 300 words a result over many questions can become too large to keep. Environment: MAGICSHELL__APP__WHY_MAX_WORDS
+why_max_words = 300
+# "Why?" questions one user may ask per minute, counted apart from runs (burst is the same number). Environment: MAGICSHELL__APP__WHY_PER_MINUTE
+why_per_minute = 600
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
 upstream_timeout_secs = 60

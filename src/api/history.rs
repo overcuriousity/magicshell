@@ -1,5 +1,6 @@
 //! A user's run history, newest first, at most 500 entries.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use axum::Json;
@@ -20,6 +21,8 @@ use crate::systemone::Run;
 
 const MAX_ENTRIES: i64 = 500;
 const MAX_STORED: usize = 64 * 1024;
+/// The kept Why? part, measured on its own so the whole request stays under the 64 KB body limit.
+const MAX_WHY: usize = 40 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -32,6 +35,56 @@ pub struct Entry {
     /// Opaque: later browser code may add fields.
     pub reply: Map<String, Value>,
     pub total_ms: Number,
+    /// The kept Why? result. Held raw so that a part that does not fit gets one clear sentence;
+    /// `check_why` parses it as a `WhyPart`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<Value>,
+}
+
+/// How each word of the situation moved the answers; see `check_why` for what must hold.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WhyPart {
+    v: u8,
+    words: u32,
+    done: u32,
+    q: BTreeMap<String, WhyQuestion>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WhyQuestion {
+    vals: Vec<f64>,
+    flips: BTreeMap<String, Value>,
+}
+
+fn check_why(why: &Value, run: &Run) -> Result<(), AppError> {
+    let size = serde_json::to_string(why).map_err(OcError::internal)?.len();
+    if size > MAX_WHY {
+        return Err(AppError::Invalid("The kept Why? result of this entry is too large to keep.".into()));
+    }
+    let bad = || AppError::Invalid("The kept Why? result of this entry is not valid.".into());
+    let part: WhyPart = serde_json::from_value(why.clone()).map_err(|_| bad())?;
+    let done = part.done as usize;
+    if part.v != 1 || part.done > part.words || part.words as usize != crate::systemone::word_count(&run.state) {
+        return Err(bad());
+    }
+    let keys: BTreeSet<&str> = run.questions.iter().map(|q| q.key.as_str()).collect();
+    if part.q.len() != keys.len() || !part.q.keys().all(|k| keys.contains(k.as_str())) {
+        return Err(bad());
+    }
+    for question in part.q.values() {
+        if question.vals.len() != done || !question.vals.iter().all(|v| v.is_finite()) {
+            return Err(bad());
+        }
+        for (word, flip) in &question.flips {
+            let word_ok = word.parse::<usize>().is_ok_and(|w| w < done && w.to_string() == *word);
+            if !word_ok || !(flip.is_boolean() || flip.is_u64()) {
+                return Err(bad());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// UTC with fixed width, so the text sorts like the time.
@@ -79,6 +132,9 @@ pub async fn put(
         + serde_json::to_string(&entry.reply).map_err(OcError::internal)?.len();
     if stored > MAX_STORED {
         return Err(AppError::Invalid("This entry is too large to keep.".into()));
+    }
+    if let Some(why) = &entry.why {
+        check_why(why, &entry.run)?;
     }
     let text = serde_json::to_string(&entry).map_err(OcError::internal)?;
     let mut tx = pool_of(&st)?.begin_with("BEGIN IMMEDIATE").await.map_err(OcError::from)?;

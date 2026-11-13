@@ -31,8 +31,9 @@ export function createRunOnce({ client, store, now, uuid, mode, navigate, guided
       return inFlight;
     },
     // hooks: start() when the call goes out, done(result) when it is back, fail(sentence) on
-    // a refused run, a failed call, or a failed save (after done).
-    async send(run, { start, done, fail }) {
+    // a refused run, a failed call, or a failed save (after done); saved(entry) once the entry is
+    // in History, optional.
+    async send(run, { start, done, fail, saved }) {
       if (inFlight) return;
       const problem = validateRun(run);
       if (problem) {
@@ -51,11 +52,14 @@ export function createRunOnce({ client, store, now, uuid, mode, navigate, guided
       }
       inFlight = false;
       done(result);
+      const entry = historyEntry({ id: uuid(), at: now().toISOString(), guided, run, result });
       try {
-        await store.saveEntry(historyEntry({ id: uuid(), at: now().toISOString(), guided, run, result }));
+        await store.saveEntry(entry);
       } catch (e) {
         failed(e, fail);
+        return;
       }
+      saved?.(entry);
     },
   };
 }

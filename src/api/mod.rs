@@ -21,6 +21,13 @@ pub struct ApiState {
     pub model: String,
     /// The accounts database; `None` is open mode.
     pub pool: Option<SqlitePool>,
+    /// "Why?": accounts mode only, and only while its word limit is above 0.
+    pub why: Option<Why>,
+}
+
+pub struct Why {
+    pub limiter: Limiter,
+    pub max_words: u32,
 }
 
 pub fn router(state: Arc<ApiState>) -> Router {
@@ -34,6 +41,9 @@ pub fn router(state: Arc<ApiState>) -> Router {
             .route("/api/setups/{id}", put(setups::put).delete(setups::delete))
             .route("/api/history", get(history::list).delete(history::clear))
             .route("/api/history/{id}", put(history::put).delete(history::delete));
+        if state.why.is_some() {
+            router = router.route("/api/why", post(run::post_why));
+        }
     }
     router.with_state(state)
 }

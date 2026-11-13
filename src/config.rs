@@ -8,6 +8,14 @@ fn runs_per_minute() -> u32 {
     60
 }
 
+fn why_max_words() -> u32 {
+    300
+}
+
+fn why_per_minute() -> u32 {
+    600
+}
+
 fn upstream_timeout_secs() -> u64 {
     60
 }
@@ -24,6 +32,12 @@ pub struct AppConfig {
     pub database: Option<String>,
     #[serde(default = "runs_per_minute")]
     pub runs_per_minute: u32,
+    /// Longest situation "Why?" accepts, in words; 0 turns "Why?" off.
+    #[serde(default = "why_max_words")]
+    pub why_max_words: u32,
+    /// "Why?" questions one user may ask per minute, counted apart from runs.
+    #[serde(default = "why_per_minute")]
+    pub why_per_minute: u32,
     #[serde(default = "upstream_timeout_secs")]
     pub upstream_timeout_secs: u64,
 }

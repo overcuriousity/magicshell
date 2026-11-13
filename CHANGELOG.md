@@ -4,6 +4,13 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-13
+
+### Added
+
+- Why? (accounts mode): after a result, the app asks the model once per word of the situation with that word left out and marks each word by how far its absence moved the answer. Shade shows strength, two colours show direction, ⇄ marks where the answer flips, and the numbers show on hover, tap or keyboard focus. A run can be stopped, and the result is kept with the run in History. It is offered in the guided view, the bench (baseline only) and a History entry.
+- `[app] why_max_words` (default 300; 0 turns Why? off) and `[app] why_per_minute` (default 600, counted apart from runs).
+
 ## [2026.11.4] - 2026-11-13
 
 ### Changed

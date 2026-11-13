@@ -420,3 +420,59 @@
 /* Footer: one quiet line at the end of the page, as in bitvault. */
 .ms-footer { margin-top: var(--space-6); padding-block: var(--space-3); color: var(--color-fg-muted); font-size: var(--text-micro); text-align: center; }
 .ms-guide__levels-lead { margin: 0; }
+
+/* Why?: the situation with every word shaded by how far leaving it out moved the answer. The
+   direction is the diverging pair (towards the pick, away from it), the size is five steps; the
+   numbers are in each word's label, tooltip and the detail line, so colour never carries it alone.
+   scripts/check-contrast.mjs pins the strongest step (52 %) and checks primary text on it. */
+.ms-why { display: flex; flex-direction: column; gap: var(--space-3); }
+.ms-why__head { margin: 0; }
+.ms-why__question { max-width: 24rem; }
+.ms-why__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+.ms-why__text { color: var(--color-fg-primary); font-size: var(--text-prose); line-height: 2.25; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ms-why__w {
+  margin: 0;
+  padding: 0.125rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  /* Tight: a button is inline-block, and the line's 2.25 would shade the whole line height. */
+  line-height: 1.25;
+  transition: background-color var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
+}
+button.ms-why__w { cursor: pointer; }
+button.ms-why__w:hover { text-decoration: underline dotted; text-underline-offset: 0.2em; }
+.ms-why__w--out { color: var(--color-fg-muted); text-decoration: line-through; outline: 1.5px dashed var(--color-border-control); outline-offset: -1px; }
+.ms-why--towards { --k: var(--chart-div-pos); }
+.ms-why--away { --k: var(--chart-div-neg); }
+.ms-why--s1 { background: color-mix(in srgb, var(--k) 12%, var(--color-bg-elevated)); }
+.ms-why--s2 { background: color-mix(in srgb, var(--k) 22%, var(--color-bg-elevated)); }
+.ms-why--s3 { background: color-mix(in srgb, var(--k) 32%, var(--color-bg-elevated)); }
+.ms-why--s4 { background: color-mix(in srgb, var(--k) 42%, var(--color-bg-elevated)); }
+.ms-why--s5 { background: color-mix(in srgb, var(--k) 52%, var(--color-bg-elevated)); }
+.ms-why__w--flip::after { content: "⇄"; margin-left: 0.125rem; font-size: var(--text-micro); font-weight: 600; line-height: 1; vertical-align: super; }
+.ms-why__detail { min-height: 1.5em; margin: 0; color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-mono); overflow-wrap: anywhere; }
+.ms-why__note { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-mono); }
+.ms-why-ask { flex-wrap: wrap; }
+.ms-why__legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--color-fg-secondary); font-size: var(--text-dense); }
+.ms-why__legend > span { display: inline-flex; align-items: center; gap: var(--space-1); }
+.ms-why__sw { display: inline-block; flex: none; width: 0.75rem; height: 0.75rem; border-radius: var(--radius-sm); outline: 1px solid var(--k); outline-offset: -1px; }
+.ms-why__flipmark { color: var(--color-fg-primary); font-weight: 600; }
+.ms-why__top > .oc-label { margin: 0 0 var(--space-1); }
+.ms-why__table { width: 100%; border-collapse: collapse; font-size: var(--text-dense); }
+.ms-why__table th { padding: 0 0 var(--space-1); color: var(--color-fg-muted); font-size: var(--text-micro); font-weight: 500; text-align: left; }
+.ms-why__table th + th { text-align: right; }
+.ms-why__table td { padding: var(--space-1) 0; border-top: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.ms-why__num { font-family: var(--font-mono); font-size: var(--text-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.ms-why__table td.ms-why__num { padding-left: var(--space-3); }
+.ms-why__flip { color: var(--color-fg-secondary); white-space: nowrap; }

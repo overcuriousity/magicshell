@@ -31,29 +31,32 @@ function wire(run) {
 export const requestText = (run) => JSON.stringify(wire(run));
 
 export function createServerClient(fetchFn, now = () => performance.now()) {
+  // Run and Why? share the request, the checks and the reply; only the route differs.
+  async function post(url, run) {
+    const request = requestText(run);
+    const started = now();
+    const reply = await send(fetchFn, url, request);
+    const response = await reply.text().catch(() => '');
+    const totalMs = now() - started;
+    if (!reply.ok) throw new RunError(sentence(response, reply.status), KINDS[reply.status] ?? 'upstream');
+    let outcome;
+    let body = null;
+    try {
+      body = JSON.parse(response);
+    } catch {
+      // checkOutcome reports it below.
+    }
+    try {
+      outcome = checkOutcome(body, run);
+    } catch (e) {
+      throw new RunError(e.message, 'upstream');
+    }
+    const upstreamMs = typeof body.upstreamMs === 'number' ? body.upstreamMs : null;
+    return { ...outcome, totalMs, upstreamMs, request, response };
+  }
   return {
-    async run(run) {
-      const request = requestText(run);
-      const started = now();
-      const reply = await send(fetchFn, 'api/run', request);
-      const response = await reply.text().catch(() => '');
-      const totalMs = now() - started;
-      if (!reply.ok) throw new RunError(sentence(response, reply.status), KINDS[reply.status] ?? 'upstream');
-      let outcome;
-      let body = null;
-      try {
-        body = JSON.parse(response);
-      } catch {
-        // checkOutcome reports it below.
-      }
-      try {
-        outcome = checkOutcome(body, run);
-      } catch (e) {
-        throw new RunError(e.message, 'upstream');
-      }
-      const upstreamMs = typeof body.upstreamMs === 'number' ? body.upstreamMs : null;
-      return { ...outcome, totalMs, upstreamMs, request, response };
-    },
+    run: (run) => post('api/run', run),
+    why: (run) => post('api/why', run),
     async signIn(username, password) {
       await expectNoContent(await send(fetchFn, 'api/auth/sign-in', JSON.stringify({ username, password })));
     },
