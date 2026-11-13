@@ -112,7 +112,6 @@ export function createHistoryView({ now = () => new Date() } = {}) {
   function renderEntry(entry) {
     const state = { resultA: benchResult(entry), ranA: entry.run, resultB: null, ranB: null, variant: null };
     const view = {
-      mode: ctx.mode,
       showIO,
       notify,
       toggleIO() {

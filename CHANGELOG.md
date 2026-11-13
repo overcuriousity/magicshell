@@ -4,6 +4,16 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-13
+
+### Removed
+
+- The static Pages site and the bring-your-own-key mode: the browser only talks to its own magicshell server. Two modes remain, open and accounts. Without its server the page shows one line saying so.
+
+### Fixed
+
+- The systemd unit started an unknown `serve` subcommand and failed; it now starts the server with no subcommand.
+
 ## [2026.11.0] - 2026-11-13
 
 ### Added

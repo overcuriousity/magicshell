@@ -183,25 +183,11 @@ test('a modifier-click on the switch carries nothing', () => {
   assert.deepEqual(bench.seen, [null]);
 });
 
-test('without a saved endpoint Ask points to Settings instead of the guide', () => {
-  globalThis.document = { createElement: fakeEl };
-  const guided = guidedSide(null);
-  const bench = benchSide(null);
-  const missing = fakeSide(null);
-  const ask = createAskView({ guided, bench, missing });
-  ask.mount({}, { route: { view: 'ask' }, modeSwitch: fakeEl('div'), navigate() {}, needsEndpoint: true });
-  assert.equal(missing.seen.length, 1);
-  assert.equal(guided.seen.length, 0);
-  ask.unmount();
-  ask.mount({}, { route: { view: 'ask', id: 'bench' }, modeSwitch: fakeEl('div'), navigate() {}, needsEndpoint: true });
-  assert.equal(bench.seen.length, 1);
-});
-
 const { showsNotSaving } = await import('./app.js');
 
 test('the not-saving notice is for browser storage only', () => {
-  assert.equal(showsNotSaving({ mode: 'pages', storage: null, store: { persistent: true } }), true);
+  assert.equal(showsNotSaving({ mode: 'open', storage: null, store: { persistent: true } }), true);
   assert.equal(showsNotSaving({ mode: 'open', storage: {}, store: { persistent: false } }), true);
-  assert.equal(showsNotSaving({ mode: 'pages', storage: {}, store: { persistent: true } }), false);
+  assert.equal(showsNotSaving({ mode: 'open', storage: {}, store: { persistent: true } }), false);
   assert.equal(showsNotSaving({ mode: 'accounts', storage: null, store: { persistent: true } }), false);
 });

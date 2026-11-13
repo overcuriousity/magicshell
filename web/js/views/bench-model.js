@@ -107,7 +107,7 @@ export function createBenchModel({
   store,
   now = () => new Date(),
   uuid = () => crypto.randomUUID(),
-  mode = 'pages',
+  mode = 'open',
   navigate = () => {},
   session = sessionStore(),
 }) {

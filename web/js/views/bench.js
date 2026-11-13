@@ -253,7 +253,6 @@ export function createBenchView(deps = {}) {
 
   function renderResults(state) {
     hosts.results.replaceChildren(...resultsSection(state, model.diff(), {
-      mode: deps.mode,
       showIO,
       notify: deps.notify,
       toggleIO: () => {
@@ -326,7 +325,7 @@ export function createBenchView(deps = {}) {
       showIO = false;
       setups = [...BUILTIN];
       root.classList.add('oc-columns--split', 'ms-bench');
-      deps = { ...deps, mode: ctx.mode, notify: ctx.notify };
+      deps = { ...deps, notify: ctx.notify };
       store = ctx.store;
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
       // A run handed over (by the guide, Setups or History) replaces the one kept from last time.

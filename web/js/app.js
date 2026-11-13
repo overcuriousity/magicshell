@@ -2,8 +2,6 @@
 // Views register as { mount(el, ctx), unmount() }, one for each destination.
 // Boot learns the mode and wires client and store for it; accounts mode shows only Sign in until
 // someone is signed in.
-import { applyByok, loadByok } from './byok.js';
-import { createDirectClient } from './client-direct.js';
 import { createServerClient } from './client-server.js';
 import { detectMode } from './mode.js';
 import { RunError } from './run-error.js';
@@ -60,27 +58,12 @@ const viewFor = (name) => registry.get(name);
 const isBench = (r) => r.view === 'ask' && r.id === 'bench';
 const ASK_HREF = { guided: '#/ask', bench: '#/ask/bench' };
 
-// Pages mode before an endpoint is saved: one line pointing to Settings, in place of the guide.
-function needsEndpoint() {
-  return {
-    mount(el) {
-      el.append(
-        h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'Ask')),
-        h('p', { class: 'ms-empty' }, 'Add your model endpoint in ', h('a', { href: '#/settings' }, 'Settings'), '.'),
-      );
-    },
-    unmount() {},
-    currentRun: () => null,
-  };
-}
-
 // What the switch hands over goes through the in-memory queues of each side (bench-model.js and
 // guided-model.js), as every other hand-over does. A side with nothing entered hands over nothing,
 // so the other keeps its own draft.
 export function createAskView({
   guided = createGuidedView(),
   bench = createBenchView(),
-  missing = needsEndpoint(),
   hand = { bench: (run) => queueRun(run), guided: queueGuidedRun },
 } = {}) {
   let current = null;
@@ -89,7 +72,7 @@ export function createAskView({
     mount(el, ctx) {
       const side = isBench(ctx.route) ? 'bench' : 'guided';
       const other = side === 'bench' ? 'guided' : 'bench';
-      current = side === 'bench' ? bench : ctx.needsEndpoint ? missing : guided;
+      current = side === 'bench' ? bench : guided;
       slot = ctx.modeSwitch ?? null;
       slot?.replaceChildren(
         h('a', { href: ASK_HREF[other], class: 'ms-switch', onclick: (e) => {
@@ -242,23 +225,28 @@ function localStore() {
   }
 }
 
-const NO_ENDPOINT = { run: async () => { throw new RunError('Add your model endpoint in Settings.', 'validation'); } };
 const memoryStorage = () => {
   const m = new Map();
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 };
-// The start notice: only where history lives in this browser (pages and open mode).
+// The start notice: only where history lives in this browser (open mode).
 export const showsNotSaving = ({ mode, storage, store }) => mode !== 'accounts' && (!storage || store.persistent === false);
 
 const NO_COOKIE = 'This browser did not keep the sign-in. Open the app over https or localhost.';
 const ENTERED = ['magicshell.bench', 'magicshell.guided'];
+const NO_SERVER = 'This app needs its magicshell server. Start it and reload the page.';
 
-// Learns the mode and wires the client and store for it; Settings and Sign in change them in place.
+// Learns the mode and wires the client and store for it; Sign in changes them in place. Without
+// its server the app shows one line and nothing else.
 async function boot(shell) {
   const fetchFn = (...args) => fetch(...args);
   if (!window.isSecureContext || !navigator.clipboard) document.documentElement.dataset.ocNoCopy = '';
   const config = await detectMode(fetchFn);
   const { mode } = config;
+  if (!mode) {
+    shell.append(h('main', { class: 'oc-main', id: 'main' }, h('p', { class: 'ms-empty' }, NO_SERVER)));
+    return;
+  }
   const storage = localStore();
   const kept = storage ?? memoryStorage();
   const services = { mode, model: config.model, user: config.user };
@@ -292,26 +280,8 @@ async function boot(shell) {
     services.store = signInOnAuth(createServerStore(fetchFn));
   };
 
-  if (mode === 'pages') {
-    const useByok = (values) => {
-      services.byok = values;
-      services.needsEndpoint = !values;
-      services.client = values ? createDirectClient(values, fetchFn) : NO_ENDPOINT;
-    };
-    useByok(loadByok(kept));
-    services.store = browserStore();
-    services.currentByok = () => services.byok;
-    // { error } or { kept }; the new values are used either way, kept or not.
-    services.saveByok = (values) => {
-      const result = applyByok(storage, values);
-      if (result.error) return { error: result.error };
-      useByok(result.value);
-      return { kept: result.kept };
-    };
-  } else {
-    services.client = createServerClient(fetchFn);
-    services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : browserStore();
-  }
+  services.client = createServerClient(fetchFn);
+  services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : browserStore();
   if (mode === 'accounts') {
     services.signIn = async (username, password) => {
       await services.client.signIn(username, password);

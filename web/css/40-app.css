@@ -369,8 +369,6 @@
 .ms-settings__part > h2, .ms-settings__sub { margin: 0; }
 .ms-settings__sub { font-size: var(--text-ui); font-weight: 600; }
 .ms-field-hint { margin: 0; color: var(--color-fg-secondary); font-size: var(--text-dense); }
-.ms-secret { display: flex; gap: var(--space-1); align-items: center; }
-.ms-secret > .oc-input { flex: 1 1 auto; }
 .ms-signed-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .ms-signed-in > .oc-btn { margin-left: auto; }
 .ms-sign-in .oc-form { max-width: 24rem; }

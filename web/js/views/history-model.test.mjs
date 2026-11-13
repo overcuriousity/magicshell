@@ -17,7 +17,7 @@ const entry = (id, at, extra = {}) => ({
   at,
   guided: true,
   run: { state: 'Printer is on fire', questions: [{ key: 'q1', type: 'noul', text: 'Is it urgent?' }] },
-  reply: { answers: { q1: { type: 'noul', noul: 0.8 } }, model: 'm', inputTokens: 9, upstreamMs: 100, request: '{}', response: '{}' },
+  reply: { answers: { q1: { type: 'noul', noul: 0.8 } }, model: 'm', inputTokens: 9, upstreamMs: 100, response: '{}' },
   totalMs: 250,
   ...extra,
 });
@@ -91,10 +91,8 @@ test('formatWhen shows the time today, the day this year and the year before', (
   assert.equal(formatWhen(at(2026, 10, 13, 9, 5), now), '09:05');
 });
 
-test('an entry without a request shows the run as the server client sends it', () => {
+test('an entry shows its run as the request the server client sends', () => {
   const e = entry('a', '2026-11-12T10:00:00Z');
-  assert.equal(benchResult(e).request, '{}');
-  delete e.reply.request;
   e.run = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
   assert.equal(benchResult(e).request, '{"state":"Rain.","questions":[{"key":"q1","type":"noul","text":"Wet?"}]}');
 });

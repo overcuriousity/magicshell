@@ -1,6 +1,6 @@
 # magicshell
 
-Experiment with decision models over the System One format. A browser app with a guided view and a bench, served by a small Rust server or as a static site.
+Experiment with decision models over the System One format. A browser app with a guided view and a bench, served by a small Rust server.
 
 Licence: MIT OR Apache-2.0.
 
@@ -20,16 +20,14 @@ A decision model does not write text. It takes a situation and typed questions, 
 - **Bench**: one situation, up to 8 typed questions, distributions per question, the exact request and response, and a variant run beside a baseline (without descriptions, neutral option names, reversed order).
 - **Setups**: ready-made and your own, exported and imported as JSON. **History**: every run, reopened, run again or loaded as baseline.
 
-## Three modes
+## Two modes
 
-| | Pages | Server, open | Server, accounts |
-|---|---|---|---|
-| Sign-in | none | none | username and password |
-| Endpoint and key | your own, kept in your browser | server configuration | server configuration |
-| Model call | browser to endpoint | browser to server to endpoint | browser to server to endpoint |
-| History and setups | browser storage | browser storage | server database, per user |
+| | Open | Accounts |
+|---|---|---|
+| Sign-in | none | username and password |
+| History and setups | browser storage | server database, per user |
 
-In server modes the browser never sees the key. The Pages site is the same files without the server: open it, enter your endpoint base URL (ending in `/v1`), an optional key and the model name in Settings. The browser calls the endpoint directly, so the endpoint must allow cross-origin requests from the Pages origin (an `Access-Control-Allow-Origin` header and an answer to the preflight request). A llama.cpp on your own machine works from `http://localhost` and `http://127.0.0.1`.
+In both, the endpoint, key and model are server configuration, and the browser talks only to its own server, which calls the endpoint. The browser never sees the key.
 
 ## Install
 
@@ -92,8 +90,8 @@ node scripts/check-contrast.mjs
 oc-check .
 ```
 
-`web/` runs on its own: `python3 -m http.server` inside it serves the Pages mode. `scripts/probe.sh` posts the fixture requests to a real endpoint (needs `jq`; set `MAGICSHELL_ENDPOINT`, `MAGICSHELL_MODEL` and optionally `MAGICSHELL_KEY`).
+`scripts/probe.sh` posts the fixture requests to a real endpoint (needs `jq`; set `MAGICSHELL_ENDPOINT`, `MAGICSHELL_MODEL` and optionally `MAGICSHELL_KEY`).
 
-Releases are tag-driven: tag `vYYYY.M.N` matching `Cargo.toml` and a `CHANGELOG.md` section. The Pages site redeploys after every successful CI run on `main`.
+Releases are tag-driven: tag `vYYYY.M.N` matching `Cargo.toml` and a `CHANGELOG.md` section.
 
 See `ROADMAP.md` for what comes later, `SECURITY.md` for reporting problems and `AGENTS.md` for the rules this repository follows.

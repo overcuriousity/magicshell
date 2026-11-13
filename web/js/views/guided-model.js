@@ -63,7 +63,7 @@ export function createGuidedModel({
   store,
   now = () => new Date(),
   uuid = () => crypto.randomUUID(),
-  mode = 'pages',
+  mode = 'open',
   navigate = () => {},
   session = sessionStore(),
 }) {

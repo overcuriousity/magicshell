@@ -1,4 +1,4 @@
-// Setups and history on this app's own server (modes 2 and 3).
+// Setups and history on this app's own server (accounts mode).
 import { OFFLINE, RunError, serverSentence as sentence } from './run-error.js';
 
 export function createServerStore(fetchFn) {

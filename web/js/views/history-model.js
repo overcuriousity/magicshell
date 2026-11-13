@@ -38,11 +38,11 @@ export function headline(entry) {
   return { text, answer: noulIsYes(a.noul) ? 'Yes' : 'No', cls: 'ms-accent' };
 }
 
-// The result of an entry in the shape the bench keeps for a run. Server-mode entries do not keep
-// the request (it is the run), so it is written out again as the server client sends it.
+// The result of an entry in the shape the bench keeps for a run. Entries do not keep the request
+// (it is the run), so it is written out again as the server client sends it.
 export const benchResult = (entry) => ({
   ...entry.reply,
-  request: typeof entry.reply?.request === 'string' ? entry.reply.request : requestText(entry.run),
+  request: requestText(entry.run),
   totalMs: entry.totalMs,
 });
 

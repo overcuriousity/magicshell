@@ -4,9 +4,9 @@
 import { messageOf, RunError } from '../run-error.js';
 import { validateRun } from '../systemone.js';
 
-// The History entry for one run and its result (ruling R14; reply is stored as it is). In the
-// server modes the request is the run itself, so it is not kept twice; History derives it.
-const historyEntry = ({ id, at, guided, run, result, mode }) => {
+// The History entry for one run and its result (ruling R14; reply is stored as it is). The
+// request is the run itself, so it is not kept twice; History derives it.
+const historyEntry = ({ id, at, guided, run, result }) => {
   const reply = {
     answers: result.answers,
     model: result.model,
@@ -14,7 +14,6 @@ const historyEntry = ({ id, at, guided, run, result, mode }) => {
     upstreamMs: result.upstreamMs,
     response: result.response,
   };
-  if (mode === 'pages') reply.request = result.request;
   return { id, at, guided, run, reply, totalMs: result.totalMs };
 };
 
@@ -52,7 +51,7 @@ export function createRunOnce({ client, store, now, uuid, mode, navigate, guided
       inFlight = false;
       done(result);
       try {
-        await store.saveEntry(historyEntry({ id: uuid(), at: now().toISOString(), guided, run, result, mode }));
+        await store.saveEntry(historyEntry({ id: uuid(), at: now().toISOString(), guided, run, result }));
       } catch (e) {
         failed(e, fail);
       }

@@ -17,7 +17,6 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 - No MCP endpoint, OpenAPI document or PWA install (spec non-goals).
 - The manifest's categorical chart colours colour choice options and its ordered ramp colours score levels; always paired with a name, a number or a symbol.
 - Kit code is copied into `src/kit/` from oc-kit v2026.11.1 instead of depending on oc-kit, so the build has no git dependency (see `src/kit/mod.rs`).
-- `web/index.html` carries a CSP meta tag for the static Pages site: `connect-src 'self' https: http://localhost:* http://127.0.0.1:*` so a visitor can reach their own endpoint. The localhost sources are written as `http&#58;//` so `oc-check`'s external-URL rule does not flag them; they are permissions, not connections. `frame-ancestors` is only in the server's header, because it is ignored in a meta tag. The server's own CSP stays `connect-src 'self'`.
 - Below 48rem the top bar carries the title and one action (the Bench/Guided switch); the theme and text-size toggles live in Settings there and in the top bar from 48rem.
 - `deny.toml` ignores RUSTSEC-2026-0459 (SQLite, `libsqlite3-sys`) with a written reachability argument, until sqlx allows `libsqlite3-sys >= 0.39`.
 
@@ -31,7 +30,7 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 ## Layout
 
 - `src/` the server; `src/kit/` is copied from oc-kit v2026.11.1.
-- `web/` the browser app, also the Pages site; `web/js/**/*.test.mjs` are its tests and are not deployed.
+- `web/` the browser app, embedded in the server; `web/js/**/*.test.mjs` are its tests and are not served.
 - `tests/` integration tests; `tests/support` starts the app on `127.0.0.1:0`.
 - `scripts/` `bundle.sh` (release bundles), `install-online.sh`, `check-contrast.mjs`, `probe.sh`.
 - `deploy/` systemd unit and nginx template.

@@ -1,4 +1,4 @@
-// Modes 2 and 3: the browser talks to this app's own server.
+// The browser talks to this app's own server, in both modes.
 import { OFFLINE, RunError, serverSentence as sentence } from './run-error.js';
 import { checkOutcome } from './systemone.js';
 

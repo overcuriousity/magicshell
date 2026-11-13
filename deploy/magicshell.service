@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/@APP@ --config /etc/@APP@/config.toml serve
+ExecStart=/usr/local/bin/@APP@ --config /etc/@APP@/config.toml
 # Keep the API key out of config.toml: LoadCredential=api-key:/etc/@APP@/api-key
 # and set api_key = "file:///run/credentials/@APP@.service/api-key" under [app].
 Restart=on-failure

@@ -1,4 +1,4 @@
-// Builds System One requests and reads the answers. See fixtures/systemone for the shared cases.
+// Checks runs before they are sent and the server's replies. See fixtures/systemone for the shared cases.
 import { LIMITS } from './limits.js';
 
 const BAD_ANSWER = 'The model endpoint sent an answer this app does not understand.';
@@ -55,75 +55,17 @@ function validateQuestion(q, allowEmptyText) {
   return null;
 }
 
-// The exact request body text: compact, keys in a fixed order, choice criteria written entry by
-// entry so integer-like names are not reordered by the JSON object model.
-export function requestJson(run, model) {
-  const S = JSON.stringify;
-  const questions = run.questions.map((q) => {
-    let out = `${S(q.key)}:{"type":${S(q.type)},"instructions":${S(trimmed(q.text))}`;
-    if (q.type === 'choice') {
-      const entries = q.options.map((o) => {
-        const name = trimmed(o.name);
-        return `${S(name)}:${S(trimmed(o.description) || name)}`;
-      });
-      out += `,"criteria":{${entries.join(',')}}`;
-    } else if (q.type === 'score') {
-      out += `,"criteria":[${q.levels.map((l) => S(trimmed(l.text))).join(',')}]`;
-    }
-    return `${out}}`;
-  });
-  return `{"model":${S(model)},"state":${S(run.state)},"questions":{${questions.join(',')}}}`;
-}
-
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-
-// Reads the parsed upstream body into an Outcome; probabilities are ordered by option position or
-// level index (the endpoint sorts a choice's probabilities by name).
-export function parseResponse(body, run) {
-  if (!isObject(body) || !isObject(body.answers)) throw new Error(BAD_ANSWER);
-  const answers = Object.create(null);
-  for (const q of run.questions) {
-    const a = has(body.answers, q.key) ? body.answers[q.key] : undefined;
-    if (!isObject(a) || a.type !== q.type) throw new Error(BAD_ANSWER);
-    if (q.type === 'choice') {
-      const names = q.options.map((o) => trimmed(o.name));
-      if (typeof a.choice !== 'string' || !names.includes(a.choice)) throw new Error(BAD_ANSWER);
-      answers[q.key] = {
-        type: 'choice',
-        choice: a.choice,
-        probabilities: probabilities(a, names),
-        confidence: number(a.confidence),
-      };
-    } else if (q.type === 'score') {
-      answers[q.key] = {
-        type: 'score',
-        score: number(a.score),
-        probabilities: probabilities(a, q.levels.map((_, i) => String(i))),
-        confidence: number(a.confidence),
-      };
-    } else {
-      answers[q.key] = { type: 'noul', noul: number(a.noul) };
-    }
-  }
-  const model = typeof body.model === 'string' ? body.model : '';
-  const inputTokens = isObject(body.usage) && isNumber(body.usage.input_tokens) ? body.usage.input_tokens : 0;
-  return { answers, model, inputTokens };
-}
 
 function number(v) {
   if (!isNumber(v)) throw new Error(BAD_ANSWER);
   return v;
 }
 
-function probabilities(answer, names) {
-  if (!isObject(answer.probabilities)) throw new Error(BAD_ANSWER);
-  return names.map((n) => (has(answer.probabilities, n) ? number(answer.probabilities[n]) : number(undefined)));
-}
-
 // Checks a server Reply, which is already an Outcome (probabilities as arrays by position), against
-// the run; returns { answers, model, inputTokens } or throws the same sentence as parseResponse.
+// the run; returns { answers, model, inputTokens } or throws the one sentence for an unreadable answer.
 export function checkOutcome(body, run) {
   if (!isObject(body) || !isObject(body.answers)) throw new Error(BAD_ANSWER);
   const numbers = (v, n) => {

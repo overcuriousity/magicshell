@@ -58,9 +58,9 @@ function block(qa, state, d, variant) {
 
 const ms = (v) => `${Math.round(v)} ms`;
 
-function runLine(result, mode) {
+function runLine(result) {
   const parts = [ms(result.totalMs)];
-  if (mode !== 'pages' && typeof result.upstreamMs === 'number') parts.push(`${ms(result.upstreamMs)} at the model`);
+  if (typeof result.upstreamMs === 'number') parts.push(`${ms(result.upstreamMs)} at the model`);
   parts.push(`${result.inputTokens} tokens`);
   if (result.model) parts.push(result.model);
   return parts.join(' · ');
@@ -95,14 +95,14 @@ function jsonPane(head, text, notify) {
   );
 }
 
-// view: { mode, showIO, toggleIO(), notify }
+// view: { showIO, toggleIO(), notify }
 export function resultsSection(state, diff, view) {
   if (!state.resultA) return [];
   const withB = Boolean(state.resultB);
   const runs = [['A', state.resultA]];
   if (withB) runs.push(['B', state.resultB]);
   const blocks = state.ranA.questions.map((qa) => block(qa, state, diff?.[qa.key] ?? null, state.variant));
-  const lines = runs.map(([name, r]) => h('div', {}, withB ? `${name} · ${runLine(r, view.mode)}` : runLine(r, view.mode)));
+  const lines = runs.map(([name, r]) => h('div', {}, withB ? `${name} · ${runLine(r)}` : runLine(r)));
   const panes = view.showIO
     ? h('div', { class: 'ms-ios', id: 'bench-io' },
         runs.flatMap(([name, r]) => {

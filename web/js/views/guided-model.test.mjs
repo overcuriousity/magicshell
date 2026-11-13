@@ -181,7 +181,6 @@ test('asking stores one guided history entry', async () => {
     model: 'm-1',
     inputTokens: 42,
     upstreamMs: 80,
-    request: '{"state":"x"}',
     response: '{"answers":{}}',
   });
   assert.equal(e.totalMs, 120);

@@ -148,9 +148,8 @@ test('running stores one history entry with the run as sent', async () => {
   assert.match(e.id, /^id-/);
   assert.deepEqual(e.run, client.calls[0]);
   assert.equal(e.run.state, triage.sampleState);
-  assert.deepEqual(Object.keys(e.reply).sort(), ['answers', 'inputTokens', 'model', 'request', 'response', 'upstreamMs']);
+  assert.deepEqual(Object.keys(e.reply).sort(), ['answers', 'inputTokens', 'model', 'response', 'upstreamMs']);
   assert.equal(e.reply.model, 'm-1');
-  assert.equal(e.reply.request, '{"state":"x"}');
   assert.equal(e.totalMs, 120);
   assert.equal(m.state.resultA.inputTokens, 42);
   assert.equal(m.state.busy, null);
@@ -294,10 +293,10 @@ test('an auth error outside accounts mode does not navigate', async () => {
   const seen = [];
   const client = {
     async run() {
-      throw new RunError('The model endpoint refused the key. Check it in Settings.', 'auth');
+      throw new RunError('Sign in first.', 'auth');
     },
   };
-  const m = make({ client, mode: 'pages', navigate: (h) => seen.push(h) });
+  const m = make({ client, mode: 'open', navigate: (h) => seen.push(h) });
   m.updateQuestion('q1', { text: 'Is it?' });
   await m.run();
   assert.deepEqual(seen, []);
@@ -365,7 +364,7 @@ test('a queued run is taken once', () => {
   assert.equal(takeRun(), null);
 });
 
-test('in the server modes an entry does not keep the request twice', async () => {
+test('an entry does not keep the request twice', async () => {
   const store = memoryStore();
   const m = make({ store, mode: 'open' });
   m.loadSetup(triage);
