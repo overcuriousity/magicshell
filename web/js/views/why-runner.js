@@ -10,17 +10,22 @@ export function createWhyRunner({ client, entry, save, onAuth = () => {} }) {
 
   const set = (patch) => {
     state = { ...state, ...patch };
-    for (const fn of [...listeners]) fn(state);
+    for (const fn of [...listeners]) {
+      try {
+        fn(state);
+      } catch {
+        // A broken listener must not break the run.
+      }
+    }
   };
 
   async function run() {
-    const { run: request } = entry;
-    const words = splitWords(request.state);
+    const request = entry.run;
     let saved = 0;
     let error = null;
     let saveFailed = false;
     stopRequested = false;
-    set({ phase: 'running', at: null, why: emptyWhy(request), error: null });
+    set({ phase: 'running', at: null, why: null, error: null });
 
     const fail = (e) => {
       error = messageOf(e);
@@ -37,24 +42,29 @@ export function createWhyRunner({ client, entry, save, onAuth = () => {} }) {
       }
     };
 
-    for (let i = 0; i < words.length && !error && !stopRequested; i += 1) {
-      set({ at: i });
-      let result;
-      try {
-        result = await client.why({ ...request, state: without(request.state, words, i) });
-      } catch (e) {
-        fail(e);
-        break;
+    try {
+      const words = splitWords(request.state);
+      set({ why: emptyWhy(request) });
+      for (let i = 0; i < words.length && !error && !stopRequested; i += 1) {
+        set({ at: i });
+        let result;
+        try {
+          result = await client.why({ ...request, state: without(request.state, words, i) });
+        } catch (e) {
+          fail(e);
+          break;
+        }
+        if (stopRequested) break;
+        set({ why: addWord(state.why, request, entry.reply.answers, result.answers) });
+        if (state.why.done % WHY_SAVE_EVERY === 0) await saveNow();
       }
-      if (stopRequested) break;
-      set({ why: addWord(state.why, request, entry.reply.answers, result.answers) });
-      if (state.why.done % WHY_SAVE_EVERY === 0) await saveNow();
+    } catch (e) {
+      fail(e);
     }
 
     set({ at: null });
-    if (!saveFailed && state.why.done >= 1 && state.why.done !== saved) await saveNow();
-    const finished = !error && !stopRequested;
-    set({ phase: finished ? 'done' : 'stopped', error });
+    if (!saveFailed && state.why && state.why.done >= 1 && state.why.done !== saved) await saveNow();
+    set({ phase: !error && !stopRequested ? 'done' : 'stopped', error });
   }
 
   return {

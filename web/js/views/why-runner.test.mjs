@@ -187,3 +187,26 @@ test('start after the end starts over from an empty part', async () => {
   assert.equal(client.sent.length, 4);
   assert.equal(runner.state.why.done, 2);
 });
+
+test('a reply that cannot be read ends stopped, keeps and saves the rest, and a later start works', async () => {
+  const client = fakeClient([answer, answer, { answers: {} }]);
+  const save = fakeSave();
+  const runner = make('a b c d', client, save);
+  await runner.start();
+  assert.equal(runner.state.phase, 'stopped');
+  assert.equal(typeof runner.state.error, 'string');
+  assert.equal(runner.state.why.done, 2);
+  assert.deepEqual(save.parts.map((p) => p.done), [2]);
+  await runner.start();
+  assert.equal(runner.state.phase, 'done');
+  assert.equal(runner.state.why.done, 4);
+});
+
+test('a throwing listener does not leave the runner running', async () => {
+  const runner = make('a b', fakeClient([]), fakeSave());
+  runner.subscribe(() => {
+    throw new Error('boom');
+  });
+  await runner.start();
+  assert.equal(runner.state.phase, 'done');
+});
