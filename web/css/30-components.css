@@ -182,6 +182,9 @@ textarea.oc-input { height: auto; min-height: 8rem; padding: var(--space-2) var(
 .oc-menu [role="option"]:hover, .oc-menu [role="option"].is-active,
 .oc-menu [role="menuitem"]:hover, .oc-menu [role="menuitem"]:focus-visible { background: var(--color-bg-hover); outline: none; }
 .oc-menu [aria-selected="true"] { font-weight: 600; }
+/* An option with a second line (data-hint on the native option). */
+.oc-menu .oc-menu__two { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding-top: var(--space-1); padding-bottom: var(--space-1); }
+.oc-menu .oc-menu__two > small { color: var(--color-fg-muted); font-size: var(--text-micro); font-weight: 400; }
 .oc-select-native { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 
 .oc-dialog {
@@ -265,4 +268,5 @@ textarea.oc-input { height: auto; min-height: 8rem; padding: var(--space-2) var(
   .oc-btn--icon, .oc-btn--row { min-width: var(--target-touch); min-height: var(--target-touch); }
   .oc-input { font-size: 16px; min-height: var(--target-touch); }
   .oc-menu [role="option"], .oc-menu [role="menuitem"] { min-height: var(--target-touch); }
+  .oc-topnav a { height: var(--target-touch); }
 }

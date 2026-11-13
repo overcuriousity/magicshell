@@ -98,7 +98,8 @@ test('verdict: tinted by pick, with a check icon', () => {
   assert.ok(cls(v).includes('opt-2'));
   assert.equal(v.textContent, 'sushi');
   assert.ok(all(v, (n) => n.tagName === 'svg').length === 1);
-  assert.equal(guidedVerdict(score, scoreAnswer).textContent, '2.2 \u00b7 Today');
+  assert.equal(guidedVerdict(score, scoreAnswer).textContent, 'Today');
+  assert.equal(guidedVerdict({ levels: [{ text: '1' }, { text: '2' }, { text: '3' }] }, { type: 'score', score: 2, probabilities: [0, 0, 1] }).textContent, '3');
   assert.equal(guidedVerdict({}, { type: 'noul', noul: 0.1 }).textContent, 'No');
 });
 
@@ -137,4 +138,19 @@ test('a score keeps level colours from another order', () => {
   assert.ok(cls(b[0]).includes('lvl-4') && cls(b[3]).includes('lvl-1'));
   const segs = all(el, (n) => cls(n) === 'ms-scale')[0].childNodes;
   assert.ok(cls(segs[0]).includes('lvl-4') && cls(segs[3]).includes('lvl-1'));
+});
+
+test('without the pick line only the bars with percentages remain', () => {
+  const c = choiceResult(choice, choiceAnswer, { percent: true, pick: false });
+  assert.equal(all(c, (n) => cls(n) === 'ms-pick').length, 0);
+  assert.equal(c.textContent.includes('confidence'), false);
+  assert.deepEqual(bars(c).map((n) => n.getAttribute('aria-label')), ['pizza 22 %', 'sushi 47 %', 'home 30 %']);
+  const s = scoreResult(score, scoreAnswer, { percent: true, pick: false });
+  assert.equal(all(s, (n) => cls(n) === 'ms-pick' || cls(n) === 'ms-mark' || cls(n) === 'ms-scale').length, 0);
+  assert.equal(bars(s).length, 4);
+  const y = noulResult({}, { type: 'noul', noul: 0.34 }, { percent: true, pick: false });
+  assert.equal(all(y, (n) => cls(n) === 'ms-pick').length, 0);
+  assert.equal(y.textContent, 'Yes34 %');
+  assert.equal(bars(y)[0].getAttribute('aria-label'), 'Yes 34 %');
+  assert.equal(all(y, (n) => cls(n) === 'ms-meter__fill')[0].vars.get('--w'), '34.0%');
 });

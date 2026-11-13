@@ -1,11 +1,9 @@
 // The bench's state and actions, without any DOM: run A, a variant B, their results and the error.
 // The working A run is kept in sessionStorage so it survives sign-in and reload.
-import { RunError } from '../run-error.js';
-import { validateRun } from '../systemone.js';
 import { compare, VARIANTS } from '../variants.js';
+import { createRunOnce } from './run-once.js';
 
 export const SESSION_KEY = 'magicshell.bench';
-const UNKNOWN = 'Something went wrong. Try again.';
 
 const copy = (v) => JSON.parse(JSON.stringify(v));
 const emptyRun = () => ({ state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
@@ -151,61 +149,29 @@ export function createBenchModel({
     changed();
   };
 
-  const fail = (e, which) => {
-    state.errorFor = which;
-    state.error = e instanceof RunError || e instanceof Error ? e.message || UNKNOWN : UNKNOWN;
-    if (e instanceof RunError && e.kind === 'auth' && mode === 'accounts') navigate('#/sign-in');
-  };
+  const runner = createRunOnce({ client, store, now, uuid, mode, navigate, guided: false });
 
-  const entry = (run, result) => ({
-    id: uuid(),
-    at: now().toISOString(),
-    guided: false,
-    run,
-    reply: {
-      answers: result.answers,
-      model: result.model,
-      inputTokens: result.inputTokens,
-      upstreamMs: result.upstreamMs,
-      request: result.request,
-      response: result.response,
-    },
-    totalMs: result.totalMs,
-  });
-
-  // Validates, calls the model, and on success hands the result to `done` and records it.
-  async function send(which, run, done) {
-    if (state.busy) return;
-    const problem = validateRun(run);
-    if (problem) {
-      state.error = problem;
-      state.errorFor = which;
-      changed();
-      return;
-    }
-    state.busy = which;
-    state.error = null;
-    state.errorFor = null;
-    changed();
-    let result;
-    try {
-      result = await client.run(run);
-    } catch (e) {
-      state.busy = null;
-      fail(e, which);
-      changed();
-      return;
-    }
-    state.busy = null;
-    done(result);
-    changed();
-    try {
-      await store.saveEntry(entry(run, result));
-    } catch (e) {
-      fail(e, which);
-      changed();
-    }
-  }
+  // Validates, calls the model, and on success hands the result to `done`; run-once records it.
+  const send = (which, run, done) =>
+    runner.send(run, {
+      start() {
+        state.busy = which;
+        state.error = null;
+        state.errorFor = null;
+        changed();
+      },
+      done(result) {
+        state.busy = null;
+        done(result);
+        changed();
+      },
+      fail(sentence) {
+        state.busy = null;
+        state.error = sentence;
+        state.errorFor = which;
+        changed();
+      },
+    });
 
   const model = {
     get state() {

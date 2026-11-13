@@ -12,9 +12,12 @@
 
 @container app (max-width: 48rem) {
   .oc-topnav { display: none; }
+  /* Below 48rem the top bar holds the title and one action, the Bench / Guided view switch;
+     theme and text size live in Settings there. */
+  .oc-topbar .ms-wide-only { display: none; }
   .oc-topbar { gap: var(--space-3); }
   .oc-topbar .oc-btn--icon { width: var(--target-touch); height: var(--target-touch); }
-  .oc-topbar__end { margin-right: calc(-1 * var(--space-3)); gap: 0; }
+  .oc-topbar__end { gap: 0; }
   .oc-shell--everyday .oc-main { padding-bottom: calc(3.5rem + var(--space-6) + env(safe-area-inset-bottom)); }
   .oc-tabbar {
     display: grid;

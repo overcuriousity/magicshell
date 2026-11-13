@@ -272,6 +272,8 @@ export function createBenchView(deps = {}) {
       root.classList.add('oc-columns--split', 'ms-bench');
       deps = { ...deps, mode: ctx.mode, notify: ctx.notify };
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
+      // A run handed over by the guided view replaces the one kept from last time.
+      if (ctx.carry) model.loadRun(ctx.carry);
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());
       hosts.form = h('div', { class: 'oc-stack' });
       hosts.errorA = h('div', { class: 'ms-error-host' });
@@ -302,6 +304,8 @@ export function createBenchView(deps = {}) {
         })
         .catch(() => {});
     },
+    // The setup as entered, for the guided view when the user switches over.
+    currentRun: () => (model ? JSON.parse(JSON.stringify(model.state.a)) : null),
     unmount() {
       off?.();
       clearTimeout(spinnerTimer);

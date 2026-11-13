@@ -1,5 +1,7 @@
 // Drawing of answers: names, numbers and bars, never a sentence. Every function returns an Element.
 // Numbers are probabilities (two decimals) or, with { percent: true }, whole percents.
+// { pick: false } leaves out the pick line (the guided view shows its verdict instead): choice and
+// score keep only their bars, noul its meter with the number beside it.
 // Bars are one grid, a row per option or level (label, bar, number); opts.deltas adds a fourth
 // column (.ms-bars--delta) with the change beside each number; opts.colors gives the rows
 // the colour slots of another order (a variant keeps each option's and level's colour from A).
@@ -52,7 +54,7 @@ export function choiceResult(question, answer, opts = {}) {
   return h(
     'div',
     { class: 'ms-answer' },
-    pickLine(answer.choice, answer.confidence, opts),
+    opts.pick === false ? null : pickLine(answer.choice, answer.confidence, opts),
     h('div', { class: barsClass(opts) }, names.map((name, i) => barRow(name, answer.probabilities[i], optionClass(opts.colors?.[i] ?? i), opts, i))),
   );
 }
@@ -62,6 +64,8 @@ export function scoreResult(question, answer, opts = {}) {
   const count = texts.length;
   const nearest = nearestLevel(answer.score, count);
   const at = clamp01((answer.score + 0.5) / count);
+  const levelBars = h('div', { class: barsClass(opts) }, texts.map((text, i) => barRow(text, answer.probabilities[i], levelClass(opts.colors?.[i] ?? i, count), opts, i)));
+  if (opts.pick === false) return h('div', { class: 'ms-answer' }, levelBars);
   const mark = h('div', { class: 'ms-mark', 'aria-hidden': 'true' });
   mark.style.setProperty('--at', width(at));
   return h(
@@ -71,7 +75,7 @@ export function scoreResult(question, answer, opts = {}) {
     mark,
     h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: levelClass(opts.colors?.[i] ?? i, count) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),
-    h('div', { class: barsClass(opts) }, texts.map((text, i) => barRow(text, answer.probabilities[i], levelClass(opts.colors?.[i] ?? i, count), opts, i))),
+    levelBars,
   );
 }
 
@@ -79,6 +83,20 @@ export function noulResult(_question, answer, opts = {}) {
   const yes = noulIsYes(answer.noul);
   const label = `Yes ${num(answer.noul, opts)}`;
   const fill = setWidth(h('span', { class: 'ms-meter__fill' }), answer.noul);
+  const meter = h('div', { class: 'ms-meter', role: 'img', 'aria-label': label }, fill, h('span', { class: 'ms-meter__half' }));
+  if (opts.pick === false) {
+    return h(
+      'div',
+      { class: 'ms-answer' },
+      h('div', { class: 'ms-bars' },
+        h('div', { class: 'ms-bar' },
+          h('span', { class: 'ms-bar__label', 'aria-hidden': 'true' }, 'Yes'),
+          meter,
+          h('span', { class: 'ms-bar__num', 'aria-hidden': 'true' }, num(answer.noul, opts)),
+        ),
+      ),
+    );
+  }
   return h(
     'div',
     { class: 'ms-answer' },
@@ -88,11 +106,11 @@ export function noulResult(_question, answer, opts = {}) {
       h('span', { class: 'ms-pick__name' }, yes ? 'Yes' : 'No'),
       h('span', { class: 'ms-pick__meta' }, `${num(answer.noul, opts)} yes`),
     ),
-    h('div', { class: 'ms-meter', role: 'img', 'aria-label': label }, fill, h('span', { class: 'ms-meter__half' })),
+    meter,
   );
 }
 
-// The tinted block of the guided view: the pick, Yes or No, or the score with its level text.
+// The tinted block of the guided view: the pick, Yes or No, or the nearest level's text.
 export function guidedVerdict(question, answer) {
   let text;
   let cls;
@@ -102,7 +120,8 @@ export function guidedVerdict(question, answer) {
   } else if (answer.type === 'score') {
     const texts = levelTexts(question);
     const nearest = nearestLevel(answer.score, texts.length);
-    text = `${scoreText(answer.score)} · ${texts[nearest]}`;
+    // Ruling R22: only the nearest level's text; the zero-based score number would read as a rating.
+    text = texts[nearest];
     cls = levelClass(nearest, texts.length);
   } else {
     text = noulIsYes(answer.noul) ? 'Yes' : 'No';

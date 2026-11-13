@@ -251,3 +251,60 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* The Bench / Guided view switch in the top bar. */
+.ms-switch {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-tool);
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+  font-weight: 500;
+}
+@media (pointer: coarse) {
+  .ms-switch { min-height: var(--target-touch); }
+}
+
+/* The guided view: one narrow column, the step in mono, a large lead, the actions at the end. */
+.ms-guide { max-width: 34rem; }
+.ms-guide__panel { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) 0 var(--space-6); }
+.ms-guide__body { display: flex; flex-direction: column; gap: var(--space-3); }
+.ms-guide__step { margin: 0; color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-mono); }
+.ms-guide__lead { margin: 0 0 var(--space-1); }
+.ms-guide__lead:focus, .ms-guide__asked:focus { outline: none; }
+.ms-guide__hint { margin: 0; color: var(--color-fg-secondary); font-size: var(--text-dense); }
+.ms-guide__kind, .ms-guide__kind > .oc-menu-wrap { display: block; }
+.ms-guide__kind > select, .ms-guide__kind .oc-menu-button { width: 100%; }
+.ms-guide__kind .oc-menu { width: 100%; }
+.ms-guide__body textarea { width: 100%; }
+.ms-guide__chips { margin: 0; padding: 0; list-style: none; }
+.ms-guide__add .oc-input { flex: 1 1 auto; min-width: 0; }
+.ms-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-right: calc(-1 * var(--space-1));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-fg-secondary);
+  cursor: pointer;
+}
+.ms-chip__remove:hover { background: var(--color-bg-hover); color: var(--color-fg-primary); }
+@media (pointer: coarse) {
+  .ms-guide__chips .ms-chip { min-height: var(--target-touch); }
+  .ms-chip__remove { width: var(--target-touch); height: var(--target-touch); margin: 0 calc(-1 * var(--space-2)) 0 0; }
+}
+.ms-guide__levels { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.ms-guide__levels .oc-input { flex: 1 1 auto; min-width: 0; }
+.ms-guide__asked { margin: 0; color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-mono); font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }
+.ms-guide .ms-verdict { margin-top: var(--space-1); }
+.ms-bar > .ms-meter { margin: 0; }
+.ms-guide__actions > .oc-btn--primary { flex: 1 1 auto; max-width: 16rem; }
+@container app (max-width: 48rem) {
+  .ms-guide__actions > .oc-btn--primary { max-width: none; }
+  .ms-guide__actions > .oc-btn:not(.oc-btn--primary) { flex: 0 0 6rem; }
+}

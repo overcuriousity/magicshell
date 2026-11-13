@@ -11,6 +11,7 @@ import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
 import { createBenchView } from './views/bench.js';
+import { createGuidedView } from './views/guided.js';
 
 export const DESTINATIONS = [
   { view: 'ask', label: 'Ask', icon: 'ask' },
@@ -52,8 +53,48 @@ export function registerView(name, view) {
 }
 const viewFor = (name) => registry.get(name) ?? placeholder(name);
 
+// Ask: the guided view at #/ask (and on every fresh load), the bench at #/ask/bench. The switch
+// in the top bar carries what was entered over; "something else" in the guide opens the bench.
+export const isBench = (r) => r.view === 'ask' && r.id === 'bench';
+export const ASK_HREF = { guided: '#/ask', bench: '#/ask/bench' };
+
+export function createAskView({ guided = createGuidedView(), bench = createBenchView() } = {}) {
+  let current = null;
+  let slot = null;
+  // { to: 'bench' | 'guided', run }, taken by the next mount of that side only.
+  let carry = null;
+  return {
+    mount(el, ctx) {
+      const side = isBench(ctx.route) ? 'bench' : 'guided';
+      const other = side === 'bench' ? 'guided' : 'bench';
+      const handed = carry?.to === side ? carry.run : null;
+      carry = null;
+      current = side === 'bench' ? bench : guided;
+      slot = ctx.modeSwitch ?? null;
+      slot?.replaceChildren(
+        h('a', { href: ASK_HREF[other], class: 'ms-switch', onclick: (e) => {
+          // A plain primary click only: a modifier-click opens a new tab and must leave nothing behind.
+          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          carry = { to: other, run: current.currentRun() };
+        } },
+          other === 'bench' ? 'Bench' : 'Guided view'),
+      );
+      const toBench = (run) => {
+        carry = { to: 'bench', run };
+        ctx.navigate(ASK_HREF.bench);
+      };
+      current.mount(el, { ...ctx, carry: handed, toBench });
+    },
+    unmount() {
+      current?.unmount();
+      slot?.replaceChildren();
+      current = null;
+    },
+  };
+}
+
 function themeToggle() {
-  const button = h('button', { type: 'button', class: 'oc-btn oc-btn--icon oc-theme-toggle' }, icon('monitor'), icon('sun'), icon('moon'));
+  const button = h('button', { type: 'button', class: 'oc-btn oc-btn--icon oc-theme-toggle ms-wide-only' }, icon('monitor'), icon('sun'), icon('moon'));
   const show = (current) => {
     const next = THEME_LABELS[nextTheme(current)];
     button.dataset.ocValue = current;
@@ -71,7 +112,7 @@ function themeToggle() {
 function textSizeToggle() {
   const button = h(
     'button',
-    { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Compact text', 'data-oc-tip': 'Compact text' },
+    { type: 'button', class: 'oc-btn oc-btn--icon ms-wide-only', 'aria-label': 'Compact text', 'data-oc-tip': 'Compact text' },
     icon('text-size'),
   );
   const show = (size) => button.setAttribute('aria-pressed', String(size === 'compact'));
@@ -127,7 +168,7 @@ export function mountShell(shell, services = {}) {
       if (a.dataset.view === r.view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
-    document.title = r.view === 'ask' ? 'magicshell' : `${TITLES[r.view]} · magicshell`;
+    document.title = r.view === 'ask' ? (isBench(r) ? 'Bench · magicshell' : 'magicshell') : `${TITLES[r.view]} · magicshell`;
     const el = h('div', { class: 'oc-columns', 'data-view': r.view });
     main.replaceChildren(el);
     current = viewFor(r.view);
@@ -187,7 +228,7 @@ async function boot(shell) {
     client = createServerClient(fetchFn);
     store = mode === 'accounts' ? createServerStore(fetchFn) : createBrowserStore(storage ?? memoryStorage());
   }
-  registerView('ask', createBenchView());
+  registerView('ask', createAskView());
   mountShell(shell, { mode, client, store });
 }
 

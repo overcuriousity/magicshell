@@ -45,9 +45,13 @@ export function picker(select) {
     'aria-label': select.getAttribute('aria-label'),
   });
   const list = h('ul', { class: 'oc-menu', id, role: 'listbox', tabindex: '-1', hidden: true });
-  const items = options.map((o, i) =>
-    h('li', { role: 'option', id: `${id}-${i}`, onclick: () => choose(i) }, o.textContent),
-  );
+  // An option's data-hint becomes a second, smaller line in the list.
+  const items = options.map((o, i) => {
+    const hint = o.getAttribute('data-hint');
+    return hint
+      ? h('li', { role: 'option', id: `${id}-${i}`, class: 'oc-menu__two', onclick: () => choose(i) }, h('span', {}, o.textContent), h('small', {}, hint))
+      : h('li', { role: 'option', id: `${id}-${i}`, onclick: () => choose(i) }, o.textContent);
+  });
   list.append(...items);
   let active = select.selectedIndex;
   let buffer = '';
