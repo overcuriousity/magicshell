@@ -1,6 +1,6 @@
 [package]
 name = "magicshell"
-version = "2026.11.3"
+version = "2026.11.4"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"

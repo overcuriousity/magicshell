@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-13
+
 ### Changed
 
 - The guide's first step offers the four kinds of question as buttons with an icon and a hint, two by two, instead of a dropdown; a button goes straight on to the question.
