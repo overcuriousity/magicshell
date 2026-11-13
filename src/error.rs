@@ -14,6 +14,9 @@ pub enum AppError {
     /// The model endpoint answered in a way this app cannot read (502).
     #[error("{0}")]
     Upstream(String),
+    /// The model endpoint did not answer in time (504).
+    #[error("The model took too long to answer. Try again.")]
+    UpstreamTimeout,
 }
 
 impl AppError {
@@ -22,6 +25,7 @@ impl AppError {
             Self::Kit(e) => e.status(),
             Self::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
+            Self::UpstreamTimeout => StatusCode::GATEWAY_TIMEOUT,
         }
     }
 }
