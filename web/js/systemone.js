@@ -121,3 +121,42 @@ function probabilities(answer, names) {
   if (!isObject(answer.probabilities)) throw new Error(BAD_ANSWER);
   return names.map((n) => (has(answer.probabilities, n) ? number(answer.probabilities[n]) : number(undefined)));
 }
+
+// Checks a server Reply, which is already an Outcome (probabilities as arrays by position), against
+// the run; returns { answers, model, inputTokens } or throws the same sentence as parseResponse.
+export function checkOutcome(body, run) {
+  if (!isObject(body) || !isObject(body.answers)) throw new Error(BAD_ANSWER);
+  const numbers = (v, n) => {
+    if (!Array.isArray(v) || v.length !== n || !v.every(isNumber)) throw new Error(BAD_ANSWER);
+    return v;
+  };
+  const answers = {};
+  for (const q of run.questions) {
+    const a = has(body.answers, q.key) ? body.answers[q.key] : undefined;
+    if (!isObject(a) || a.type !== q.type) throw new Error(BAD_ANSWER);
+    if (q.type === 'choice') {
+      const names = q.options.map((o) => trimmed(o.name));
+      if (typeof a.choice !== 'string' || !names.includes(a.choice)) throw new Error(BAD_ANSWER);
+      answers[q.key] = {
+        type: 'choice',
+        choice: a.choice,
+        probabilities: numbers(a.probabilities, names.length),
+        confidence: number(a.confidence),
+      };
+    } else if (q.type === 'score') {
+      answers[q.key] = {
+        type: 'score',
+        score: number(a.score),
+        probabilities: numbers(a.probabilities, q.levels.length),
+        confidence: number(a.confidence),
+      };
+    } else {
+      answers[q.key] = { type: 'noul', noul: number(a.noul) };
+    }
+  }
+  return {
+    answers,
+    model: typeof body.model === 'string' ? body.model : '',
+    inputTokens: isNumber(body.inputTokens) ? body.inputTokens : 0,
+  };
+}
