@@ -2,7 +2,8 @@
 // ctx.signIn resolves when the session holds and the app has moved on to the route asked for.
 import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
-import { field, inlineError } from './settings.js';
+import { inlineError } from '../ui/notice.js';
+import { field } from './settings.js';
 
 export function createSignInView() {
   return {

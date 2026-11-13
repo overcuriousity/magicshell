@@ -1,6 +1,7 @@
 /* magicshell's own pieces: colours of options and levels, chips, the verdict, bars, the scale and the meter.
    Choice options take --chart-cat-N by position (colors.js optionClass), score levels the ordered ramp
-   --chart-seq-N (levelClass), the yes/no meter the accent. Views set a bar's length with
+   --chart-seq-N (levelClass), the yes/no meter the accent, and a pick that matches no option the
+   neutral grey (ms-neutral), so it never borrows another option's colour. Views set a bar's length with
    el.style.setProperty('--w', '42%') (CSSOM, allowed by the CSP; style attributes are not).
    scripts/check-contrast.mjs checks every pair below in both themes. */
 
@@ -17,40 +18,25 @@
 .lvl-3 { --k: var(--chart-seq-3); --k-outline: var(--outline-lvl-3, transparent); }
 .lvl-4 { --k: var(--chart-seq-4); --k-outline: var(--outline-lvl-4, transparent); }
 .ms-accent { --k: var(--color-accent); --k-outline: transparent; }
+.ms-neutral { --k: var(--color-fg-muted); --k-outline: transparent; }
 
 /* Soft fill behind primary text, and an edge that holds 3:1 on the page. */
 .opt-1, .opt-2, .opt-3, .opt-4, .opt-5, .opt-6, .opt-7, .opt-8,
-.lvl-1, .lvl-2, .lvl-3, .lvl-4, .ms-accent {
+.lvl-1, .lvl-2, .lvl-3, .lvl-4, .ms-accent, .ms-neutral {
   --k-soft: color-mix(in srgb, var(--k) 12%, var(--color-bg-elevated));
   --k-edge: color-mix(in srgb, var(--k) 45%, var(--color-fg-primary));
 }
 
-/* Bar colours under 3:1 on --color-bg-base get a --color-border-control outline (palette unchanged). */
+/* Bar colours under 3:1 on --color-bg-base get a --color-border-control outline (palette unchanged).
+   One declaration per bar, light-dark(light, dark): it follows the color-scheme that both dark blocks
+   of 00-tokens.css set (the system preference and data-theme="dark"), so the two paths cannot drift. */
 :root {
-  --outline-opt-2: var(--color-border-control);
-  --outline-opt-3: var(--color-border-control);
-  --outline-opt-7: var(--color-border-control);
-  --outline-opt-8: var(--color-border-control);
+  --outline-opt-2: light-dark(var(--color-border-control), transparent);
+  --outline-opt-3: light-dark(var(--color-border-control), transparent);
+  --outline-opt-7: light-dark(var(--color-border-control), transparent);
+  --outline-opt-8: light-dark(var(--color-border-control), transparent);
   --outline-lvl-1: var(--color-border-control);
-  --outline-lvl-2: var(--color-border-control);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --outline-opt-2: transparent;
-    --outline-opt-3: transparent;
-    --outline-opt-7: transparent;
-    --outline-opt-8: transparent;
-    --outline-lvl-1: var(--color-border-control);
-    --outline-lvl-2: transparent;
-  }
-}
-:root[data-theme="dark"] {
-    --outline-opt-2: transparent;
-    --outline-opt-3: transparent;
-    --outline-opt-7: transparent;
-    --outline-opt-8: transparent;
-    --outline-lvl-1: var(--color-border-control);
-    --outline-lvl-2: transparent;
+  --outline-lvl-2: light-dark(var(--color-border-control), transparent);
 }
 
 /* A colour dot beside a name; decoration, the name carries the meaning. */
@@ -230,6 +216,8 @@
 .ms-variant { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .ms-variant__head { display: flex; align-items: center; justify-content: space-between; }
 .ms-variant__head > .ms-result__title { margin: 0; }
+.ms-variant__body { display: contents; }
+.ms-variant > .ms-error-host:empty { display: none; }
 
 /* Delta column beside the bar numbers. */
 .ms-bar__delta { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
@@ -280,11 +268,12 @@
 .ms-guide__chips { margin: 0; padding: 0; list-style: none; }
 .ms-guide__add .oc-input { flex: 1 1 auto; min-width: 0; }
 .ms-chip__remove {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--target-row);
+  height: var(--target-row);
   margin-right: calc(-1 * var(--space-1));
   padding: 0;
   border: 0;
@@ -293,10 +282,14 @@
   color: var(--color-fg-secondary);
   cursor: pointer;
 }
+/* The mark stays 24 px so the chip keeps its height; its target is the icon button's 32 px
+   (manifest 20-components), spread over the chip's own padding and gap. Touch has 44 px below. */
+.ms-chip__remove::after { content: ""; position: absolute; inset: calc((var(--target-row) - var(--target-tool)) / 2); }
 .ms-chip__remove:hover { background: var(--color-bg-hover); color: var(--color-fg-primary); }
 @media (pointer: coarse) {
   .ms-guide__chips .ms-chip { min-height: var(--target-touch); }
   .ms-chip__remove { width: var(--target-touch); height: var(--target-touch); margin: 0 calc(-1 * var(--space-2)) 0 0; }
+  .ms-chip__remove::after { content: none; }
 }
 .ms-guide__levels { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .ms-guide__levels .oc-input { flex: 1 1 auto; min-width: 0; }
@@ -353,7 +346,6 @@
 .ms-hrow__more { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-mono); }
 .ms-hrow__ms { min-width: 5rem; text-align: right; color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-mono); font-variant-numeric: tabular-nums; }
 .ms-hrow__when { min-width: 3.5rem; text-align: right; color: var(--color-fg-muted); font-size: var(--text-dense); }
-.ms-hrow__chip:last-child { grid-column: auto; }
 @container app (max-width: 48rem) {
   .ms-hrow { grid-template-columns: auto 1fr auto auto; row-gap: var(--space-1); }
   .ms-hrow__text { grid-column: 1 / -1; }

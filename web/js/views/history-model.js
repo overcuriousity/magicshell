@@ -27,7 +27,9 @@ export function headline(entry) {
   if (!q || !a) return { text, answer: '', cls: '' };
   if (a.type === 'choice') {
     const names = (q.options ?? []).map((o) => o.name.trim());
-    return { text, answer: a.choice, cls: optionClass(Math.max(0, names.indexOf(a.choice))) };
+    const at = names.indexOf(String(a.choice ?? '').trim());
+    // A pick that is not among the options gets the neutral tint, never another option's colour.
+    return { text, answer: a.choice, cls: at >= 0 ? optionClass(at) : 'ms-neutral' };
   }
   if (a.type === 'score') {
     const levels = (q.levels ?? []).map((l) => l.text.trim());

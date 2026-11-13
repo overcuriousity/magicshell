@@ -4,7 +4,8 @@
 // score keep only their bars, noul its meter with the number beside it.
 // Bars are one grid, a row per option or level (label, bar, number); opts.deltas adds a fourth
 // column (.ms-bars--delta) with the change beside each number; opts.colors gives the rows
-// the colour slots of another order (a variant keeps each option's and level's colour from A).
+// the colour slots of another order (a variant keeps each option's and level's colour from A), and
+// for levels opts.colorCount the number of levels those slots are spread over (A's count).
 import { nearestLevel, noulIsYes, pct, prob, scoreText, signed } from '../format.js';
 import { levelClass, optionClass } from './colors.js';
 import { h } from './dom.js';
@@ -48,13 +49,15 @@ const barsClass = (opts) => (opts?.deltas ? 'ms-bars ms-bars--delta' : 'ms-bars'
 
 const optionNames = (question) => question.options.map((o) => o.name.trim());
 const levelTexts = (question) => question.levels.map((l) => l.text.trim());
+// The pick as named in the options: names are compared trimmed, so the pick is shown trimmed too.
+const choiceName = (answer) => String(answer.choice ?? '').trim();
 
 export function choiceResult(question, answer, opts = {}) {
   const names = optionNames(question);
   return h(
     'div',
     { class: 'ms-answer' },
-    opts.pick === false ? null : pickLine(answer.choice, answer.confidence, opts),
+    opts.pick === false ? null : pickLine(choiceName(answer), answer.confidence, opts),
     h('div', { class: barsClass(opts) }, names.map((name, i) => barRow(name, answer.probabilities[i], optionClass(opts.colors?.[i] ?? i), opts, i))),
   );
 }
@@ -63,8 +66,10 @@ export function scoreResult(question, answer, opts = {}) {
   const texts = levelTexts(question);
   const count = texts.length;
   const nearest = nearestLevel(answer.score, count);
+  const spread = opts.colors ? (opts.colorCount ?? count) : count;
+  const color = (i) => levelClass(Math.min(opts.colors?.[i] ?? i, spread - 1), spread);
   const at = clamp01((answer.score + 0.5) / count);
-  const levelBars = h('div', { class: barsClass(opts) }, texts.map((text, i) => barRow(text, answer.probabilities[i], levelClass(opts.colors?.[i] ?? i, count), opts, i)));
+  const levelBars = h('div', { class: barsClass(opts) }, texts.map((text, i) => barRow(text, answer.probabilities[i], color(i), opts, i)));
   if (opts.pick === false) return h('div', { class: 'ms-answer' }, levelBars);
   const mark = h('div', { class: 'ms-mark', 'aria-hidden': 'true' });
   mark.style.setProperty('--at', width(at));
@@ -73,7 +78,7 @@ export function scoreResult(question, answer, opts = {}) {
     { class: 'ms-answer' },
     pickLine(`${scoreText(answer.score)} · ${texts[nearest]}`, answer.confidence, opts),
     mark,
-    h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: levelClass(opts.colors?.[i] ?? i, count) }))),
+    h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: color(i) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),
     levelBars,
   );
@@ -110,13 +115,15 @@ export function noulResult(_question, answer, opts = {}) {
   );
 }
 
-// The tinted block of the guided view: the pick, Yes or No, or the nearest level's text.
+// The tinted block of the guided view: the pick, Yes or No, or the nearest level's text. A pick
+// that is not among the options gets the neutral tint, never another option's colour.
 export function guidedVerdict(question, answer) {
   let text;
   let cls;
   if (answer.type === 'choice') {
-    text = answer.choice;
-    cls = optionClass(Math.max(0, optionNames(question).indexOf(answer.choice)));
+    text = choiceName(answer);
+    const at = optionNames(question).indexOf(text);
+    cls = at >= 0 ? optionClass(at) : 'ms-neutral';
   } else if (answer.type === 'score') {
     const texts = levelTexts(question);
     const nearest = nearestLevel(answer.score, texts.length);

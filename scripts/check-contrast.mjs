@@ -2,7 +2,10 @@
 // Checks the colour pairs the app relies on, in both themes, against web/css/00-tokens.css:
 // the manifest's documented text pairs, primary text on every option and level soft fill (7:1),
 // and every chip edge, bar colour and level colour on the page (3:1). A bar colour under 3:1 passes
-// only if web/css/40-app.css gives it the --color-border-control outline. Exits 1 naming each failure.
+// only if web/css/40-app.css gives it the --color-border-control outline in that theme: an outline is one
+// declaration on :root, either a value for both themes or light-dark(light, dark), which follows the
+// color-scheme both dark token blocks set. Dark blocks in 40-app.css, if any come back, must agree.
+// Exits 1 naming each failure.
 // Usage: node scripts/check-contrast.mjs [web/css]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +23,7 @@ const KEYS = [
   ...Array.from({ length: 8 }, (_, i) => [`opt-${i + 1}`, `--chart-cat-${i + 1}`]),
   ...Array.from({ length: 4 }, (_, i) => [`lvl-${i + 1}`, `--chart-seq-${i + 1}`]),
   ['ms-accent', '--color-accent'],
+  ['ms-neutral', '--color-fg-muted'],
 ];
 
 function blockAfter(css, selector) {
@@ -71,7 +75,25 @@ for (const rule of [SOFT, EDGE]) {
   if (!appCss.includes(rule.css)) errors.push(`40-app.css: expected "${rule.css}"`);
 }
 
-const outlines = themes(appCss, /var\(--[\w-]+\)|transparent/);
+// light-dark() in the outlines resolves by color-scheme, so each theme's token block must set it.
+for (const [name, selector, scheme] of [['light', ':root {', 'light'], ['dark (media)', DARK_MEDIA, 'dark'], ['dark (data-theme)', DARK_ATTR, 'dark']]) {
+  if (!new RegExp(`color-scheme:\\s*${scheme}\\s*;`).test(blockAfter(tokensCss, selector) ?? '')) {
+    errors.push(`tokens: the ${name} block must set color-scheme: ${scheme}`);
+  }
+}
+
+const COLOR = /var\(--[\w-]+\)|transparent/;
+const outlines = { light: {}, dark: {} };
+const outlineRe = new RegExp(`(--outline-[\\w-]+):\\s*(?:light-dark\\(\\s*(${COLOR.source})\\s*,\\s*(${COLOR.source})\\s*\\)|(${COLOR.source}))\\s*;`, 'g');
+for (const m of (blockAfter(appCss, ':root {') ?? '').matchAll(outlineRe)) {
+  outlines.light[m[1]] = m[2] ?? m[4];
+  outlines.dark[m[1]] = m[3] ?? m[4];
+}
+const appDark = themes(appCss, COLOR);
+for (const k of new Set([...Object.keys(appDark.media), ...Object.keys(appDark.attr)])) {
+  if (appDark.media[k] !== appDark.attr[k]) errors.push(`40-app.css: the two dark blocks differ at ${k}`);
+  else outlines.dark[k] = appDark.attr[k];
+}
 
 for (const name of ['light', 'dark']) {
   const t = tok[name];
@@ -113,6 +135,7 @@ for (const name of ['light', 'dark']) {
       need('the meter (accent) on bg-base', k, base, 3);
       continue;
     }
+    if (cls === 'ms-neutral') continue;
     const ratio = contrast(k, base);
     const hasOutline = outlines[name][`--outline-${cls}`] === `var(${OUTLINE})`;
     if (ratio < 3 && !hasOutline) errors.push(`${name}: the ${cls} bar (${token}) on bg-base is ${ratio.toFixed(2)}, needs 3 or an outline`);

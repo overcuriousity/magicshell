@@ -191,3 +191,9 @@ test('the not-saving notice is for browser storage only', () => {
   assert.equal(showsNotSaving({ mode: 'open', storage: {}, store: { persistent: true } }), false);
   assert.equal(showsNotSaving({ mode: 'accounts', storage: null, store: { persistent: true } }), false);
 });
+
+test('the sentence for a trimmed history names how many entries went', async () => {
+  const { trimmedSentence } = await import('./app.js');
+  assert.equal(trimmedSentence(1), 'This browser is out of room, so History removed its oldest entry. It keeps making room this way.');
+  assert.equal(trimmedSentence(3), 'This browser is out of room, so History removed its 3 oldest entries. It keeps making room this way.');
+});

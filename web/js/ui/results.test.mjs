@@ -154,3 +154,29 @@ test('without the pick line only the bars with percentages remain', () => {
   assert.equal(bars(y)[0].getAttribute('aria-label'), 'Yes 34 %');
   assert.equal(all(y, (n) => cls(n) === 'ms-meter__fill')[0].vars.get('--w'), '34.0%');
 });
+
+test('the pick line shows the choice trimmed, as the option names are', () => {
+  const el = choiceResult(choice, { ...choiceAnswer, choice: '  sushi \n' });
+  assert.equal(all(el, (n) => cls(n) === 'ms-pick__name')[0].textContent, 'sushi');
+});
+
+test('verdict: a choice found after trimming takes its option colour', () => {
+  const v = guidedVerdict({ options: [{ name: 'pizza' }, { name: ' sushi ' }] }, { ...choiceAnswer, choice: 'sushi ' });
+  assert.ok(cls(v).includes('opt-2'));
+  assert.equal(v.textContent, 'sushi');
+});
+
+test('verdict: a choice not among the options is neutral, not option 1', () => {
+  const v = guidedVerdict(choice, { ...choiceAnswer, choice: 'tacos' });
+  assert.ok(cls(v).includes('ms-neutral'));
+  assert.ok(!/opt-\d/.test(cls(v)));
+  assert.equal(v.textContent, 'tacos');
+});
+
+test('a score keeps A\'s level colours when B has fewer levels (colorCount)', () => {
+  // B dropped A's second level: B's rows are A's levels 0, 2, 3 of 4.
+  const three = { type: 'score', levels: [{ text: 'Not urgent' }, { text: 'Today' }, { text: 'Now' }] };
+  const el = scoreResult(three, { type: 'score', score: 1, probabilities: [0.2, 0.5, 0.3], confidence: 0.5 }, { colors: [0, 2, 3], colorCount: 4 });
+  const b = bars(el);
+  assert.deepEqual(b.map((n) => cls(n).match(/lvl-\d/)[0]), ['lvl-1', 'lvl-3', 'lvl-4']);
+});

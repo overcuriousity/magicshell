@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createBrowserStore } from './store-browser.js';
+import { createBrowserStore, TOO_OLD } from './store-browser.js';
 
 const memory = (seed = {}) => {
   const data = { ...seed };
@@ -129,14 +129,48 @@ test('a history that no longer fits drops its oldest entries until it does', asy
     if (k === 'magicshell.history' && JSON.parse(v).length > 20) throw new Error('QuotaExceededError');
     set(k, v);
   };
-  const store = createBrowserStore(storage, { onNotSaving: () => (told += 1) });
+  const trimmed = [];
+  const store = createBrowserStore(storage, { onNotSaving: () => (told += 1), onTrimmed: (n) => trimmed.push(n) });
   for (let i = 0; i < 30; i += 1) await store.saveEntry(entry(`e${i}`, new Date(2026, 0, 1, 0, 0, i).toISOString()));
   const kept = JSON.parse(storage.data['magicshell.history']).map((e) => e.id);
-  assert.ok(kept.length <= 20 && kept.length >= 10);
+  // Only as many of the oldest as make room: one at a time, not half the list.
+  assert.equal(kept.length, 20);
   assert.equal(kept[0], 'e29');
+  assert.equal(kept[19], 'e10');
+  assert.deepEqual(trimmed, Array(10).fill(1));
   assert.deepEqual((await store.listHistory()).map((e) => e.id), kept);
   assert.equal(store.persistent, true);
   assert.equal(told, 0);
+});
+
+test('a setup that does not fit makes room in the history', async () => {
+  const storage = memory();
+  const set = storage.setItem;
+  // Room for 12 items across both lists.
+  storage.setItem = (k, v) => {
+    const other = k === 'magicshell.history' ? 'magicshell.setups' : 'magicshell.history';
+    if (JSON.parse(v).length + JSON.parse(storage.data[other] ?? '[]').length > 12) throw new Error('QuotaExceededError');
+    set(k, v);
+  };
+  const trimmed = [];
+  const store = createBrowserStore(storage, { onTrimmed: (n) => trimmed.push(n) });
+  for (let i = 0; i < 12; i += 1) await store.saveEntry(entry(`e${i}`, new Date(2026, 0, 1, 0, 0, i).toISOString()));
+  await store.saveSetup(setup('a'));
+  await store.saveSetup(setup('b'));
+  assert.deepEqual(JSON.parse(storage.data['magicshell.setups']).map((s) => s.id), ['a', 'b']);
+  assert.deepEqual(JSON.parse(storage.data['magicshell.history']).map((e) => e.id), ['e11', 'e10', 'e9', 'e8', 'e7', 'e6', 'e5', 'e4', 'e3', 'e2']);
+  assert.deepEqual(trimmed, [1, 1]);
+  assert.equal((await store.listHistory()).length, 10);
+  assert.equal(store.persistent, true);
+});
+
+test('an entry older than the 500 kept is refused, not dropped in silence', async () => {
+  const store = createBrowserStore(memory());
+  for (let i = 0; i < 500; i += 1) await store.saveEntry(entry(`e${i}`, new Date(2026, 0, 2, 0, 0, i).toISOString()));
+  await assert.rejects(store.saveEntry(entry('old', '2025-01-01T00:00:00.000Z')), { message: TOO_OLD });
+  assert.equal((await store.listHistory()).length, 500);
+  await store.saveEntry(entry('new', '2027-01-01T00:00:00.000Z'));
+  assert.equal((await store.listHistory())[0].id, 'new');
 });
 
 test('a history that does not fit even at its floor is kept in memory and reported', async () => {

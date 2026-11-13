@@ -1,6 +1,7 @@
 // What the bench and the guided view share when they ask the model: one call at a time, the run
 // checked first, the answer recorded once in History, and an expired session in accounts mode
 // leading to sign-in. The models keep their own state; this calls their hooks.
+import { HREF } from '../routes.js';
 import { messageOf, RunError } from '../run-error.js';
 import { validateRun } from '../systemone.js';
 
@@ -22,7 +23,7 @@ export function createRunOnce({ client, store, now, uuid, mode, navigate, guided
 
   const failed = (e, fail) => {
     fail(messageOf(e));
-    if (e instanceof RunError && e.kind === 'auth' && mode === 'accounts') navigate('#/sign-in');
+    if (e instanceof RunError && e.kind === 'auth' && mode === 'accounts') navigate(HREF.signIn);
   };
 
   return {

@@ -19,9 +19,8 @@ impl Limiter {
 
     /// Takes one token for `key`; false when the bucket is empty.
     pub fn take(&self, key: &str) -> bool {
-        let Ok(mut map) = self.state.lock() else {
-            return true;
-        };
+        // The guarded code leaves the map consistent even if it panics, so a poisoned lock keeps limiting.
+        let mut map = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
         if map.len() > 10_000 {
             // A bucket that has refilled carries no state, so it can go.
@@ -41,5 +40,25 @@ impl Limiter {
             entry.0 = refilled;
             false
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_poisoned_lock_keeps_limiting() {
+        let limiter = Limiter::new(1);
+        let state = limiter.state.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = state.lock().unwrap();
+            panic!("poison the lock");
+        })
+        .join();
+        assert!(limiter.state.is_poisoned());
+        assert!(limiter.take("a"));
+        assert!(!limiter.take("a"));
     }
 }

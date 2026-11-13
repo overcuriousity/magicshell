@@ -7,6 +7,7 @@ import { BUILTIN } from '../setups-builtin.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
+import { inlineError } from '../ui/notice.js';
 import { validateSetup } from '../transfer.js';
 import { VARIANTS } from '../variants.js';
 import { createBenchModel, takeRun } from './bench-model.js';
@@ -50,10 +51,6 @@ function opsForB(model) {
     removeItem: (many, key, id) => b((run) => e[many].remove(run, key, id)),
     addItem: (many, key) => b((run) => e[many].add(run, key)),
   };
-}
-
-function errorNotice(text) {
-  return h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, text));
 }
 
 function situationField(value, id, onText) {
@@ -162,14 +159,14 @@ export function createBenchView(deps = {}) {
         h('button', { type: 'submit', class: 'oc-btn' }, 'Save'),
         h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Cancel', 'data-oc-tip': 'Cancel', onclick: close }, icon('x')),
       ),
-      problem ? errorNotice(problem) : null,
+      problem ? inlineError(problem) : null,
     );
   }
 
   function renderForm(state) {
     hosts.form.replaceChildren(
       situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v))),
-      h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)))),
+      h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)), { idPrefix: 'bench-a' })),
       h('div', { class: 'oc-row' },
         h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= LIMITS.questions, onclick: () => model.addQuestion('noul') },
           icon('plus'), 'Add question'),
@@ -217,38 +214,45 @@ export function createBenchView(deps = {}) {
       const text = state.error && state.errorFor === which ? state.error : null;
       if (text === shown[which] && !attemptEnded) continue;
       shown[which] = text;
-      hosts[`error${which.toUpperCase()}`].replaceChildren(...(text ? [errorNotice(text)] : []));
+      hosts[`error${which.toUpperCase()}`].replaceChildren(...(text ? [inlineError(text)] : []));
     }
   }
 
-  // B's own editor, above its column, when "Edit a copy" was chosen.
+  // B's own editor, above its column, when "Edit a copy" was chosen. Its frame stays while the
+  // editor is open and only its body and Run B are rebuilt, so B's error notice (between them, beside
+  // Run B) is never re-inserted and re-announced by a rebuild. Without the editor, B's error sits
+  // above the results.
   function renderVariant(state) {
     if (!state.b || state.variant !== null) {
-      hosts.variant.replaceChildren(hosts.errorB);
+      if (hosts.variant.firstChild !== hosts.errorB || hosts.variant.childNodes.length !== 1) hosts.variant.replaceChildren(hosts.errorB);
       return;
     }
-    hosts.variant.replaceChildren(
-      h('section', { class: 'ms-variant', 'data-variant-editor': '' },
-        h('div', { class: 'ms-variant__head' },
-          h('h2', { class: 'ms-result__title' }, variantLabel(null)),
-          h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Drop variant', 'data-oc-tip': 'Drop variant', 'data-fid': 'drop-b', onclick: () => model.dropVariant() }, icon('x')),
-        ),
-        situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; }))),
-        h('div', { class: 'ms-cards' }, questionCards(state.b, wrapOps(opsForB(model)), { locked: true, slotsFor: (q) => colorSlots(state.ranA?.questions.find((x) => x.key === q.key), q) })),
-        hosts.errorB,
-        h('div', { class: 'oc-row' },
-          h('button', {
-            type: 'button',
-            class: 'oc-btn',
-            'data-fid': 'run-b',
-            'data-oc-tip': 'Run B (Ctrl+Enter)',
-            'aria-busy': state.busy === 'b' && spinner ? 'true' : null,
-            'aria-disabled': state.busy ? 'true' : null,
-            onclick: () => model.runVariant(),
-          }, 'Run B'),
-        ),
+    hosts.variantBody.replaceChildren(
+      h('div', { class: 'ms-variant__head' },
+        h('h2', { class: 'ms-result__title' }, variantLabel(null)),
+        h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Drop variant', 'data-oc-tip': 'Drop variant', 'data-fid': 'drop-b', onclick: () => model.dropVariant() }, icon('x')),
       ),
+      situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; }))),
+      h('div', { class: 'ms-cards' }, questionCards(state.b, wrapOps(opsForB(model)), {
+        locked: true,
+        idPrefix: 'bench-b',
+        fidPrefix: 'b',
+        slotsFor: (q) => colorSlots(state.ranA?.questions.find((x) => x.key === q.key), q),
+      })),
     );
+    hosts.variantRun.replaceChildren(
+      h('button', {
+        type: 'button',
+        class: 'oc-btn',
+        'data-fid': 'run-b',
+        'data-oc-tip': 'Run B (Ctrl+Enter)',
+        'aria-busy': state.busy === 'b' && spinner ? 'true' : null,
+        'aria-disabled': state.busy ? 'true' : null,
+        onclick: () => model.runVariant(),
+      }, 'Run B'),
+    );
+    if (hosts.errorB.parentNode !== hosts.variantEditor) hosts.variantEditor.replaceChildren(hosts.variantBody, hosts.errorB, hosts.variantRun);
+    if (hosts.variant.firstChild !== hosts.variantEditor) hosts.variant.replaceChildren(hosts.variantEditor);
   }
 
   function renderResults(state) {
@@ -341,6 +345,9 @@ export function createBenchView(deps = {}) {
       shown.b = null;
       hosts.actions = h('div', { class: 'oc-stack ms-actions-host' });
       hosts.variant = h('div', {});
+      hosts.variantBody = h('div', { class: 'ms-variant__body' });
+      hosts.variantRun = h('div', { class: 'oc-row' });
+      hosts.variantEditor = h('section', { class: 'ms-variant', 'data-variant-editor': '' });
       hosts.results = h('div', {});
       root.append(
         h('section', { class: 'ms-setup', 'aria-label': 'Setup' },
@@ -362,8 +369,9 @@ export function createBenchView(deps = {}) {
         })
         .catch(() => {});
     },
-    // The setup as entered, for the guided view when the user switches over.
-    currentRun: () => (model ? JSON.parse(JSON.stringify(model.state.a)) : null),
+    // The setup as entered, for the guided view when the user switches over; null when nothing
+    // was entered, so the guide keeps its own draft.
+    currentRun: () => (model?.holdsSomething() ? JSON.parse(JSON.stringify(model.state.a)) : null),
     unmount() {
       off?.();
       clearTimeout(spinnerTimer);

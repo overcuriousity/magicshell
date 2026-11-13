@@ -11,11 +11,24 @@ export function sessionStore() {
       return s;
     }
   } catch {
-    // Blocked: memory below.
+    // Blocked or full: memory below.
   }
   if (!fallback) {
     const m = new Map();
     fallback = { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
   }
   return fallback;
+}
+
+// Removes the keys from both places a draft can be. sessionStore() picks memory when the real
+// storage is full, yet drafts written before it filled up are still there, and removing needs no room.
+export function forget(keys) {
+  for (const key of keys) {
+    try {
+      globalThis.sessionStorage?.removeItem(key);
+    } catch {
+      // Blocked: nothing kept there.
+    }
+    fallback?.removeItem(key);
+  }
 }

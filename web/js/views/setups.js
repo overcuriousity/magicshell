@@ -2,24 +2,25 @@
 // situation, question cards), deleted with an undo, exported and imported. From 90rem the list and
 // the editor sit side by side; below, the editor replaces the list.
 import { LIMITS } from '../limits.js';
+import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { exportSetups, importSetups, validateSetup } from '../transfer.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { inlineError } from '../ui/notice.js';
+import { copy } from '../util.js';
 import { questionCards } from './bench-cards.js';
 import { queueRun, runEdits } from './bench-model.js';
 import { duplicate } from './setup-model.js';
 
-const copy = (v) => JSON.parse(JSON.stringify(v));
 const byName = (a, b) => a.name.localeCompare(b.name);
 const emptyDraft = (uuid) => ({ id: uuid(), name: '', sampleState: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
 
-function errorNotice(text) {
-  return h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, text));
-}
-
 const plural = (n) => `${n} setup${n === 1 ? '' : 's'}`;
+export const NOTHING_TO_EXPORT = 'Nothing to export yet. Export saves your own setups; the built-in ones come with the app.';
+// An import that stopped part way: how far it got, then why.
+export const importStopped = (saved, total, why) => `Imported ${saved} of ${plural(total)}, then stopped. ${why}`;
 
 function download(text) {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -51,7 +52,7 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
 
   function openInBench(setup) {
     queueRun({ state: setup.sampleState ?? '', questions: copy(setup.questions) });
-    ctx.navigate('#/ask/bench');
+    ctx.navigate(HREF.bench);
   }
 
   async function remove(setup) {
@@ -118,7 +119,7 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
       h('div', { class: 'oc-row ms-actions' },
         h('button', { type: 'button', class: draft ? 'oc-btn' : 'oc-btn oc-btn--primary', 'data-fid': 'new', onclick: () => openEditor(null) }, icon('plus'), 'New setup'),
         h('button', { type: 'button', class: 'oc-btn', onclick: () => fileInput.click() }, icon('upload'), 'Import'),
-        h('button', { type: 'button', class: 'oc-btn', disabled: own.length === 0, onclick: () => download(exportSetups(own)) }, icon('download'), 'Export'),
+        h('button', { type: 'button', class: 'oc-btn', onclick: exportOwn }, icon('download'), 'Export'),
         fileInput,
       ),
       h('ul', { class: 'ms-setup-list' }, [...BUILTIN, ...own].map(row)),
@@ -126,16 +127,39 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
     );
   }
 
+  // Only the user's own setups go into the file; with none yet, the button says so instead.
+  function exportOwn() {
+    if (own.length === 0) {
+      notify(NOTHING_TO_EXPORT);
+      return;
+    }
+    download(exportSetups(own));
+  }
+
   async function importFile(file) {
     if (!file) return;
+    let setups;
+    let skipped;
     try {
-      const { setups, skipped } = importSetups(await file.text(), uuid);
-      for (const s of setups) await ctx.store.saveSetup(s);
-      await reload();
-      notify(skipped ? `Imported ${plural(setups.length)}, skipped ${skipped}` : `Imported ${plural(setups.length)}`);
+      ({ setups, skipped } = importSetups(await file.text(), uuid));
     } catch (e) {
       fail(e);
+      return;
     }
+    let saved = 0;
+    let failure = null;
+    for (const s of setups) {
+      try {
+        await ctx.store.saveSetup(s);
+        saved += 1;
+      } catch (e) {
+        failure = e;
+        break;
+      }
+    }
+    await reload().catch(() => {});
+    if (failure) notify(importStopped(saved, setups.length, messageOf(failure)), { kind: 'danger' });
+    else notify(skipped ? `Imported ${plural(saved)}, skipped ${skipped}` : `Imported ${plural(saved)}`);
   }
 
   // ---- editor ----
@@ -200,10 +224,12 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
 
   function setError(text) {
     editError = text;
-    hosts.error?.replaceChildren(...(text ? [errorNotice(text)] : []));
+    hosts.error?.replaceChildren(...(text ? [inlineError(text)] : []));
   }
 
   async function save() {
+    // The view this save belongs to; after leaving and coming back the editor is another one.
+    const at = root;
     const setup = { id: draft.id, name: draft.name.trim(), sampleState: draft.sampleState, questions: copy(draft.questions) };
     const problem = validateSetup(setup);
     if (problem) {
@@ -213,10 +239,10 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
     try {
       await ctx.store.saveSetup(setup);
     } catch (e) {
-      setError(messageOf(e));
+      if (root === at) setError(messageOf(e));
       return;
     }
-    if (!root) return;
+    if (!root || root !== at) return;
     closeEditor(false);
     await reload();
     hosts.list?.querySelector(`[data-setup="${CSS.escape(setup.id)}"] button`)?.focus({ preventScroll: true });

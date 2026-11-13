@@ -25,12 +25,14 @@ const iconButton = (name, label, onclick, { disabled = false, fid } = {}) =>
   }, icon(name, 'row'));
 
 // A text input bound to one field; typing edits quietly (no rebuild), so focus and caret stay.
-function textInput(value, label, fid, onText, { mono = false, readonly = false } = {}) {
+// With `id` a <label for> names it and `label` is left out.
+function textInput(value, label, fid, onText, { mono = false, readonly = false, id = null } = {}) {
   return h('input', {
     type: 'text',
     class: mono ? 'oc-input ms-mono' : 'oc-input',
+    id,
     value,
-    'aria-label': label,
+    'aria-label': id ? null : label,
     'data-fid': fid,
     autocomplete: 'off',
     spellcheck: mono ? 'false' : null,
@@ -98,11 +100,19 @@ function list(kind, q, ref, ops, fq, slots) {
   );
 }
 
-// fq: the card's focus prefix by position, so focus finds its way back after a rebuild.
-function card(q, index, count, ops, locked, slots) {
+// fq: the card's focus prefix by position, so focus finds its way back after a rebuild; ids take
+// the editor's prefix as well, so A's and B's cards never share one.
+function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
   // The key is renamed on change, not per keystroke; every handler reads the key the card holds now.
   const ref = { key: q.key };
-  const fq = `q${index}`;
+  const fq = `${fidPrefix}q${index}`;
+  const textId = `${idPrefix}-${fq}-text`;
+  const commitKey = (input) => {
+    const next = input.value.trim();
+    if (next === ref.key) input.value = ref.key;
+    else if (ops.renameQuestion(ref.key, next)) ref.key = next;
+    else input.value = ref.key;
+  };
   const keyInput = h('input', {
     type: 'text',
     class: 'oc-input ms-mono ms-card__key',
@@ -112,10 +122,11 @@ function card(q, index, count, ops, locked, slots) {
     autocomplete: 'off',
     spellcheck: 'false',
     readonly: locked,
-    onchange: (e) => {
-      const next = e.target.value.trim();
-      if (ops.renameQuestion(ref.key, next)) ref.key = next;
-      else e.target.value = ref.key;
+    onchange: (e) => commitKey(e.target),
+    // Ctrl+Enter runs from the view's listener above this one: commit the pending key first, so the
+    // run does not go out with the old one (change fires only on blur).
+    onkeydown: (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) commitKey(e.target);
     },
   });
   return h('div', { class: 'ms-card' },
@@ -125,8 +136,8 @@ function card(q, index, count, ops, locked, slots) {
       locked ? null : iconButton('trash', 'Remove question', () => ops.removeQuestion(ref.key), { disabled: count <= 1, fid: `${fq}:drop` }),
     ),
     h('div', { class: 'oc-field' },
-      h('span', { class: 'oc-field__label', 'aria-hidden': 'true' }, 'Question'),
-      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v)),
+      h('label', { for: textId }, 'Question'),
+      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId }),
     ),
     q.type === 'choice' ? list('option', q, ref, ops, fq, slots) : null,
     q.type === 'score' ? list('level', q, ref, ops, fq, slots) : null,
@@ -134,6 +145,8 @@ function card(q, index, count, ops, locked, slots) {
 }
 
 // slotsFor(q): colour positions for q's rows (B's editor takes them from A), or null for position.
-export function questionCards(run, ops, { locked = false, slotsFor = () => null } = {}) {
-  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q)));
+// idPrefix and fidPrefix: unique per editor on the page, so A's and B's cards share no id and focus
+// returns to the editor it was in.
+export function questionCards(run, ops, { locked = false, slotsFor = () => null, idPrefix = 'bench', fidPrefix = '' } = {}) {
+  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q), { idPrefix, fidPrefix }));
 }

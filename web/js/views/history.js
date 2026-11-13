@@ -2,16 +2,16 @@
 // every question's result, the run line and the request and response; from there a run goes
 // back to the bench (as baseline A), back into the guide, or away. Deleting and clearing act at
 // once with an undo notice.
+import { HREF, hrefOf } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
-import { icon } from '../ui/icons.js';
+import { inlineError } from '../ui/notice.js';
 import { resultsSection } from './bench-results.js';
 import { queueRun } from './bench-model.js';
 import { loadable, queueGuidedRun } from './guided-model.js';
 import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
 
-const LIST = '#/history';
-const hrefOf = (id) => `${LIST}/${encodeURIComponent(id)}`;
+const LIST = HREF.history;
 
 export function createHistoryView({ now = () => new Date() } = {}) {
   let root = null;
@@ -69,7 +69,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     const { text, answer, cls } = headline(entry);
     const more = entry.run.questions.length - 1;
     return h('li', {},
-      h('a', { class: 'ms-hrow', href: hrefOf(entry.id), 'data-entry': entry.id },
+      h('a', { class: 'ms-hrow', href: hrefOf('history', entry.id), 'data-entry': entry.id },
         h('span', { class: 'ms-hrow__text' }, text),
         answer ? h('span', { class: `ms-chip ms-hrow__chip ${cls}` }, answer) : null,
         more > 0 ? h('span', { class: 'ms-hrow__more' }, `+${more}`) : null,
@@ -90,13 +90,13 @@ export function createHistoryView({ now = () => new Date() } = {}) {
         ? h('ul', { class: 'ms-hlist' }, entries.map(row))
         : h('div', { class: 'ms-hempty' },
             h('p', { class: 'ms-empty' }, 'Nothing asked yet.'),
-            act('Ask a question', () => ctx.navigate('#/ask'), 'oc-btn oc-btn--primary')),
+            act('Ask a question', () => ctx.navigate(HREF.ask), 'oc-btn oc-btn--primary')),
     );
   }
 
   function openInBench(entry) {
     queueRun(entry.run, benchResult(entry));
-    ctx.navigate('#/ask/bench');
+    ctx.navigate(HREF.bench);
   }
 
   // A run the guide cannot take (more than one question) opens in the bench instead.
@@ -106,7 +106,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       return;
     }
     queueGuidedRun(entry.run);
-    ctx.navigate('#/ask');
+    ctx.navigate(HREF.ask);
   }
 
   function renderEntry(entry) {
@@ -138,12 +138,25 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     );
   }
 
-  // The list could not be read: the heading and the sentence, in place of the list.
+  // The list could not be read: the heading, the sentence and a way to try again, in place of the list.
   function renderFailed(e) {
+    const again = act('Try again', () => {
+      again.disabled = true;
+      load(root);
+    });
     root.replaceChildren(
       h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'History')),
-      h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, messageOf(e))),
+      inlineError(messageOf(e), again),
     );
+  }
+
+  function load(el) {
+    model.load().then(() => {
+      loaded = true;
+      render();
+    }).catch((e) => {
+      if (root === el) renderFailed(e);
+    });
   }
 
   function render() {
@@ -166,12 +179,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
         modelStore = ctx.store;
       }
       off = model.subscribe(() => render());
-      model.load().then(() => {
-        loaded = true;
-        render();
-      }).catch((e) => {
-        if (root === el) renderFailed(e);
-      });
+      load(el);
     },
     unmount() {
       // ctx stays: an Undo still in flight finishes against the store after leaving.

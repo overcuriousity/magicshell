@@ -29,9 +29,8 @@ pub fn client_key(ip: IpAddr) -> IpAddr {
 
 impl Buckets {
     fn take(&self, ip: IpAddr) -> bool {
-        let Ok(mut map) = self.state.lock() else {
-            return true;
-        };
+        // The guarded code leaves the map consistent even if it panics, so a poisoned lock keeps limiting.
+        let mut map = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
         if map.len() > 10_000 {
             // A bucket that has refilled carries no state, so it can go.
@@ -105,6 +104,20 @@ mod tests {
         assert!(b.take("192.0.2.2".parse().unwrap()));
         assert!(!b.take("192.0.2.1".parse().unwrap()));
         assert_eq!(client_key("::ffff:192.0.2.1".parse().unwrap()), "::ffff:192.0.2.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn a_poisoned_lock_keeps_limiting() {
+        let b = buckets(1);
+        let state = b.state.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = state.lock().unwrap();
+            panic!("poison the lock");
+        })
+        .join();
+        assert!(b.state.is_poisoned());
+        assert!(b.take("192.0.2.1".parse().unwrap()));
+        assert!(!b.take("192.0.2.1".parse().unwrap()));
     }
 
     #[test]

@@ -28,6 +28,9 @@ pub struct Upstream {
     model: String,
 }
 
+/// System One replies are a few KB; a longer body is not read to its end.
+const MAX_REPLY_BYTES: usize = 1024 * 1024;
+
 fn upstream_error(sentence: &str) -> AppError {
     AppError::Upstream(sentence.to_owned())
 }
@@ -47,6 +50,19 @@ fn status_error(status: StatusCode) -> AppError {
         501 => upstream_error("This model is not a decision model. Check the server configuration."),
         code => AppError::Upstream(format!("The model endpoint answered with an error ({code}). Try again later.")),
     }
+}
+
+async fn read_capped(mut response: reqwest::Response) -> Result<Vec<u8>, AppError> {
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| transport_error(&e))? {
+        if bytes.len() + chunk.len() > MAX_REPLY_BYTES {
+            return Err(upstream_error(
+                "The model endpoint sent an answer that is too large. Check the server configuration.",
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 impl Upstream {
@@ -71,7 +87,7 @@ impl Upstream {
         let started = Instant::now();
         let response = request.send().await.map_err(|e| transport_error(&e))?;
         let status = response.status();
-        let bytes = response.bytes().await.map_err(|e| transport_error(&e))?;
+        let bytes = read_capped(response).await?;
         let upstream_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         if !status.is_success() {
             return Err(status_error(status));

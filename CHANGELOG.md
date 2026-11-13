@@ -4,6 +4,23 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Security
+
+- Changing a password, in the app or with `magicshell user passwd`, ends every other session of that user; the session that changed it stays signed in under a new id. Sessions from before this version end once, at the first request after the upgrade.
+- Signing out clears the drafts of the bench and the guide also when the browser's session storage is full, and drops runs handed between views.
+
+### Changed
+
+- The bench keeps the variant B and the results of A and B when you visit another view or sign in, not only A.
+- Switching from an untouched bench to Guided view leaves the guide's draft alone.
+- A full browser makes room by removing only as many of the oldest history entries as needed, and says how many; saving a setup makes room the same way.
+- Restoring a history entry older than the 500 kept is refused with a sentence instead of being dropped without a word.
+- History offers Try again when its list cannot be loaded.
+- Setups: an import that stops part way says how many setups it saved; Export with no own setups explains why there is nothing to export.
+- A reply from the model endpoint larger than 1 MiB is refused; a negative history duration is refused.
+- A proxy's error page or text is no longer shown as the app's own sentence.
+- Rate limits keep limiting after a panic elsewhere instead of letting everything through.
+
 ## [2026.11.2] - 2026-11-13
 
 ### Changed

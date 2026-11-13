@@ -4,6 +4,7 @@
 // someone is signed in.
 import { createServerClient } from './client-server.js';
 import { detectMode } from './mode.js';
+import { HREF, hrefOf } from './routes.js';
 import { RunError } from './run-error.js';
 import { createBrowserStore } from './store-browser.js';
 import { createServerStore } from './store-server.js';
@@ -11,14 +12,14 @@ import { h } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
-import { queueRun } from './views/bench-model.js';
+import { queueRun, takeRun } from './views/bench-model.js';
 import { createBenchView } from './views/bench.js';
-import { queueGuidedRun } from './views/guided-model.js';
+import { queueGuidedRun, takeGuidedRun } from './views/guided-model.js';
 import { createGuidedView } from './views/guided.js';
 import { createHistoryView } from './views/history.js';
 import { createSettingsView, LOOK_EVENT, NOT_SAVING } from './views/settings.js';
 import { createSetupsView } from './views/setups.js';
-import { sessionStore } from './views/session.js';
+import { forget } from './views/session.js';
 import { createSignInView } from './views/sign-in.js';
 
 const DESTINATIONS = [
@@ -44,7 +45,7 @@ export function route(hash) {
   return m[2] ? { view: m[1], id: decode(m[2]) } : { view: m[1] };
 }
 
-export const hrefOf = (view, id) => (id == null ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`);
+export { hrefOf };
 
 const registry = new Map();
 function registerView(name, view) {
@@ -56,7 +57,7 @@ const viewFor = (name) => registry.get(name);
 // in the top bar carries what was entered over; "something else" in the guide opens the bench as
 // it was left.
 const isBench = (r) => r.view === 'ask' && r.id === 'bench';
-const ASK_HREF = { guided: '#/ask', bench: '#/ask/bench' };
+const ASK_HREF = { guided: HREF.ask, bench: HREF.bench };
 
 // What the switch hands over goes through the in-memory queues of each side (bench-model.js and
 // guided-model.js), as every other hand-over does. A side with nothing entered hands over nothing,
@@ -120,7 +121,11 @@ function textSizeToggle() {
     { type: 'button', class: 'oc-btn oc-btn--icon ms-wide-only', 'aria-label': 'Compact text', 'data-oc-tip': 'Compact text' },
     icon('text-size'),
   );
-  const show = (size) => button.setAttribute('aria-pressed', String(size === 'compact'));
+  // The name stays "Compact text" (aria-pressed says whether it is on); the tooltip says it in words.
+  const show = (size) => {
+    button.setAttribute('aria-pressed', String(size === 'compact'));
+    button.dataset.ocTip = size === 'compact' ? 'Compact text: on' : 'Compact text: off';
+  };
   show(storedTextSize());
   button.addEventListener('click', () => {
     applyTextSize(button.getAttribute('aria-pressed') === 'true' ? 'default' : 'compact');
@@ -166,7 +171,7 @@ function mountShell(shell, services = {}) {
   let current = null;
   let first = true;
   // The route to return to after signing in.
-  let asked = '#/ask';
+  let asked = HREF.ask;
   const navigate = (hash) => {
     // Views send the app here when the server refused the session: whoever it was is signed out.
     if (services.mode === 'accounts' && route(hash).view === 'sign-in') services.user = null;
@@ -176,11 +181,11 @@ function mountShell(shell, services = {}) {
   const show = () => {
     let r = route(location.hash);
     const accounts = services.mode === 'accounts';
-    if (r.view === 'sign-in' && !accounts) r = redirect('#/ask');
+    if (r.view === 'sign-in' && !accounts) r = redirect(HREF.ask);
     else if (r.view === 'sign-in' && services.user) r = redirect(asked);
     else if (accounts && r.view !== 'sign-in') {
-      asked = location.hash || '#/ask';
-      if (!services.user) r = redirect('#/sign-in');
+      asked = location.hash || HREF.ask;
+      if (!services.user) r = redirect(HREF.signIn);
     }
     const locked = accounts && (r.view === 'sign-in' || !services.user);
     topnav.hidden = locked;
@@ -232,6 +237,9 @@ const memoryStorage = () => {
 // The start notice: only where history lives in this browser (open mode).
 export const showsNotSaving = ({ mode, storage, store }) => mode !== 'accounts' && (!storage || store.persistent === false);
 
+export const trimmedSentence = (n) =>
+  `This browser is out of room, so History removed its ${n === 1 ? 'oldest entry' : `${n} oldest entries`}. It keeps making room this way.`;
+
 const NO_COOKIE = 'This browser did not keep the sign-in. Open the app over https or localhost.';
 const ENTERED = ['magicshell.bench', 'magicshell.guided'];
 const NO_SERVER = 'This app needs its magicshell server. Start it and reload the page.';
@@ -258,7 +266,14 @@ async function boot(shell) {
     warned = true;
     notify(NOT_SAVING, { kind: 'warning', ms: 12000 });
   };
-  const browserStore = () => createBrowserStore(kept, { onNotSaving: warnNotSaving });
+  // History making room in a full browser, said once per page with how many entries went.
+  let trimmedOnce = false;
+  const warnTrimmed = (n) => {
+    if (trimmedOnce) return;
+    trimmedOnce = true;
+    notify(trimmedSentence(n), { kind: 'warning', ms: 12000 });
+  };
+  const browserStore = () => createBrowserStore(kept, { onNotSaving: warnNotSaving, onTrimmed: warnTrimmed });
   const navigate = (hash) => shellApi.navigate(hash);
 
   // Accounts mode: a session that ran out during use leads to Sign in, whichever view noticed.
@@ -267,7 +282,7 @@ async function boot(shell) {
     for (const [name, fn] of Object.entries(store)) {
       if (typeof fn !== 'function') continue;
       wrapped[name] = (...args) => Promise.resolve().then(() => fn(...args)).catch((e) => {
-        if (e instanceof RunError && e.kind === 'auth' && route(location.hash).view !== 'sign-in') navigate('#/sign-in');
+        if (e instanceof RunError && e.kind === 'auth' && route(location.hash).view !== 'sign-in') navigate(HREF.signIn);
         throw e;
       });
     }
@@ -291,16 +306,13 @@ async function boot(shell) {
     };
     services.signOut = async () => {
       await services.client.signOut();
-      for (const key of ENTERED) {
-        try {
-          sessionStore().removeItem(key);
-        } catch {
-          // Nothing kept to clear.
-        }
-      }
+      // Nothing one user entered or handed over stays for the next.
+      forget(ENTERED);
+      takeRun();
+      takeGuidedRun();
       await userChanged();
       // Whoever signs in next starts at Ask.
-      navigate('#/ask');
+      navigate(HREF.ask);
     };
   }
 

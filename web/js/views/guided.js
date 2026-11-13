@@ -8,6 +8,7 @@ import { levelClass, optionClass } from '../ui/colors.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
+import { inlineError } from '../ui/notice.js';
 import { answerResult, guidedVerdict } from '../ui/results.js';
 import { createGuidedModel, takeGuidedRun } from './guided-model.js';
 
@@ -23,10 +24,6 @@ const CONTEXT_LABEL = 'Anything it should know? (optional)';
 const LEADS = { 1: 'I want to ask', 2: 'What is your question?', choice: 'Which options can it pick from?', score: 'On which scale?', noul: CONTEXT_LABEL };
 
 const uid = () => crypto.randomUUID();
-
-function errorNotice(text) {
-  return h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, text));
-}
 
 export function createGuidedView() {
   let model = null;
@@ -136,6 +133,7 @@ export function createGuidedView() {
               type: 'button',
               class: 'ms-chip__remove',
               'aria-label': `Remove ${o.name}`,
+              'data-oc-tip': 'Remove',
               'data-fid': `option:${o.id}`,
               onclick: () => {
                 model.removeOption(o.id);
@@ -238,7 +236,7 @@ export function createGuidedView() {
     const text = state.error;
     if (text === shownError && !force) return;
     shownError = text;
-    hosts.error.replaceChildren(...(text ? [errorNotice(text)] : []));
+    hosts.error.replaceChildren(...(text ? [inlineError(text)] : []));
   }
 
   function trackBusy(state) {

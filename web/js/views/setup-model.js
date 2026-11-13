@@ -1,5 +1,6 @@
 // Setups made from other setups or from a bench run, without any DOM.
-const copy = (v) => JSON.parse(JSON.stringify(v));
+import { copy } from '../util.js';
+
 
 const withIds = (questions, uuid) =>
   questions.map((q) => {

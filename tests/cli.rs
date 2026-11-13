@@ -121,6 +121,23 @@ fn user_commands_explain_that_accounts_are_off() {
 }
 
 #[tokio::test]
+async fn a_password_set_from_the_shell_ends_the_users_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = config_in(&dir, &support::accounts_toml(dir.path()));
+    for name in ["ada", "bob"] {
+        assert!(magicshell(&file, &["user", "add", name, "--password-stdin"], &format!("{PASSWORD}\n")).ok);
+    }
+    let app = support::spawn_in(&std::fs::read_to_string(&file).unwrap(), dir).await;
+    let ada = support::sign_in(&app, "ada", PASSWORD).await;
+    let bob = support::sign_in(&app, "bob", PASSWORD).await;
+    assert!(magicshell(&file, &["user", "passwd", "ada", "--password-stdin"], "another long password\n").ok);
+    let res = support::post_json(&app, "/api/run", &json!({}), Some(&ada)).await;
+    assert_eq!(res.status(), 401);
+    let config: serde_json::Value = support::get_with(&app, "/api/config", Some(&bob)).await.json().await.unwrap();
+    assert_eq!(config["user"], json!({"username": "bob"}));
+}
+
+#[tokio::test]
 async fn a_removed_users_cookie_does_not_become_the_next_users() {
     let dir = tempfile::tempdir().unwrap();
     let file = config_in(&dir, &support::accounts_toml(dir.path()));

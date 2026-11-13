@@ -1,11 +1,9 @@
 // Checks runs before they are sent and the server's replies. See fixtures/systemone for the shared cases.
 import { LIMITS } from './limits.js';
+import { isObject, len, trimmed } from './util.js';
 
 const BAD_ANSWER = 'The model endpoint sent an answer this app does not understand.';
 
-// Length in characters (code points), not UTF-16 units, so Rust's chars().count() agrees.
-const len = (s) => [...s].length;
-const trimmed = (s) => (typeof s === 'string' ? s.trim() : '');
 
 // Returns the first problem as a sentence, or null. The first sentence in the list wins:
 // run-level checks first, then each question in order with its own checks in list order.
@@ -55,7 +53,6 @@ function validateQuestion(q, allowEmptyText) {
   return null;
 }
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 

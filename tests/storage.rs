@@ -215,6 +215,38 @@ async fn the_501st_entry_drops_the_oldest() {
 }
 
 #[tokio::test]
+async fn an_entry_older_than_the_500_newest_is_refused() {
+    let (app, ada, _bob) = two_users().await;
+    for i in 0..500 {
+        let id = format!("e{i:03}");
+        let at = format!("2026-11-13T10:{:02}:{:02}Z", i / 60, i % 60);
+        assert_eq!(put(&app, &format!("/api/history/{id}"), &entry(&id, &at), Some(&ada)).await.status(), 204);
+    }
+    let res = put(&app, "/api/history/old", &entry("old", "2026-01-01T00:00:00Z"), Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "History keeps only its 500 newest entries, and this one is older.");
+    let got = list(&app, "/api/history", &ada).await;
+    assert_eq!(got.len(), 500);
+    assert!(got.iter().all(|e| e["id"] != "old"));
+    assert_eq!(got[499]["id"], "e000");
+}
+
+#[tokio::test]
+async fn a_negative_duration_is_refused() {
+    let (app, ada, _bob) = two_users().await;
+    let mut bad = entry("e1", "2026-11-13T10:00:00Z");
+    bad["totalMs"] = json!(-1);
+    let res = put(&app, "/api/history/e1", &bad, Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "The duration of this entry is not valid.");
+    bad["totalMs"] = json!(-0.5);
+    assert_eq!(put(&app, "/api/history/e1", &bad, Some(&ada)).await.status(), 422);
+    assert!(list(&app, "/api/history", &ada).await.is_empty());
+    bad["totalMs"] = json!(0);
+    assert_eq!(put(&app, "/api/history/e1", &bad, Some(&ada)).await.status(), 204);
+}
+
+#[tokio::test]
 async fn deleting_one_entry_and_clearing_history() {
     let (app, ada, _bob) = two_users().await;
     for id in ["e1", "e2"] {

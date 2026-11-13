@@ -150,3 +150,24 @@ test('a question named __proto__ is compared like any other', () => {
   assert.deepEqual(Object.keys(diff), ['__proto__']);
   assert.equal(diff.__proto__.pickChanged, true);
 });
+
+test('options without ids compare their picks by place, and a pick that is not there is unknown', () => {
+  const mk = (names) => ({
+    state: '',
+    questions: [{ key: 'n', type: 'choice', text: 't', options: names.map((name) => ({ name, description: '' })) }],
+  });
+  const a = mk(['red', 'blue']);
+  const b = mk(['red', 'blue']);
+  const moved = compare(a, outcome({ n: choiceOut('red', [0.6, 0.4]) }), b, outcome({ n: choiceOut('blue', [0.4, 0.6]) })).n;
+  assert.equal(moved.pickChanged, true);
+  const kept = compare(a, outcome({ n: choiceOut('red', [0.6, 0.4]) }), b, outcome({ n: choiceOut('red', [0.7, 0.3]) })).n;
+  assert.equal(kept.pickChanged, false);
+  const lost = compare(a, outcome({ n: choiceOut('red', [0.6, 0.4]) }), b, outcome({ n: choiceOut('green', [0.7, 0.3]) })).n;
+  assert.equal(lost.pickChanged, null);
+});
+
+test('neutral names are single letters for as many options as a question can have', () => {
+  const options = Array.from({ length: 8 }, (_, i) => ({ id: `o${i}`, name: `n${i}`, description: '' }));
+  const q = neutralNames({ state: '', questions: [{ key: 'k', type: 'choice', text: 't', options }] }).questions[0];
+  assert.deepEqual(q.options.map((o) => o.name), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+});

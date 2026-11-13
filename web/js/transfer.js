@@ -2,10 +2,9 @@
 import { LIMITS } from './limits.js';
 import { RunError } from './run-error.js';
 import { validateRun } from './systemone.js';
+import { isObject, len } from './util.js';
 
 const NOT_SETUPS = 'This file does not hold magicshell setups.';
-const len = (s) => [...s].length;
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // First problem as a sentence, or null. Mirrors PUT /api/setups.
 export function validateSetup(setup) {
@@ -14,7 +13,9 @@ export function validateSetup(setup) {
   if (len(name) > LIMITS.setupName) return 'Keep the setup name to 60 characters or fewer.';
   const state = typeof setup.sampleState === 'string' ? setup.sampleState : '';
   if (len(state) > LIMITS.state) return 'Shorten the situation to 8,000 characters or fewer.';
-  return validateRun({ state: '', questions: setup.questions }, { allowEmptyText: true });
+  const questions = Array.isArray(setup.questions) ? setup.questions : [];
+  if (!questions.every(isObject)) return NOT_SETUPS;
+  return validateRun({ state: '', questions }, { allowEmptyText: true });
 }
 
 const stripIds = (q) => {

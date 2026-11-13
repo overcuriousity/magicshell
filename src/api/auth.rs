@@ -12,7 +12,7 @@ use super::ApiState;
 use crate::error::AppError;
 use crate::kit::OcError;
 use crate::kit::identity::{User, users};
-use crate::kit::session::USER_KEY;
+use crate::kit::session::{EPOCH_KEY, USER_KEY};
 
 pub const SHORT_PASSWORD: &str = "Use at least 12 characters.";
 const MIN_PASSWORD_CHARS: usize = 12;
@@ -28,6 +28,7 @@ pub fn check_new_password(secret: &str) -> Result<(), AppError> {
 const UNREADABLE: &str = "The server could not read this request. Reload the page and try again.";
 
 /// The signed-in user of this request, if any. Only accounts mode has sessions.
+/// A session from before the user's last password change is over and is removed.
 pub async fn current(st: &ApiState, parts: &mut Parts) -> Result<Option<User>, OcError> {
     let Some(pool) = &st.pool else {
         return Ok(None);
@@ -36,7 +37,23 @@ pub async fn current(st: &ApiState, parts: &mut Parts) -> Result<Option<User>, O
     let Some(id) = session.get::<i64>(USER_KEY).await.map_err(OcError::internal)? else {
         return Ok(None);
     };
-    users::by_id(pool, id).await
+    let epoch = session.get::<i64>(EPOCH_KEY).await.map_err(OcError::internal)?;
+    let user = match epoch {
+        Some(epoch) => users::by_session(pool, id, epoch).await?,
+        None => None,
+    };
+    if user.is_none() {
+        session.flush().await.map_err(OcError::internal)?;
+    }
+    Ok(user)
+}
+
+/// Gives the session a new id and records the user under their current epoch.
+async fn start(session: &Session, user_id: i64, epoch: i64) -> Result<(), OcError> {
+    session.cycle_id().await.map_err(OcError::internal)?;
+    session.insert(USER_KEY, user_id).await.map_err(OcError::internal)?;
+    session.insert(EPOCH_KEY, epoch).await.map_err(OcError::internal)?;
+    Ok(())
 }
 
 /// A request that needs a signed-in user; anyone else gets 401 "Sign in first.".
@@ -77,8 +94,8 @@ pub async fn sign_in(
     let Some(user) = users::verify_password(pool, form.username.trim(), &form.password).await? else {
         return Err(AppError::WrongLogin);
     };
-    session.cycle_id().await.map_err(OcError::internal)?;
-    session.insert(USER_KEY, user.id).await.map_err(OcError::internal)?;
+    let epoch = users::session_epoch(pool, user.id).await?.ok_or(AppError::WrongLogin)?;
+    start(&session, user.id, epoch).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -94,9 +111,11 @@ pub struct ChangePassword {
     new: String,
 }
 
+/// Ends the user's other sessions; this one stays signed in under a new id.
 pub async fn change_password(
     State(st): State<Arc<ApiState>>,
     SignedIn(user): SignedIn,
+    session: Session,
     body: Result<Json<ChangePassword>, JsonRejection>,
 ) -> Result<StatusCode, AppError> {
     let form = read(body)?;
@@ -105,6 +124,7 @@ pub async fn change_password(
         return Err(AppError::Invalid("The current password is wrong.".into()));
     }
     check_new_password(&form.new)?;
-    users::set_password(pool, user.id, &form.new).await?;
+    let epoch = users::set_password(pool, user.id, &form.new).await?;
+    start(&session, user.id, epoch).await?;
     Ok(StatusCode::NO_CONTENT)
 }

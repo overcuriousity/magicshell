@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET password_hash = ?, session_epoch = session_epoch + 1 WHERE id = ?\n           RETURNING session_epoch AS \"e!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "e!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "session_epoch"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "050cdfa0b0dac2dea095ff8afec7a6b4c855dbdefcf30619f096b9ba38bc52b9"
+}

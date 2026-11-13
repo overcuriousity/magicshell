@@ -5,6 +5,10 @@ import { icon } from './icons.js';
 
 const KINDS = ['info', 'success', 'warning', 'danger'];
 
+// A danger notice that stays in the page beside what it is about, with optional controls after the text.
+export const inlineError = (text, ...controls) =>
+  h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, text), ...controls);
+
 export function notify(text, { action, ms = 6000, kind = 'info', region } = {}) {
   const host = region ?? document.getElementById('notices');
   const k = KINDS.includes(kind) ? kind : 'info';

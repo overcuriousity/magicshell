@@ -14,8 +14,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 for f in "$dir"/request-*.json; do
   name=$(basename "$f" .json)
-  fixture_model=$(jq -r '.model' "$f")
-  jq -r '.expected_json' "$f" | sed "s|\"model\":\"$fixture_model\"|\"model\":\"$MAGICSHELL_MODEL\"|" > "$tmp/body"
+  jq -r '.expected_json' "$f" | jq -c --arg model "$MAGICSHELL_MODEL" '.model = $model' > "$tmp/body"
   if [ -n "${MAGICSHELL_KEY:-}" ]; then
     status=$(printf 'Authorization: Bearer %s\n' "$MAGICSHELL_KEY" |
       curl -sS -o "$tmp/out" -w '%{http_code}' -X POST "$MAGICSHELL_ENDPOINT/systemone" \

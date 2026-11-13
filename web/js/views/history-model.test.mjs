@@ -96,3 +96,14 @@ test('an entry shows its run as the request the server client sends', () => {
   e.run = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
   assert.equal(benchResult(e).request, '{"state":"Rain.","questions":[{"key":"q1","type":"noul","text":"Wet?"}]}');
 });
+
+test('a pick that is not among the options is shown neutral, not in option 1\'s colour', async () => {
+  const { headline } = await import('./history-model.js');
+  const entry = {
+    run: { state: '', questions: [{ key: 'q', type: 'choice', text: 'Which?', options: [{ name: 'Red' }, { name: 'Blue' }] }] },
+    reply: { answers: { q: { type: 'choice', choice: 'Green' } } },
+  };
+  assert.equal(headline(entry).cls, 'ms-neutral');
+  entry.reply.answers.q.choice = 'Blue';
+  assert.notEqual(headline(entry).cls, 'ms-neutral');
+});

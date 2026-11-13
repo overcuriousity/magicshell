@@ -40,7 +40,7 @@ name=$(sed -n "s/^[0-9a-f]*[ *]*\\(magicshell-.*-$arch-unknown-linux-musl-offlin
 [ -n "$name" ] || fail "SHA256SUMS lists no bundle for $arch."
 
 fetch "$base/$name" "$work/$name" || fail "Could not download $base/$name."
-grep -F "$name" "$work/SHA256SUMS" | grep -v '^$' | head -n 1 > "$work/expected"
+awk -v name="$name" '$2 == name || $2 == "*" name { print; exit }' "$work/SHA256SUMS" > "$work/expected"
 (cd "$work" && verify expected) || fail "Checksum mismatch for $name. The download is damaged or was altered."
 
 mkdir "$work/bundle"

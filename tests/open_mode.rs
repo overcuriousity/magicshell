@@ -142,3 +142,32 @@ async fn an_oversized_request_is_refused_with_one_sentence() {
     assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
     assert!(fake.requests.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn a_reply_of_the_wrong_shape_is_a_bad_gateway_with_one_sentence() {
+    let fake = fake_upstream(vec![FakeReply::ok(r#"{"answers":{"team":"ops"},"model":"m"}"#)]).await;
+    let app = spawn_against(support::OPEN, &fake).await;
+    let res = post_run(&app, &triage_run()).await;
+    assert_eq!(res.status(), 502);
+    assert_eq!(res.text().await.unwrap(), "The model endpoint sent an answer this app does not understand.");
+}
+
+#[tokio::test]
+async fn a_wrong_method_on_an_api_route_is_405_and_an_unknown_api_path_is_404() {
+    let app = support::spawn(support::OPEN).await;
+    let res = app.client.get(format!("{}/api/run", app.base)).send().await.unwrap();
+    assert_eq!(res.status(), 405);
+    assert!(res.headers()["allow"].to_str().unwrap().contains("POST"));
+    let res = app.client.delete(format!("{}/api/config", app.base)).send().await.unwrap();
+    assert_eq!(res.status(), 405);
+    assert_eq!(app.client.get(format!("{}/api/nothing", app.base)).send().await.unwrap().status(), 404);
+    assert_eq!(app.client.post(format!("{}/api/nothing", app.base)).send().await.unwrap().status(), 404);
+    // Storage routes exist only with accounts; there a wrong method is 405 as well.
+    assert_eq!(app.client.get(format!("{}/api/history/e1", app.base)).send().await.unwrap().status(), 404);
+    let accounts = support::spawn(support::ACCOUNTS).await;
+    let res = accounts.client.post(format!("{}/api/history/e1", accounts.base)).send().await.unwrap();
+    assert_eq!(res.status(), 405);
+    let res = app.client.get(format!("{}/", app.base)).send().await.unwrap();
+    assert_eq!(res.status(), 200);
+    assert!(res.headers()["content-type"].to_str().unwrap().starts_with("text/html"));
+}

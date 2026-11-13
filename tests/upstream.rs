@@ -77,6 +77,15 @@ async fn a_reply_that_is_not_json_is_a_bad_gateway_with_one_sentence() {
 }
 
 #[tokio::test]
+async fn an_oversized_reply_is_not_read_to_the_end() {
+    let body = format!("{{\"pad\":\"{}\"}}", "x".repeat(2 * 1024 * 1024));
+    let err = error_of(FakeReply::ok(body)).await;
+    assert!(matches!(err, AppError::Upstream(_)));
+    assert_eq!(err.status(), axum::http::StatusCode::BAD_GATEWAY);
+    assert_eq!(err.to_string(), "The model endpoint sent an answer that is too large. Check the server configuration.");
+}
+
+#[tokio::test]
 async fn a_refused_key_is_reported() {
     for status in [401, 403] {
         let err = error_of(FakeReply::status(status, "no")).await;

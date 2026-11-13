@@ -7,6 +7,8 @@ use tower_sessions_sqlx_store::SqliteStore;
 use crate::kit::error::OcError;
 
 pub const USER_KEY: &str = "oc.user_id";
+/// The user's `session_epoch` at sign-in; a password change raises it and so ends the session.
+pub const EPOCH_KEY: &str = "oc.session_epoch";
 
 /// `__Host-` cookies need Secure, which browsers also honour on `http://localhost`.
 pub async fn session_layer(pool: &SqlitePool, app: &str) -> Result<SessionManagerLayer<SqliteStore>, OcError> {

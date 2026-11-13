@@ -1,13 +1,16 @@
 // Setups and history in localStorage. Each change reads the key again first, so two tabs keep each
-// other's writes. Items of the wrong shape are left out when reading. A history that no longer
-// fits drops its oldest entries until it does (down to FLOOR). When storage fails, the data stays
-// in memory for this page, `persistent` turns false and `onNotSaving` is called once.
+// other's writes. Items of the wrong shape are left out when reading. When a write does not fit,
+// History gives up as few of its oldest entries as make room (keeping at least FLOOR) and
+// `onTrimmed(count)` says how many went. When storage fails even so, the data stays in memory for
+// this page, `persistent` turns false and `onNotSaving` is called once.
+import { RunError } from './run-error.js';
+import { isObject } from './util.js';
+
 const SETUPS = 'magicshell.setups';
 const HISTORY = 'magicshell.history';
 const KEEP = 500;
 const FLOOR = 10;
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const SHAPES = {
   [SETUPS]: (s) => isObject(s) && typeof s.id === 'string' && typeof s.name === 'string' && Array.isArray(s.questions),
   [HISTORY]: (e) =>
@@ -31,7 +34,20 @@ function parse(raw, key) {
   }
 }
 
-export function createBrowserStore(storage, { onNotSaving = () => {} } = {}) {
+export const TOO_OLD = 'History keeps only its 500 newest entries, and this one is older.';
+
+// The largest n in [lo, hi] for which fits(n) holds, given that fewer always fit; null when lo does not.
+function largest(lo, hi, fits) {
+  if (!fits(lo)) return null;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+export function createBrowserStore(storage, { onNotSaving = () => {}, onTrimmed = () => {} } = {}) {
   let persistent = true;
   let ready = false;
   const lists = { [SETUPS]: [], [HISTORY]: [] };
@@ -59,22 +75,27 @@ export function createBrowserStore(storage, { onNotSaving = () => {} } = {}) {
       return false;
     }
   };
+  // Writes `list` under `key`. When it does not fit, the history (newest first) keeps the most of
+  // its newest entries that leave room; the history in memory then matches what was stored.
   const keep = (key, list) => {
     lists[key] = list;
-    if (persistent && !write(key, list)) lost();
-  };
-  // Newest first; when the whole list does not fit, keep fewer of the newest until it does.
-  const keepHistory = (list) => {
-    lists[HISTORY] = list;
-    if (!persistent) return;
-    for (let n = list.length; ; n = Math.max(FLOOR, Math.floor(n / 2))) {
-      if (write(HISTORY, list.slice(0, n))) {
-        lists[HISTORY] = list.slice(0, n);
-        return;
-      }
-      if (n <= FLOOR) break;
+    if (!persistent || write(key, list)) return;
+    const history = key === HISTORY ? list : lists[HISTORY];
+    const floor = Math.min(FLOOR, history.length);
+    let stored = false;
+    const fits = (n) => {
+      if (key === HISTORY) return write(HISTORY, history.slice(0, n));
+      if (!write(HISTORY, history.slice(0, n))) return false;
+      stored ||= write(key, list);
+      return stored;
+    };
+    const n = history.length > floor ? largest(floor, history.length - 1, fits) : null;
+    if (n === null) {
+      lost();
+      return;
     }
-    lost();
+    lists[HISTORY] = history.slice(0, n);
+    onTrimmed(history.length - n);
   };
 
   load(SETUPS);
@@ -104,7 +125,9 @@ export function createBrowserStore(storage, { onNotSaving = () => {} } = {}) {
       return structuredClone(load(HISTORY));
     },
     async saveEntry(entry) {
-      keepHistory(upsert(load(HISTORY), structuredClone(entry)).sort(byNewest).slice(0, KEEP));
+      const list = upsert(load(HISTORY), structuredClone(entry)).sort(byNewest);
+      if (list.length > KEEP && list.slice(KEEP).some((e) => e.id === entry.id)) throw new RunError(TOO_OLD, 'validation');
+      keep(HISTORY, list.slice(0, KEEP));
     },
     async deleteEntry(id) {
       keep(HISTORY, load(HISTORY).filter((e) => e.id !== id));

@@ -380,3 +380,66 @@ test('an error that is not a RunError shows one plain sentence, not its text', a
   await m.run();
   assert.equal(m.state.error, 'Something went wrong. Reload the page and try again.');
 });
+
+test('an untouched bench holds nothing, anything typed into it does', () => {
+  const m = make();
+  assert.equal(m.holdsSomething(), false);
+  m.updateQuestion('q1', { type: 'choice' });
+  assert.equal(m.holdsSomething(), false);
+  m.updateOption('q1', m.state.a.questions[0].options[0].id, { name: 'Red' });
+  assert.equal(m.holdsSomething(), true);
+  const situation = make();
+  situation.setState('  ');
+  assert.equal(situation.holdsSomething(), false);
+  situation.setState('Rain.');
+  assert.equal(situation.holdsSomething(), true);
+  const asked = make();
+  asked.updateQuestion('q1', { text: 'Wet?' });
+  assert.equal(asked.holdsSomething(), true);
+});
+
+test('the variant and both results come back after leaving and returning', async () => {
+  const session = memory();
+  const m = make({ session });
+  m.loadSetup(triage);
+  await m.run();
+  m.startVariant('bare');
+  m.editVariant((b) => { b.state = 'Edited B.'; });
+  await m.runVariant();
+  const back = make({ session });
+  for (const k of ['a', 'ranA', 'b', 'variant', 'ranB']) assert.deepEqual(back.state[k], m.state[k], k);
+  assert.deepEqual({ ...back.state.resultA, answers: { ...back.state.resultA.answers } }, { ...m.state.resultA, answers: { ...m.state.resultA.answers } });
+  assert.deepEqual(Object.keys(back.state.resultB.answers), Object.keys(m.state.resultB.answers));
+  assert.equal(back.state.b.state, 'Edited B.');
+  assert.ok(back.diff());
+});
+
+test('an edited variant that was not run yet comes back without a result', async () => {
+  const session = memory();
+  const m = make({ session });
+  m.loadSetup(triage);
+  await m.run();
+  m.startVariant(null);
+  m.editVariant((b) => { b.state = 'Not run.'; });
+  const back = make({ session });
+  assert.equal(back.state.b.state, 'Not run.');
+  assert.equal(back.state.variant, null);
+  assert.equal(back.state.resultB, null);
+  assert.ok(back.state.resultA);
+});
+
+test('a kept result that no longer answers its run is dropped with what depends on it', async () => {
+  const session = memory();
+  const m = make({ session });
+  m.loadSetup(triage);
+  await m.run();
+  m.startVariant('bare');
+  const saved = JSON.parse(session.getItem(SESSION_KEY));
+  saved.resultA.answers = { nope: { type: 'noul', noul: 2 } };
+  session.setItem(SESSION_KEY, JSON.stringify(saved));
+  const back = make({ session });
+  assert.deepEqual(back.state.a, m.state.a);
+  assert.equal(back.state.ranA, null);
+  assert.equal(back.state.resultA, null);
+  assert.equal(back.state.b, null);
+});

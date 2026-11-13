@@ -1,8 +1,9 @@
 // Settings: theme and text size in every mode; in accounts mode the signed-in name, a new password
 // and signing out.
 import { messageOf } from '../run-error.js';
+import { HREF } from '../routes.js';
 import { h } from '../ui/dom.js';
-import { icon } from '../ui/icons.js';
+import { inlineError } from '../ui/notice.js';
 import { applyTextSize, applyTheme, storedTextSize, storedTheme } from '../ui/theme.js';
 
 // Sent when theme or text size change, so the top-bar toggles and this page agree.
@@ -11,9 +12,6 @@ export const NOT_SAVING = 'This browser is not saving anything. History is lost 
 
 const THEME_CHOICES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
 const SIZE_CHOICES = [['default', 'Default'], ['compact', 'Compact']];
-
-export const inlineError = (text) =>
-  h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, text));
 
 export const field = (id, label, input, hint) =>
   h('div', { class: 'oc-field' }, h('label', { for: id }, label), input, hint ? h('span', { class: 'ms-field-hint', id: `${id}-hint` }, hint) : null);
@@ -87,13 +85,13 @@ export function createSettingsView() {
         await ctx.client.changePassword(current.value, next.value);
       } catch (e) {
         error.replaceChildren(inlineError(messageOf(e)));
-        if (e.kind === 'auth') ctx.navigate('#/sign-in');
+        if (e.kind === 'auth') ctx.navigate(HREF.signIn);
         return;
       }
       error.replaceChildren();
       current.value = '';
       next.value = '';
-      ctx.notify('Password changed', { kind: 'success' });
+      ctx.notify('Password changed. Other sign-ins of this account are signed out.', { kind: 'success' });
     });
     const out = h('button', { type: 'button', class: 'oc-btn', onclick: async () => {
       try {

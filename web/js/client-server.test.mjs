@@ -91,3 +91,12 @@ test('a malformed 2xx reply is an upstream error with the shared sentence', asyn
   const bodies = ['null', '[]', '7', '{}', '{"answers":1}', 'not json', JSON.stringify(missing), JSON.stringify(short)];
   for (const text of bodies) await fails(createServerClient(stub(200, text)).run(run), 'upstream', sentence);
 });
+
+test('only the server\'s own sentence is shown; a proxy\'s body is replaced', async () => {
+  const { serverSentence } = await import('./run-error.js');
+  const fallback = 'The server answered with an error (502). Try again later.';
+  assert.equal(serverSentence('The model endpoint cannot be reached. Try again later.', 502), 'The model endpoint cannot be reached. Try again later.');
+  for (const body of ['', '<html>Bad Gateway</html>', '{"error":"upstream"}', 'Bad Gateway', 'line one.\nline two.', `${'x'.repeat(400)}.`]) {
+    assert.equal(serverSentence(body, 502), fallback, body);
+  }
+});

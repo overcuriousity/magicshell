@@ -68,9 +68,7 @@ async fn start(cfg_toml: &str, endpoint: &str, dir: tempfile::TempDir) -> TestAp
 /// Creates a user straight in the database, with a password.
 pub async fn add_user(app: &TestApp, name: &str, password: &str) {
     let pool = app.pool.as_ref().unwrap();
-    magicshell::kit::identity::users::create(pool, name, Some(password), time::OffsetDateTime::now_utc())
-        .await
-        .unwrap();
+    magicshell::kit::identity::users::create(pool, name, password, time::OffsetDateTime::now_utc()).await.unwrap();
 }
 
 /// `name=value` of the session cookie a response sets. The cookie is Secure, so over plain

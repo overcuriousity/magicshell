@@ -1,5 +1,7 @@
 // The bench's state and actions, without any DOM: run A, a variant B, their results and the error.
-// The working A run is kept in sessionStorage so it survives sign-in and reload.
+// A, B and both results are kept in sessionStorage so they survive other views, sign-in and reload.
+import { checkOutcome } from '../systemone.js';
+import { copy, isObject } from '../util.js';
 import { compare, VARIANTS } from '../variants.js';
 import { createRunOnce } from './run-once.js';
 import { sessionStore } from './session.js';
@@ -17,11 +19,8 @@ export function takeRun() {
   return taken;
 }
 
-const copy = (v) => JSON.parse(JSON.stringify(v));
 const emptyRun = () => ({ state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
 
-
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const looksLikeRun = (r) =>
   isObject(r) &&
   typeof r.state === 'string' &&
@@ -35,6 +34,21 @@ const looksLikeRun = (r) =>
       (q.type !== 'choice' || (Array.isArray(q.options) && q.options.every((o) => isObject(o) && typeof o.name === 'string'))) &&
       (q.type !== 'score' || (Array.isArray(q.levels) && q.levels.every((l) => isObject(l) && typeof l.text === 'string'))),
   );
+
+// A kept result is used only when it still answers the run it came from.
+function keptResult(result, run) {
+  if (!isObject(result) || !run) return null;
+  try {
+    const outcome = checkOutcome(result, run);
+    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const text = (v) => (typeof v === 'string' ? v : '');
+    return { ...outcome, totalMs: num(result.totalMs) ?? 0, upstreamMs: num(result.upstreamMs), request: text(result.request), response: text(result.response) };
+  } catch {
+    return null;
+  }
+}
+
+const textIn = (s) => typeof s === 'string' && s.trim() !== '';
 
 // Only the fields a run has, so a setup's id, name or builtin flag never ride along.
 function runOf(state, questions) {
@@ -114,24 +128,32 @@ export function createBenchModel({
   const edits = runEdits(uuid);
   const listeners = new Set();
 
+  const keptRun = (r) => (looksLikeRun(r) ? runOf(r.state, r.questions) : null);
+  // A, then what depends on it: A's result, the variant B, B's result. A part that does not fit
+  // drops what depends on it.
   const restore = () => {
+    const none = { a: emptyRun(), ranA: null, resultA: null, b: null, variant: null, ranB: null, resultB: null };
+    let saved;
     try {
-      const saved = JSON.parse(session?.getItem(SESSION_KEY) ?? 'null');
-      if (isObject(saved) && looksLikeRun(saved.a)) return runOf(saved.a.state, saved.a.questions);
+      saved = JSON.parse(session?.getItem(SESSION_KEY) ?? 'null');
     } catch {
-      // A damaged entry means a fresh bench.
+      return none;
     }
-    return emptyRun();
+    const a = isObject(saved) ? keptRun(saved.a) : null;
+    if (!a) return none;
+    const ranA = keptRun(saved.ranA);
+    const resultA = keptResult(saved.resultA, ranA);
+    if (!resultA) return { ...none, a };
+    const b = keptRun(saved.b);
+    if (!b) return { ...none, a, ranA, resultA };
+    const variant = VARIANTS.some((v) => v.id === saved.variant) ? saved.variant : null;
+    const ranB = keptRun(saved.ranB);
+    const resultB = keptResult(saved.resultB, ranB);
+    return { a, ranA, resultA, b, variant, ranB: resultB ? ranB : null, resultB };
   };
 
   const state = {
-    a: restore(),
-    b: null,
-    variant: null,
-    ranA: null,
-    ranB: null,
-    resultA: null,
-    resultB: null,
+    ...restore(),
     busy: null,
     error: null,
     // Which run the error belongs to: 'a' or 'b', so the view can show it beside that run.
@@ -139,8 +161,9 @@ export function createBenchModel({
   };
 
   const persist = () => {
+    const { a, ranA, resultA, b, variant, ranB, resultB } = state;
     try {
-      session?.setItem(SESSION_KEY, JSON.stringify({ a: state.a }));
+      session?.setItem(SESSION_KEY, JSON.stringify({ a, ranA, resultA, b, variant, ranB, resultB }));
     } catch {
       // Without session storage the bench still works; it just does not survive a reload.
     }
@@ -217,6 +240,16 @@ export function createBenchModel({
     updateLevel: (key, id, patch) => editA((a) => edits.levels.update(a, key, id, patch)),
     moveLevel: (key, id, delta) => editA((a) => edits.levels.move(a, key, id, delta)),
     removeLevel: (key, id) => editA((a) => edits.levels.remove(a, key, id)),
+
+    // Whether anything was entered in A: the situation, a question, an option or a level.
+    holdsSomething: () =>
+      textIn(state.a.state) ||
+      state.a.questions.some(
+        (q) =>
+          textIn(q.text) ||
+          (q.options ?? []).some((o) => textIn(o.name) || textIn(o.description)) ||
+          (q.levels ?? []).some((l) => textIn(l.text)),
+      ),
 
     loadSetup(setup) {
       state.a = runOf(setup.sampleState ?? '', copy(setup.questions));

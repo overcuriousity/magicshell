@@ -19,17 +19,26 @@ function barDeltas(qa, a, qb, b) {
   return qb[field].map((x, i) => (before.has(x.id) ? b.probabilities[i] - before.get(x.id) : null));
 }
 
-// For each row of B's question, the position of the same option or level in A (by id).
+// For each row of B's question, the position of the same option or level in A (by id), so colour
+// follows identity. A row B added has no colour in A: a new option takes the next slot A does not
+// use (it must not look like one of A's), a new level its own position within A's ramp.
 export function colorSlots(qa, qb) {
   const field = qa?.type === 'choice' ? 'options' : qa?.type === 'score' ? 'levels' : null;
   if (!field || !qb?.[field]) return null;
   const at = new Map(qa[field].map((x, i) => [x.id, i]));
-  return qb[field].map((x, i) => at.get(x.id) ?? i);
+  const count = qa[field].length;
+  let next = count;
+  return qb[field].map((x, i) => {
+    if (at.has(x.id)) return at.get(x.id);
+    return field === 'options' ? next++ : Math.min(i, count - 1);
+  });
 }
 
 function deltaLine(qa, d) {
   const parts = [];
   if (d.pickChanged) parts.push(icon('warning', 'row'), h('span', {}, 'pick changed'));
+  // The pick of A or B could not be matched to an option, so whether it changed is not known.
+  if (d.pickChanged === null) parts.push(icon('info', 'row'), h('span', {}, 'pick not compared'));
   let change = null;
   if (qa.type === 'score' && d.scoreDelta !== null && d.scoreDelta !== undefined) change = signed(d.scoreDelta);
   if (qa.type === 'noul') change = `yes ${signed(d.delta)}`;
@@ -47,6 +56,8 @@ function block(qa, state, d, variant) {
   // An option or level keeps its colour from A wherever B moved it.
   const colors = colorSlots(qa, qb);
   if (colors) deltas.colors = colors;
+  // Level slots are A's positions, so they are spread over A's number of levels.
+  if (colors && qa.type === 'score') deltas.colorCount = qa.levels.length;
   return h('section', { class: 'ms-result' },
     h('h2', { class: 'ms-result__title' }, title),
     h('div', { class: 'ms-ab' },

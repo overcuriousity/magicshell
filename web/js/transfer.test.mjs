@@ -50,3 +50,9 @@ test('a setup whose option description is not text is skipped', () => {
   const text = JSON.stringify({ magicshell: 2, setups: [{ name: 'Odd', questions: [choice] }] });
   assert.deepEqual(importSetups(text), { setups: [], skipped: 1 });
 });
+
+test('validateSetup answers a sentence, not a TypeError, for questions of the wrong shape', () => {
+  assert.equal(validateSetup({ name: 'x', questions: 'no' }), 'Add at least one question.');
+  assert.equal(validateSetup({ name: 'x' }), 'Add at least one question.');
+  assert.equal(validateSetup({ name: 'x', questions: [null] }), 'This file does not hold magicshell setups.');
+});

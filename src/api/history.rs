@@ -72,6 +72,9 @@ pub async fn put(
         return Err(AppError::Invalid("The entry id does not match its address.".into()));
     }
     let at = sortable(&entry.at)?;
+    if !entry.total_ms.as_f64().is_some_and(|ms| ms.is_finite() && ms >= 0.0) {
+        return Err(AppError::Invalid("The duration of this entry is not valid.".into()));
+    }
     let stored = serde_json::to_string(&entry.run).map_err(OcError::internal)?.len()
         + serde_json::to_string(&entry.reply).map_err(OcError::internal)?.len();
     if stored > MAX_STORED {
@@ -99,6 +102,15 @@ pub async fn put(
     .execute(&mut *tx)
     .await
     .map_err(OcError::from)?;
+    let kept =
+        sqlx::query_scalar!(r#"SELECT COUNT(*) AS "n!: i64" FROM history WHERE user_id = ? AND id = ?"#, user.id, id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(OcError::from)?;
+    if kept == 0 {
+        // Dropping the transaction rolls it back, so neither the entry nor the trim is kept.
+        return Err(AppError::Invalid("History keeps only its 500 newest entries, and this one is older.".into()));
+    }
     tx.commit().await.map_err(OcError::from)?;
     Ok(StatusCode::NO_CONTENT)
 }

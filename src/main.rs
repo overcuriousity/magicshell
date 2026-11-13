@@ -132,7 +132,7 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
         UserCommand::Add { name, password } => {
             check_name(&name)?;
             let secret = read_password(&password)?;
-            users::create(&pool, &name, Some(&secret), time::OffsetDateTime::now_utc()).await?;
+            users::create(&pool, &name, &secret, time::OffsetDateTime::now_utc()).await?;
             println!("Added {name}.");
         }
         UserCommand::Passwd { name, password } => {

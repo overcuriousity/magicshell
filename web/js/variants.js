@@ -1,8 +1,7 @@
 // Ready-made changes to a run and the comparison of two runs' outcomes. All functions are pure.
 import { nearestLevel, noulIsYes } from './format.js';
+import { copy, trimmed } from './util.js';
 
-const copy = (run) => JSON.parse(JSON.stringify(run));
-const trimmed = (s) => (typeof s === 'string' ? s.trim() : '');
 
 function mapQuestions(run, fn) {
   const out = copy(run);
@@ -16,12 +15,13 @@ export const withoutDescriptions = (run) =>
     return q;
   });
 
+// A, B, C… by position; a question has at most LIMITS.maxOptions (8) options, well within A to Z.
 export const neutralNames = (run) =>
   mapQuestions(run, (q) => {
     if (q.type === 'choice') {
       q.options = q.options.map((o, i) => ({
         ...o,
-        name: String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : ''),
+        name: String.fromCharCode(65 + i),
         description: trimmed(o.description) || trimmed(o.name),
       }));
     }
@@ -41,9 +41,12 @@ export const VARIANTS = [
   { id: 'reversed', label: 'Reversed order', apply: reversedOrder },
 ];
 
-// The id of the option the answer picked, by that run's own option names.
+// The option the answer picked, by that run's own option names: its id, or its place in the list
+// when it has none; null when the answer names no option of the run.
 function pickedId(question, answer) {
-  return question.options.find((o) => trimmed(o.name) === answer.choice)?.id;
+  const i = question.options.findIndex((o) => trimmed(o.name) === trimmed(answer.choice));
+  if (i < 0) return null;
+  return question.options[i].id ?? `#${i}`;
 }
 
 function compareChoice(qa, a, qb, b) {
@@ -52,7 +55,9 @@ function compareChoice(qa, a, qb, b) {
   const deltas = qa.options
     .filter((o) => pb.has(o.id))
     .map((o) => ({ id: o.id, delta: pb.get(o.id) - pa.get(o.id) }));
-  return { pickChanged: pickedId(qa, a) !== pickedId(qb, b), deltas };
+  const picked = [pickedId(qa, a), pickedId(qb, b)];
+  // A pick that cannot be found is unknown, not unchanged.
+  return { pickChanged: picked.includes(null) ? null : picked[0] !== picked[1], deltas };
 }
 
 function compareScore(qa, a, qb, b) {

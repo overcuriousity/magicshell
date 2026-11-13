@@ -126,6 +126,40 @@ async fn a_user_changes_their_password() {
 }
 
 #[tokio::test]
+async fn a_password_change_ends_the_other_sessions_and_keeps_this_one() {
+    let (app, _fake) = app_with_ada(vec![], "").await;
+    let here = sign_in(&app, "ada", PASSWORD).await;
+    let elsewhere = sign_in(&app, "ada", PASSWORD).await;
+    let ok = post_json(
+        &app,
+        "/api/auth/password",
+        &json!({"current": PASSWORD, "new": "another long password"}),
+        Some(&here),
+    )
+    .await;
+    assert_eq!(ok.status(), 204);
+    // The session that changed it gets a fresh id and stays signed in.
+    let renewed = cookie_of(&ok);
+    assert_ne!(renewed, here);
+    assert_eq!(user_of(&app, Some(&renewed)).await, json!({"username": "ada"}));
+    assert_eq!(user_of(&app, Some(&here)).await, Value::Null);
+    assert_eq!(user_of(&app, Some(&elsewhere)).await, Value::Null);
+    let run = post_json(&app, "/api/run", &triage_run(), Some(&elsewhere)).await;
+    assert_eq!(run.status(), 401);
+}
+
+#[tokio::test]
+async fn a_wrong_current_password_is_named_before_a_short_new_one() {
+    let (app, _fake) = app_with_ada(vec![], "").await;
+    let cookie = sign_in(&app, "ada", PASSWORD).await;
+    let res =
+        post_json(&app, "/api/auth/password", &json!({"current": "not the password", "new": "short"}), Some(&cookie))
+            .await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "The current password is wrong.");
+}
+
+#[tokio::test]
 async fn a_short_new_password_is_refused() {
     let (app, _fake) = app_with_ada(vec![], "").await;
     let cookie = sign_in(&app, "ada", PASSWORD).await;

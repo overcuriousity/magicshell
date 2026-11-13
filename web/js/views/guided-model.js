@@ -3,6 +3,7 @@
 // the result is not.
 import { LIMITS } from '../limits.js';
 import { SCALES } from '../setups-builtin.js';
+import { isObject } from '../util.js';
 import { createRunOnce } from './run-once.js';
 import { sessionStore } from './session.js';
 
@@ -27,7 +28,6 @@ export function loadable(run) {
   return Boolean(q && KINDS.includes(q.type) && typeof q.text === 'string');
 }
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isScale = (id) => id === 'own' || SCALES.some((s) => s.id === id);
 const fresh = () => ({ step: 1, kind: 'noul', question: '', options: [], scaleId: FIRST_SCALE, levels: [], context: '' });
 const sameTexts = (a, b) => a.length === b.length && a.every((t, i) => t === b[i]);

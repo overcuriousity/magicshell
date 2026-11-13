@@ -13,9 +13,10 @@ const GENERIC = 'Something went wrong. Reload the page and try again.';
 // The sentence a person is shown: a RunError's own, never the text of any other error.
 export const messageOf = (e) => (e instanceof RunError && e.message ? e.message : GENERIC);
 
-// The server's one-sentence body, or a fallback when it is empty or a web page.
+// The server's own sentence, or a fallback for anything else: an empty body, a web page, JSON or
+// the text of a proxy in front of the server. The app's sentences are one short line ending in a full stop.
 export function serverSentence(text, status) {
   const t = text.trim();
-  if (t === '' || t.startsWith('<')) return `The server answered with an error (${status}). Try again later.`;
-  return t;
+  const own = t.length > 0 && t.length <= 300 && !/[\r\n]/.test(t) && /[.?!]$/.test(t) && !/^[<{[]/.test(t);
+  return own ? t : `The server answered with an error (${status}). Try again later.`;
 }

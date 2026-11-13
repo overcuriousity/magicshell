@@ -10,16 +10,8 @@ pub struct User {
     pub username: String,
 }
 
-pub async fn create(
-    pool: &SqlitePool,
-    username: &str,
-    password: Option<&str>,
-    now: OffsetDateTime,
-) -> Result<User, OcError> {
-    let hash = match password {
-        Some(p) => Some(password::hash_blocking(p).await?),
-        None => None,
-    };
+pub async fn create(pool: &SqlitePool, username: &str, secret: &str, now: OffsetDateTime) -> Result<User, OcError> {
+    let hash = password::hash_blocking(secret).await?;
     let id = sqlx::query_scalar!(
         r#"INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?) RETURNING id AS "id!: i64""#,
         username,
@@ -37,8 +29,21 @@ pub async fn create(
     Ok(User { id, username: username.to_owned() })
 }
 
-pub async fn by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, OcError> {
-    Ok(sqlx::query_as!(User, r#"SELECT id AS "id!: i64", username AS "username!" FROM users WHERE id = ?"#, id)
+/// The user of a session signed in under `epoch`; `None` once the password changed since.
+pub async fn by_session(pool: &SqlitePool, id: i64, epoch: i64) -> Result<Option<User>, OcError> {
+    Ok(sqlx::query_as!(
+        User,
+        r#"SELECT id AS "id!: i64", username AS "username!" FROM users WHERE id = ? AND session_epoch = ?"#,
+        id,
+        epoch
+    )
+    .fetch_optional(pool)
+    .await?)
+}
+
+/// The value a new session of this user records; `None` when there is no such user.
+pub async fn session_epoch(pool: &SqlitePool, id: i64) -> Result<Option<i64>, OcError> {
+    Ok(sqlx::query_scalar!(r#"SELECT session_epoch AS "e!: i64" FROM users WHERE id = ?"#, id)
         .fetch_optional(pool)
         .await?)
 }
@@ -68,10 +73,17 @@ pub async fn verify_password(pool: &SqlitePool, username: &str, secret: &str) ->
     Ok(ok.then_some(User { id: row.id, username: row.username }))
 }
 
-pub async fn set_password(pool: &SqlitePool, user_id: i64, secret: &str) -> Result<(), OcError> {
+/// Sets the password and ends every session of the user; returns the epoch for a session that stays.
+pub async fn set_password(pool: &SqlitePool, user_id: i64, secret: &str) -> Result<i64, OcError> {
     let hash = password::hash_blocking(secret).await?;
-    sqlx::query!("UPDATE users SET password_hash = ? WHERE id = ?", hash, user_id).execute(pool).await?;
-    Ok(())
+    Ok(sqlx::query_scalar!(
+        r#"UPDATE users SET password_hash = ?, session_epoch = session_epoch + 1 WHERE id = ?
+           RETURNING session_epoch AS "e!: i64""#,
+        hash,
+        user_id
+    )
+    .fetch_one(pool)
+    .await?)
 }
 
 pub async fn count(pool: &SqlitePool) -> Result<i64, OcError> {
