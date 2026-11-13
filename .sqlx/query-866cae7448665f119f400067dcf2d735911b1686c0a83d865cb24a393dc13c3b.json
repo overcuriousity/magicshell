@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!: i64\", username AS \"username!\" FROM users WHERE id = ? AND session_epoch = ?",
+  "query": "SELECT u.id AS \"id!: i64\", u.username AS \"username!\" FROM oidc_identities i\n           JOIN users u ON u.id = i.user_id WHERE i.issuer = ? AND i.subject = ?",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "c4b3b96e8dbbda4fc62c3a58dbbd1162cf6c2631eced27af0fb43306ea2153e9"
+  "hash": "866cae7448665f119f400067dcf2d735911b1686c0a83d865cb24a393dc13c3b"
 }

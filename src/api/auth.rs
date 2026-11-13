@@ -39,7 +39,7 @@ pub async fn current(st: &ApiState, parts: &mut Parts) -> Result<Option<User>, O
     };
     let epoch = session.get::<i64>(EPOCH_KEY).await.map_err(OcError::internal)?;
     let user = match epoch {
-        Some(epoch) => users::by_session(pool, id, epoch).await?,
+        Some(epoch) => users::by_session(pool, id, epoch, false).await?,
         None => None,
     };
     if user.is_none() {
