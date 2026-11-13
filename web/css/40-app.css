@@ -1,0 +1,160 @@
+/* magicshell's own pieces: colours of options and levels, chips, the verdict, bars, the scale and the meter.
+   Choice options take --chart-cat-N by position (colors.js optionClass), score levels the ordered ramp
+   --chart-seq-N (levelClass), the yes/no meter the accent. Views set a bar's length with
+   el.style.setProperty('--w', '42%') (CSSOM, allowed by the CSP; style attributes are not).
+   scripts/check-contrast.mjs checks every pair below in both themes. */
+
+.opt-1 { --k: var(--chart-cat-1); --k-outline: var(--outline-opt-1, transparent); }
+.opt-2 { --k: var(--chart-cat-2); --k-outline: var(--outline-opt-2, transparent); }
+.opt-3 { --k: var(--chart-cat-3); --k-outline: var(--outline-opt-3, transparent); }
+.opt-4 { --k: var(--chart-cat-4); --k-outline: var(--outline-opt-4, transparent); }
+.opt-5 { --k: var(--chart-cat-5); --k-outline: var(--outline-opt-5, transparent); }
+.opt-6 { --k: var(--chart-cat-6); --k-outline: var(--outline-opt-6, transparent); }
+.opt-7 { --k: var(--chart-cat-7); --k-outline: var(--outline-opt-7, transparent); }
+.opt-8 { --k: var(--chart-cat-8); --k-outline: var(--outline-opt-8, transparent); }
+.lvl-1 { --k: var(--chart-seq-1); --k-outline: var(--outline-lvl-1, transparent); }
+.lvl-2 { --k: var(--chart-seq-2); --k-outline: var(--outline-lvl-2, transparent); }
+.lvl-3 { --k: var(--chart-seq-3); --k-outline: var(--outline-lvl-3, transparent); }
+.lvl-4 { --k: var(--chart-seq-4); --k-outline: var(--outline-lvl-4, transparent); }
+.ms-accent { --k: var(--color-accent); --k-outline: transparent; }
+
+/* Soft fill behind primary text, and an edge that holds 3:1 on the page. */
+.opt-1, .opt-2, .opt-3, .opt-4, .opt-5, .opt-6, .opt-7, .opt-8,
+.lvl-1, .lvl-2, .lvl-3, .lvl-4, .ms-accent {
+  --k-soft: color-mix(in srgb, var(--k) 12%, var(--color-bg-elevated));
+  --k-edge: color-mix(in srgb, var(--k) 45%, var(--color-fg-primary));
+}
+
+/* Bar colours under 3:1 on --color-bg-base get a --color-border-control outline (palette unchanged). */
+:root {
+  --outline-opt-2: var(--color-border-control);
+  --outline-opt-3: var(--color-border-control);
+  --outline-opt-7: var(--color-border-control);
+  --outline-opt-8: var(--color-border-control);
+  --outline-lvl-1: var(--color-border-control);
+  --outline-lvl-2: var(--color-border-control);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --outline-opt-2: transparent;
+    --outline-opt-3: transparent;
+    --outline-opt-7: transparent;
+    --outline-opt-8: transparent;
+    --outline-lvl-1: var(--color-border-control);
+    --outline-lvl-2: transparent;
+  }
+}
+:root[data-theme="dark"] {
+    --outline-opt-2: transparent;
+    --outline-opt-3: transparent;
+    --outline-opt-7: transparent;
+    --outline-opt-8: transparent;
+    --outline-lvl-1: var(--color-border-control);
+    --outline-lvl-2: transparent;
+}
+
+/* A colour dot beside a name; decoration, the name carries the meaning. */
+.ms-dot { display: inline-block; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--k); }
+
+.ms-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--k-edge, var(--color-border));
+  border-radius: var(--radius-sm);
+  background: var(--k-soft, var(--color-bg-elevated));
+  color: var(--color-fg-primary);
+  font-size: var(--text-dense);
+}
+
+.ms-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--k-edge);
+  border-radius: var(--radius-md);
+  background: var(--k-soft);
+  color: var(--color-fg-primary);
+  font-size: var(--text-page);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.ms-verdict > .oc-icon { width: 1.375rem; height: 1.375rem; color: var(--k-edge); }
+
+/* One result block per question. */
+.ms-result { padding: var(--space-3) 0 var(--space-4); border-bottom: 1px solid var(--color-border); }
+.ms-result:last-child { border-bottom: 0; }
+.ms-result__title { margin-bottom: var(--space-2); font-size: var(--text-ui); font-weight: 600; }
+.ms-ab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
+@container app (max-width: 48rem) {
+  .ms-ab { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+}
+.ms-ab__head { margin-bottom: var(--space-1); color: var(--color-fg-muted); font-size: var(--text-micro); }
+
+.ms-pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-section);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ms-pick__meta { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); font-weight: 400; letter-spacing: 0; white-space: nowrap; }
+
+/* Bars: label, plain bar, number in tabular mono on the right. Rows share one grid so bars line up. */
+.ms-bars {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  font-size: var(--text-dense);
+}
+.ms-bar { display: contents; }
+.ms-bar__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-bar__fill {
+  display: block;
+  width: var(--w, 0%);
+  min-width: 2px;
+  height: 0.625rem;
+  border-radius: var(--radius-sm);
+  background: var(--k);
+  outline: 1px solid var(--k-outline, transparent);
+  outline-offset: -1px;
+}
+.ms-bar__num { color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+/* Score: segments in ramp colours, a marker at the expected level, the end labels. */
+.ms-scale { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; }
+.ms-scale > span { height: 0.625rem; background: var(--k); outline: 1px solid var(--k-outline, transparent); outline-offset: -1px; }
+.ms-scale > span:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ms-scale > span:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ms-mark { position: relative; height: 0.75rem; }
+.ms-mark::after {
+  content: "";
+  position: absolute;
+  left: var(--at, 0%);
+  top: 0;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--color-fg-primary);
+}
+.ms-ends { display: flex; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-1); color: var(--color-fg-muted); font-size: var(--text-micro); }
+
+/* Yes/no: the probability of yes against the 0.5 line. */
+.ms-meter { position: relative; height: 0.625rem; margin: var(--space-2) 0 var(--space-1); border-radius: var(--radius-sm); background: var(--color-bg-active); }
+.ms-meter__fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); border-radius: var(--radius-sm); background: var(--color-accent); }
+.ms-meter__half { position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--color-border-control); }
+
+.ms-delta { display: flex; align-items: center; gap: var(--space-1); margin-top: var(--space-2); color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-micro); }
+.ms-delta > .oc-icon { width: var(--icon-row); height: var(--icon-row); color: var(--color-warning); }
+
+.ms-runinfo { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }

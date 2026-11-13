@@ -1,0 +1,59 @@
+/* Adapted from oc-kit assets/css/profile-everyday.css (v2026.11.1). */
+.oc-shell--everyday {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--target-touch) 1fr auto;
+  grid-template-areas: "topbar" "main" "tabbar";
+}
+.oc-shell--everyday .oc-main {
+  padding: 0 max(var(--space-4), env(safe-area-inset-right)) calc(var(--space-6) + env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+}
+
+.oc-columns { max-width: 46rem; margin: 0 auto; }
+
+@container app (max-width: 48rem) {
+  .oc-topnav { display: none; }
+  .oc-topbar { gap: var(--space-3); }
+  .oc-topbar .oc-btn--icon { width: var(--target-touch); height: var(--target-touch); }
+  .oc-topbar__end { margin-right: calc(-1 * var(--space-3)); gap: 0; }
+  .oc-shell--everyday .oc-main { padding-bottom: calc(3.5rem + var(--space-6) + env(safe-area-inset-bottom)); }
+  .oc-tabbar {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-rail);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+  }
+  .oc-notices {
+    left: 0;
+    width: 100%;
+    translate: none;
+    bottom: calc(3.5rem + 1px + env(safe-area-inset-bottom));
+    padding: 0 max(var(--space-4), env(safe-area-inset-right)) 0 max(var(--space-4), env(safe-area-inset-left));
+  }
+  .oc-notices .oc-notice:last-child { border-bottom: 0; }
+  .oc-fab {
+    position: fixed;
+    right: max(var(--space-4), env(safe-area-inset-right));
+    bottom: calc(3.5rem + var(--space-4) + env(safe-area-inset-bottom));
+    z-index: var(--z-rail);
+    height: 3rem;
+    padding: 0 var(--space-4);
+    box-shadow: var(--shadow-float);
+  }
+}
+
+@container app (min-width: 90rem) {
+  .oc-columns--split {
+    display: grid;
+    grid-template-columns: 28rem 52rem;
+    justify-content: center;
+    gap: var(--space-6);
+    max-width: none;
+  }
+}

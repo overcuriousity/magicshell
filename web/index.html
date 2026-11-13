@@ -2,10 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http&#58;//localhost:* http&#58;//127.0.0.1:*; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<script src="js/ui/theme-boot.js"></script>
 <title>magicshell</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/00-tokens.css">
+<link rel="stylesheet" href="css/10-base.css">
+<link rel="stylesheet" href="css/20-layout.css">
+<link rel="stylesheet" href="css/30-components.css">
+<link rel="stylesheet" href="css/35-everyday.css">
+<link rel="stylesheet" href="css/40-app.css">
+<script type="module" src="js/app.js"></script>
 </head>
-<body>
-<main><h1>magicshell</h1></main>
+<body class="oc-app">
+<div class="oc-shell oc-shell--everyday" id="shell"></div>
+<div class="oc-notices" id="notices" role="status" aria-live="polite"></div>
 </body>
 </html>

@@ -1,0 +1,142 @@
+// The app shell: top bar, navigation (top from 48rem, tab bar below), and the view of the current route.
+// Views register as { mount(el, ctx), unmount() }; until a later task adds one, a destination shows its heading.
+import { h } from './ui/dom.js';
+import { icon } from './ui/icons.js';
+import { notify } from './ui/notice.js';
+import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
+
+export const DESTINATIONS = [
+  { view: 'ask', label: 'Ask', icon: 'ask' },
+  { view: 'history', label: 'History', icon: 'history' },
+  { view: 'setups', label: 'Setups', icon: 'setups' },
+  { view: 'settings', label: 'Settings', icon: 'settings' },
+];
+const TITLES = { ...Object.fromEntries(DESTINATIONS.map((d) => [d.view, d.label])), 'sign-in': 'Sign in' };
+
+function decode(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+// "#/history/abc" -> { view: "history", id: "abc" }; anything unknown opens Ask.
+export function route(hash) {
+  const m = /^#\/([^/]*)(?:\/(.*))?$/.exec(hash ?? '');
+  if (!m || !Object.hasOwn(TITLES, m[1])) return { view: 'ask' };
+  return m[2] ? { view: m[1], id: decode(m[2]) } : { view: m[1] };
+}
+
+export const hrefOf = (view, id) => (id == null ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`);
+
+function placeholder(view) {
+  return {
+    mount(el) {
+      el.append(h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, TITLES[view])));
+    },
+    unmount() {},
+  };
+}
+
+const registry = new Map();
+export function registerView(name, view) {
+  registry.set(name, view);
+}
+const viewFor = (name) => registry.get(name) ?? placeholder(name);
+
+function themeToggle() {
+  const button = h('button', { type: 'button', class: 'oc-btn oc-btn--icon oc-theme-toggle' }, icon('monitor'), icon('sun'), icon('moon'));
+  const show = (current) => {
+    const next = THEME_LABELS[nextTheme(current)];
+    button.dataset.ocValue = current;
+    button.dataset.ocTip = next;
+    button.setAttribute('aria-label', next);
+  };
+  show(storedTheme());
+  button.addEventListener('click', () => {
+    show(applyTheme(nextTheme(button.dataset.ocValue)));
+    syncThemeColor();
+  });
+  return button;
+}
+
+function textSizeToggle() {
+  const button = h(
+    'button',
+    { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Compact text', 'data-oc-tip': 'Compact text' },
+    icon('text-size'),
+  );
+  const show = (size) => button.setAttribute('aria-pressed', String(size === 'compact'));
+  show(storedTextSize());
+  button.addEventListener('click', () => {
+    show(applyTextSize(button.getAttribute('aria-pressed') === 'true' ? 'default' : 'compact'));
+  });
+  return button;
+}
+
+// The browser chrome follows --theme-color from the tokens.
+function syncThemeColor() {
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = h('meta', { name: 'theme-color' });
+    document.head.append(meta);
+  }
+  meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim());
+}
+
+function navLinks(withIcons) {
+  return DESTINATIONS.map((d) =>
+    h('a', { href: hrefOf(d.view), 'data-view': d.view }, withIcons ? icon(d.icon, 'tab') : null, h('span', {}, d.label)),
+  );
+}
+
+export function mountShell(shell) {
+  const modeSwitch = h('div', { class: 'oc-topbar__slot', id: 'mode-switch' });
+  const topnav = h('nav', { class: 'oc-topnav', 'aria-label': 'Main' }, navLinks(false));
+  const tabbar = h('nav', { class: 'oc-tabbar', 'aria-label': 'Main' }, navLinks(true));
+  const main = h('main', { class: 'oc-main', id: 'main' });
+  shell.append(
+    h('header', { class: 'oc-topbar' },
+      h('span', { class: 'oc-topbar__title' }, 'magicshell'),
+      topnav,
+      h('div', { class: 'oc-topbar__end' }, modeSwitch, themeToggle(), textSizeToggle()),
+    ),
+    main,
+    tabbar,
+  );
+
+  let current = null;
+  let first = true;
+  const navigate = (hash) => {
+    if (location.hash === hash) show();
+    else location.hash = hash;
+  };
+  const show = () => {
+    const r = route(location.hash);
+    current?.unmount();
+    for (const a of [...topnav.children, ...tabbar.children]) {
+      if (a.dataset.view === r.view) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    }
+    document.title = r.view === 'ask' ? 'magicshell' : `${TITLES[r.view]} · magicshell`;
+    const el = h('div', { class: 'oc-columns', 'data-view': r.view });
+    main.replaceChildren(el);
+    current = viewFor(r.view);
+    current.mount(el, { route: r, navigate, notify, modeSwitch });
+    if (!first) {
+      window.scrollTo(0, 0);
+      el.querySelector('h1')?.focus({ preventScroll: true });
+    }
+    first = false;
+  };
+  window.addEventListener('hashchange', show);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncThemeColor);
+  syncThemeColor();
+  show();
+}
+
+if (typeof document !== 'undefined') {
+  const shell = document.getElementById('shell');
+  if (shell) mountShell(shell);
+}

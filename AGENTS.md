@@ -22,3 +22,5 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo fmt --check`
 - `cargo deny check`
+- `node --test 'web/**/*.test.mjs'` (Node 22, no npm dependencies)
+- `node scripts/check-contrast.mjs`
