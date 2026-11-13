@@ -51,9 +51,10 @@ fn status_error(status: StatusCode) -> AppError {
 
 impl Upstream {
     pub fn new(endpoint: Url, key: Option<Secret>, model: String, timeout: Duration) -> Result<Self, AppError> {
-        let client = reqwest::Client::builder().timeout(timeout).build().map_err(|_| {
-            upstream_error("The model endpoint client could not be set up. Check the server configuration.")
-        })?;
+        let client =
+            reqwest::Client::builder().timeout(timeout).redirect(reqwest::redirect::Policy::none()).build().map_err(
+                |_| upstream_error("The model endpoint client could not be set up. Check the server configuration."),
+            )?;
         let url = format!("{}/systemone", endpoint.as_str().trim_end_matches('/'));
         Ok(Self { client, url, key, model })
     }

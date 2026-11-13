@@ -8,7 +8,10 @@ use magicshell::config::AppConfig;
 use magicshell::kit::config::OcConfig;
 
 /// No configuration: open mode on loopback.
-pub const OPEN: &str = "";
+pub const OPEN: &str = "[app]\nendpoint = \"{ENDPOINT}\"\nmodel = \"test-model\"\n";
+
+/// An address nothing listens on, for tests that never reach the model.
+const NOWHERE: &str = "http://127.0.0.1:9/v1";
 
 pub struct TestApp {
     pub base: String,
@@ -17,11 +20,21 @@ pub struct TestApp {
 
 /// Starts the app on `127.0.0.1:0` with the given TOML; `bind` is replaced by the port the OS picked.
 pub async fn spawn(cfg_toml: &str) -> TestApp {
+    spawn_with(cfg_toml, NOWHERE).await
+}
+
+/// Like `spawn`, with `{ENDPOINT}` in the TOML replaced by the fake upstream's URL.
+pub async fn spawn_against(cfg_toml: &str, fake: &FakeUpstream) -> TestApp {
+    spawn_with(cfg_toml, fake.url.as_str()).await
+}
+
+async fn spawn_with(cfg_toml: &str, endpoint: &str) -> TestApp {
+    let cfg_toml = &cfg_toml.replace("{ENDPOINT}", endpoint);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let mut cfg: OcConfig = Figment::new().merge(Toml::string(cfg_toml)).extract().unwrap();
     cfg.bind = addr;
-    let app_cfg: AppConfig = cfg.app().unwrap();
+    let app_cfg: AppConfig = AppConfig::from_config(&cfg).unwrap();
     let router = magicshell::app::build(&cfg, app_cfg, None).unwrap();
     tokio::spawn(async move {
         axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();

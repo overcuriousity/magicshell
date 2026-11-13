@@ -17,6 +17,9 @@ pub enum AppError {
     /// The model endpoint did not answer in time (504).
     #[error("The model took too long to answer. Try again.")]
     UpstreamTimeout,
+    /// One client asked too often (429).
+    #[error("Too many questions. Wait a minute and try again.")]
+    RateLimited,
 }
 
 impl AppError {
@@ -26,6 +29,7 @@ impl AppError {
             Self::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::UpstreamTimeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 }

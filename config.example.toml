@@ -1,5 +1,5 @@
-# Every key is optional. Environment variables override it as MAGICSHELL__SECTION__KEY,
-# for example MAGICSHELL__BIND=127.0.0.1:9000.
+# Every key is optional except endpoint and model in [app]. Environment variables override it as
+# MAGICSHELL__SECTION__KEY, for example MAGICSHELL__BIND=127.0.0.1:9000 or MAGICSHELL__APP__MODEL=name.
 # A key ending in _FILE reads the value from a file: MAGICSHELL__APP__API_KEY_FILE=/run/secrets/key.
 
 # The https address users see. Required unless magicshell is reached via localhost.
@@ -9,5 +9,18 @@ bind = "127.0.0.1:8080"
 trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # data_dir = "/var/lib/magicshell"
 
-# [app]
-# Settings that belong to magicshell.
+[app]
+# Base address of the model endpoint (required). The server calls <endpoint>/systemone and nothing else.
+# Environment: MAGICSHELL__APP__ENDPOINT
+endpoint = "https://models.example.org/v1"
+# The model to ask (required). Visitors cannot choose another one. Environment: MAGICSHELL__APP__MODEL
+model = "decision-model"
+# Bearer key for the endpoint; leave out if it needs none. "file:///run/secrets/key" reads it from a file.
+# Environment: MAGICSHELL__APP__API_KEY or MAGICSHELL__APP__API_KEY_FILE
+# api_key = "file:///run/secrets/magicshell-key"
+# SQLite file for accounts mode; leave out for open mode (no sign-in). Environment: MAGICSHELL__APP__DATABASE
+# database = "/var/lib/magicshell/magicshell.db"
+# Questions one client may ask per minute (burst is the same number). Environment: MAGICSHELL__APP__RUNS_PER_MINUTE
+runs_per_minute = 60
+# Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
+upstream_timeout_secs = 60

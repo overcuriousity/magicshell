@@ -44,7 +44,7 @@ async fn main() -> ExitCode {
 
 async fn serve(file: Option<PathBuf>) -> Result<(), AppError> {
     let cfg: OcConfig = load("magicshell", file.as_deref())?;
-    let app_cfg: AppConfig = cfg.app()?;
+    let app_cfg: AppConfig = AppConfig::from_config(&cfg)?;
     let router = magicshell::app::build(&cfg, app_cfg, None)?;
     let listener = tokio::net::TcpListener::bind(cfg.bind)
         .await

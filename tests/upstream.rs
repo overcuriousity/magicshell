@@ -130,3 +130,21 @@ async fn a_trailing_slash_on_the_endpoint_is_ignored() {
     upstream(url, None, secs(5)).run(&triage_run()).await.unwrap();
     assert_eq!(fake.requests.lock().unwrap()[0].path, "/v1/systemone");
 }
+
+#[tokio::test]
+async fn a_redirect_from_the_endpoint_is_not_followed() {
+    let target = fake_upstream(vec![fixture_reply("response-triage")]).await;
+    let location = format!("{}/systemone", target.url);
+    let router = axum::Router::new().fallback(move || {
+        let location = location.clone();
+        async move { (axum::http::StatusCode::FOUND, [("location", location)], "") }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url: url::Url = format!("http://{}/v1", listener.local_addr().unwrap()).parse().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+    let err = upstream(url, None, secs(5)).run(&triage_run()).await.unwrap_err();
+    assert_eq!(err.to_string(), "The model endpoint answered with an error (302). Try again later.");
+    assert!(target.requests.lock().unwrap().is_empty());
+}
