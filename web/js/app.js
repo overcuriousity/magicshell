@@ -12,6 +12,7 @@ import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
 import { createBenchView } from './views/bench.js';
 import { createGuidedView } from './views/guided.js';
+import { createHistoryView } from './views/history.js';
 import { createSetupsView } from './views/setups.js';
 
 export const DESTINATIONS = [
@@ -230,6 +231,7 @@ async function boot(shell) {
     store = mode === 'accounts' ? createServerStore(fetchFn) : createBrowserStore(storage ?? memoryStorage());
   }
   registerView('ask', createAskView());
+  registerView('history', createHistoryView());
   registerView('setups', createSetupsView());
   mountShell(shell, { mode, client, store });
 }

@@ -5,6 +5,16 @@ import { createRunOnce } from './run-once.js';
 
 export const SESSION_KEY = 'magicshell.bench';
 
+// A run with its result, left by History for the bench that mounts next (the result is not kept
+// in sessionStorage, so it cannot ride along any other way). Taken once.
+let pending = null;
+export const queueRun = (run, result) => { pending = { run, result }; };
+export function takeRun() {
+  const taken = pending;
+  pending = null;
+  return taken;
+}
+
 const copy = (v) => JSON.parse(JSON.stringify(v));
 const emptyRun = () => ({ state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
 

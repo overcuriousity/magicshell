@@ -7,7 +7,7 @@ import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
 import { validateSetup } from '../transfer.js';
 import { VARIANTS } from '../variants.js';
-import { createBenchModel } from './bench-model.js';
+import { createBenchModel, takeRun } from './bench-model.js';
 import { fromRun } from './setup-model.js';
 import { questionCards } from './bench-cards.js';
 import { colorSlots, resultsSection, variantLabel } from './bench-results.js';
@@ -323,6 +323,8 @@ export function createBenchView(deps = {}) {
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
       // A run handed over by the guided view replaces the one kept from last time.
       if (ctx.carry) model.loadRun(ctx.carry);
+      const queued = takeRun();
+      if (queued) model.loadRun(queued.run, queued.result);
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());
       hosts.saveAs = h('div', { class: 'ms-save-as-host' }, saveAsControl());
       hosts.form = h('div', { class: 'oc-stack' });

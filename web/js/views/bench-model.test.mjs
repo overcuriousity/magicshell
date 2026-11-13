@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RunError } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
-import { createBenchModel, SESSION_KEY } from './bench-model.js';
+import { createBenchModel, queueRun, SESSION_KEY, takeRun } from './bench-model.js';
 
 const memory = () => {
   const data = new Map();
@@ -356,4 +356,11 @@ test('an error says which run it belongs to', async () => {
   await m.run();
   assert.equal(m.state.error, 'Type a question first.');
   assert.equal(m.state.errorFor, 'a');
+});
+
+test('a queued run is taken once', () => {
+  const run = { state: '', questions: [] };
+  queueRun(run, { totalMs: 1 });
+  assert.deepEqual(takeRun(), { run, result: { totalMs: 1 } });
+  assert.equal(takeRun(), null);
 });
