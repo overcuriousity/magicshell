@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.2] - 2026-11-13
+
+### Changed
+
+- Dependencies: rand 0.10 and tower-http 0.7; CI uses actions/setup-node 7.1.0.
+
 ## [2026.11.1] - 2026-11-13
 
 ### Removed
