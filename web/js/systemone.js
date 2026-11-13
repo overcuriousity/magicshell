@@ -9,7 +9,7 @@ const trimmed = (s) => (typeof s === 'string' ? s.trim() : '');
 
 // Returns the first problem as a sentence, or null. The first sentence in the list wins:
 // run-level checks first, then each question in order with its own checks in list order.
-export function validateRun(run) {
+export function validateRun(run, { allowEmptyText = false } = {}) {
   const questions = run.questions;
   if (questions.length < 1) return 'Add at least one question.';
   if (questions.length > LIMITS.questions) return `Use at most ${LIMITS.questions} questions.`;
@@ -19,15 +19,15 @@ export function validateRun(run) {
   const keyOk = new RegExp(`^[a-z0-9_]{1,${LIMITS.key}}$`);
   if (!keys.every((k) => keyOk.test(k))) return 'Name each question with 1 to 30 lower-case letters, digits or _.';
   for (const q of questions) {
-    const problem = validateQuestion(q);
+    const problem = validateQuestion(q, allowEmptyText);
     if (problem) return problem;
   }
   return null;
 }
 
-function validateQuestion(q) {
+function validateQuestion(q, allowEmptyText) {
   const text = trimmed(q.text);
-  if (text === '') return 'Type a question first.';
+  if (text === '' && !allowEmptyText) return 'Type a question first.';
   if (len(text) > LIMITS.questionText) return 'Keep each question to 500 characters or fewer.';
   if (q.type === 'choice') {
     const options = q.options ?? [];
