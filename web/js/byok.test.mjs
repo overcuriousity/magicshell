@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyByok, BYOK_KEY, loadByok, saveByok } from './byok.js';
+import { applyByok, BYOK_KEY, loadByok } from './byok.js';
+
+// null when the values are taken, else the sentence that refuses them.
+const saveByok = (storage, values) => applyByok(storage, values).error ?? null;
 
 const memory = () => {
   const m = new Map();

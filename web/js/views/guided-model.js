@@ -4,18 +4,27 @@
 import { LIMITS } from '../limits.js';
 import { SCALES } from '../setups-builtin.js';
 import { createRunOnce } from './run-once.js';
+import { sessionStore } from './session.js';
 
 export const SESSION_KEY = 'magicshell.guided';
 export const KINDS = ['noul', 'choice', 'score'];
 const FIRST_SCALE = SCALES[0].id;
 const KEY = 'q1';
 
-function defaultSession() {
-  try {
-    return globalThis.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
+
+// A run left for the guide that mounts next (by the bench switch or History), taken once.
+let pending = null;
+export const queueGuidedRun = (run) => { pending = run; };
+export function takeGuidedRun() {
+  const taken = pending;
+  pending = null;
+  return taken;
+}
+
+// Whether the guide can take a run: one question of a kind it asks.
+export function loadable(run) {
+  const q = run?.questions?.length === 1 ? run.questions[0] : null;
+  return Boolean(q && KINDS.includes(q.type) && typeof q.text === 'string');
 }
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -56,7 +65,7 @@ export function createGuidedModel({
   uuid = () => crypto.randomUUID(),
   mode = 'pages',
   navigate = () => {},
-  session = defaultSession(),
+  session = sessionStore(),
 }) {
   const listeners = new Set();
   const runner = createRunOnce({ client, store, now, uuid, mode, navigate, guided: true });
@@ -143,6 +152,9 @@ export function createGuidedModel({
       if (state.step === 2 || state.step === 3) edit(() => { state.step -= 1; });
     },
 
+    // Whether anything was entered: a question, an option or the context.
+    holdsSomething: () => state.question.trim() !== '' || state.options.length > 0 || state.context.trim() !== '',
+
     toRun() {
       const q = { key: KEY, type: state.kind, text: state.question };
       if (state.kind === 'choice') q.options = state.options.map((o) => ({ id: o.id, name: o.name, description: o.description ?? '' }));
@@ -186,8 +198,8 @@ export function createGuidedModel({
 
     // The reverse of toRun for a run of one question; lands on step 2. Returns false otherwise.
     load(run) {
-      const q = run?.questions?.length === 1 ? run.questions[0] : null;
-      if (!q || !KINDS.includes(q.type) || typeof q.text !== 'string') return false;
+      if (!loadable(run)) return false;
+      const q = run.questions[0];
       edit(() => {
         Object.assign(state, fresh(), { result: null });
         state.step = 2;

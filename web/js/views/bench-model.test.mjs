@@ -364,3 +364,20 @@ test('a queued run is taken once', () => {
   assert.deepEqual(takeRun(), { run, result: { totalMs: 1 } });
   assert.equal(takeRun(), null);
 });
+
+test('in the server modes an entry does not keep the request twice', async () => {
+  const store = memoryStore();
+  const m = make({ store, mode: 'open' });
+  m.loadSetup(triage);
+  await m.run();
+  assert.deepEqual(Object.keys(store.entries[0].reply).sort(), ['answers', 'inputTokens', 'model', 'response', 'upstreamMs']);
+  assert.equal(m.state.resultA.request, '{"state":"x"}');
+});
+
+test('an error that is not a RunError shows one plain sentence, not its text', async () => {
+  const client = { async run() { throw new TypeError("Cannot read properties of null (reading 'id')"); } };
+  const m = make({ client });
+  m.updateQuestion('q1', { text: 'Is it?' });
+  await m.run();
+  assert.equal(m.state.error, 'Something went wrong. Reload the page and try again.');
+});

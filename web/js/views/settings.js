@@ -1,5 +1,6 @@
 // Settings: theme and text size in every mode; in pages mode the visitor's endpoint, key and
 // model; in accounts mode the signed-in name, a new password and signing out.
+import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { applyTextSize, applyTheme, storedTextSize, storedTheme } from '../ui/theme.js';
@@ -149,7 +150,7 @@ export function createSettingsView() {
       try {
         await ctx.client.changePassword(current.value, next.value);
       } catch (e) {
-        error.replaceChildren(inlineError(e.message));
+        error.replaceChildren(inlineError(messageOf(e)));
         if (e.kind === 'auth') ctx.navigate('#/sign-in');
         return;
       }
@@ -162,7 +163,7 @@ export function createSettingsView() {
       try {
         await ctx.signOut();
       } catch (e) {
-        ctx.notify(e.message, { kind: 'danger' });
+        ctx.notify(messageOf(e), { kind: 'danger' });
       }
     } }, 'Sign out');
     return h('section', { class: 'ms-settings__part', 'aria-labelledby': 'settings-account' },

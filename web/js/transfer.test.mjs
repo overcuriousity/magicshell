@@ -44,3 +44,9 @@ test('a file of another kind is refused', () => {
     assert.throws(() => importSetups(bad), { message: 'This file does not hold magicshell setups.' });
   }
 });
+
+test('a setup whose option description is not text is skipped', () => {
+  const choice = { key: 'pick', type: 'choice', text: 'Which?', options: [{ name: 'A', description: 5 }, { name: 'B' }] };
+  const text = JSON.stringify({ magicshell: 2, setups: [{ name: 'Odd', questions: [choice] }] });
+  assert.deepEqual(importSetups(text), { setups: [], skipped: 1 });
+});

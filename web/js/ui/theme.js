@@ -1,8 +1,8 @@
 // Theme (system, light, dark) and text size (default, compact), kept in localStorage.
 // theme-boot.js applies the stored values before first paint; this module changes them.
-export const THEMES = ['system', 'light', 'dark'];
-export const THEME_KEY = 'magicshell.theme';
-export const TEXT_SIZE_KEY = 'magicshell.textsize';
+const THEMES = ['system', 'light', 'dark'];
+const THEME_KEY = 'magicshell.theme';
+const TEXT_SIZE_KEY = 'magicshell.textsize';
 export const THEME_LABELS = { system: 'System theme', light: 'Light theme', dark: 'Dark theme' };
 
 const defaultRoot = () => globalThis.document?.documentElement;

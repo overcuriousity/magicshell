@@ -1,5 +1,6 @@
 // Sign in (accounts mode only): username and password; the server's sentence inline on failure.
 // ctx.signIn resolves when the session holds and the app has moved on to the route asked for.
+import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
 import { field, inlineError } from './settings.js';
 
@@ -26,7 +27,7 @@ export function createSignInView() {
         try {
           await ctx.signIn(username.value, password.value);
         } catch (err) {
-          error.replaceChildren(inlineError(err?.message || 'Something went wrong. Try again.'));
+          error.replaceChildren(inlineError(messageOf(err)));
           password.value = '';
           password.focus();
         } finally {

@@ -1,5 +1,5 @@
 // The app shell: top bar, navigation (top from 48rem, tab bar below), and the view of the current route.
-// Views register as { mount(el, ctx), unmount() }; a destination without one shows its heading.
+// Views register as { mount(el, ctx), unmount() }, one for each destination.
 // Boot learns the mode and wires client and store for it; accounts mode shows only Sign in until
 // someone is signed in.
 import { applyByok, loadByok } from './byok.js';
@@ -13,14 +13,17 @@ import { h } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
+import { queueRun } from './views/bench-model.js';
 import { createBenchView } from './views/bench.js';
+import { queueGuidedRun } from './views/guided-model.js';
 import { createGuidedView } from './views/guided.js';
 import { createHistoryView } from './views/history.js';
 import { createSettingsView, LOOK_EVENT, NOT_SAVING } from './views/settings.js';
 import { createSetupsView } from './views/setups.js';
+import { sessionStore } from './views/session.js';
 import { createSignInView } from './views/sign-in.js';
 
-export const DESTINATIONS = [
+const DESTINATIONS = [
   { view: 'ask', label: 'Ask', icon: 'ask' },
   { view: 'history', label: 'History', icon: 'history' },
   { view: 'setups', label: 'Setups', icon: 'setups' },
@@ -45,25 +48,17 @@ export function route(hash) {
 
 export const hrefOf = (view, id) => (id == null ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`);
 
-function placeholder(view) {
-  return {
-    mount(el) {
-      el.append(h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, TITLES[view])));
-    },
-    unmount() {},
-  };
-}
-
 const registry = new Map();
-export function registerView(name, view) {
+function registerView(name, view) {
   registry.set(name, view);
 }
-const viewFor = (name) => registry.get(name) ?? placeholder(name);
+const viewFor = (name) => registry.get(name);
 
 // Ask: the guided view at #/ask (and on every fresh load), the bench at #/ask/bench. The switch
-// in the top bar carries what was entered over; "something else" in the guide opens the bench.
-export const isBench = (r) => r.view === 'ask' && r.id === 'bench';
-export const ASK_HREF = { guided: '#/ask', bench: '#/ask/bench' };
+// in the top bar carries what was entered over; "something else" in the guide opens the bench as
+// it was left.
+const isBench = (r) => r.view === 'ask' && r.id === 'bench';
+const ASK_HREF = { guided: '#/ask', bench: '#/ask/bench' };
 
 // Pages mode before an endpoint is saved: one line pointing to Settings, in place of the guide.
 function needsEndpoint() {
@@ -79,32 +74,34 @@ function needsEndpoint() {
   };
 }
 
-export function createAskView({ guided = createGuidedView(), bench = createBenchView(), missing = needsEndpoint() } = {}) {
+// What the switch hands over goes through the in-memory queues of each side (bench-model.js and
+// guided-model.js), as every other hand-over does. A side with nothing entered hands over nothing,
+// so the other keeps its own draft.
+export function createAskView({
+  guided = createGuidedView(),
+  bench = createBenchView(),
+  missing = needsEndpoint(),
+  hand = { bench: (run) => queueRun(run), guided: queueGuidedRun },
+} = {}) {
   let current = null;
   let slot = null;
-  // { to: 'bench' | 'guided', run }, taken by the next mount of that side only.
-  let carry = null;
   return {
     mount(el, ctx) {
       const side = isBench(ctx.route) ? 'bench' : 'guided';
       const other = side === 'bench' ? 'guided' : 'bench';
-      const handed = carry?.to === side ? carry.run : null;
-      carry = null;
       current = side === 'bench' ? bench : ctx.needsEndpoint ? missing : guided;
       slot = ctx.modeSwitch ?? null;
       slot?.replaceChildren(
         h('a', { href: ASK_HREF[other], class: 'ms-switch', onclick: (e) => {
           // A plain primary click only: a modifier-click opens a new tab and must leave nothing behind.
           if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          carry = { to: other, run: current.currentRun() };
+          const run = current.currentRun();
+          if (run) hand[other](run);
         } },
           other === 'bench' ? 'Bench' : 'Guided view'),
       );
-      const toBench = (run) => {
-        carry = { to: 'bench', run };
-        ctx.navigate(ASK_HREF.bench);
-      };
-      current.mount(el, { ...ctx, carry: handed, toBench });
+      const toBench = () => ctx.navigate(ASK_HREF.bench);
+      current.mount(el, { ...ctx, toBench });
     },
     unmount() {
       current?.unmount();
@@ -168,7 +165,7 @@ function navLinks(withIcons) {
 
 // services: { mode, client, store, user, ... }, handed to every view with the route and navigate.
 // It is read at every route change, so boot can swap the client or the user in place.
-export function mountShell(shell, services = {}) {
+function mountShell(shell, services = {}) {
   const modeSwitch = h('div', { class: 'oc-topbar__slot', id: 'mode-switch' });
   const topnav = h('nav', { class: 'oc-topnav', 'aria-label': 'Main' }, navLinks(false));
   const tabbar = h('nav', { class: 'oc-tabbar', 'aria-label': 'Main' }, navLinks(true));
@@ -266,6 +263,14 @@ async function boot(shell) {
   const kept = storage ?? memoryStorage();
   const services = { mode, model: config.model, user: config.user };
   let shellApi = null;
+  // The not-saving notice, once per page: at boot, or when storage stops taking writes later.
+  let warned = false;
+  const warnNotSaving = () => {
+    if (warned) return;
+    warned = true;
+    notify(NOT_SAVING, { kind: 'warning', ms: 12000 });
+  };
+  const browserStore = () => createBrowserStore(kept, { onNotSaving: warnNotSaving });
   const navigate = (hash) => shellApi.navigate(hash);
 
   // Accounts mode: a session that ran out during use leads to Sign in, whichever view noticed.
@@ -294,7 +299,7 @@ async function boot(shell) {
       services.client = values ? createDirectClient(values, fetchFn) : NO_ENDPOINT;
     };
     useByok(loadByok(kept));
-    services.store = createBrowserStore(kept);
+    services.store = browserStore();
     services.currentByok = () => services.byok;
     // { error } or { kept }; the new values are used either way, kept or not.
     services.saveByok = (values) => {
@@ -305,7 +310,7 @@ async function boot(shell) {
     };
   } else {
     services.client = createServerClient(fetchFn);
-    services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : createBrowserStore(kept);
+    services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : browserStore();
   }
   if (mode === 'accounts') {
     services.signIn = async (username, password) => {
@@ -318,7 +323,7 @@ async function boot(shell) {
       await services.client.signOut();
       for (const key of ENTERED) {
         try {
-          sessionStorage.removeItem(key);
+          sessionStore().removeItem(key);
         } catch {
           // Nothing kept to clear.
         }
@@ -335,7 +340,7 @@ async function boot(shell) {
   registerView('settings', createSettingsView());
   registerView('sign-in', createSignInView());
   shellApi = mountShell(shell, services);
-  if (showsNotSaving({ mode, storage, store: services.store })) notify(NOT_SAVING, { kind: 'warning', ms: 12000 });
+  if (showsNotSaving({ mode, storage, store: services.store })) warnNotSaving();
 }
 
 if (typeof document !== 'undefined') {

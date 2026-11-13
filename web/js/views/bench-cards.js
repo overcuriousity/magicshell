@@ -7,7 +7,7 @@ import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 
-export const TYPES = [
+const TYPES = [
   { id: 'choice', label: 'choice' },
   { id: 'score', label: 'score' },
   { id: 'noul', label: 'noul' },

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { parseResponse, requestJson, validateRun } from './systemone.js';
+import { checkOutcome, parseResponse, requestJson, validateRun } from './systemone.js';
 
 const dir = new URL('../../fixtures/systemone/', import.meta.url);
 const load = (prefix) =>
@@ -23,7 +23,9 @@ test('response fixtures parse to the expected outcome or error', () => {
     if (f.expected.error) {
       assert.throws(() => parseResponse(f.body, f.run), { message: f.expected.error }, name);
     } else {
-      assert.deepEqual(parseResponse(f.body, f.run), f.expected, name);
+      const out = parseResponse(f.body, f.run);
+      // answers has no prototype; compare its entries as a plain object.
+      assert.deepEqual({ ...out, answers: { ...out.answers } }, f.expected, name);
     }
   }
 });
@@ -65,4 +67,20 @@ test('a noul question ignores options and levels', () => {
   const run = { state: '', questions: [{ key: 'a', type: 'noul', text: 'Q', options: [], levels: [] }] };
   assert.equal(validateRun(run), null);
   assert.equal(requestJson(run, 'm'), '{"model":"m","state":"","questions":{"a":{"type":"noul","instructions":"Q"}}}');
+});
+
+test('a question named __proto__ gets its own answer, not the prototype', () => {
+  const run = { state: '', questions: [{ key: '__proto__', type: 'noul', text: 'Odd?' }, { key: 'constructor', type: 'noul', text: 'Odd too?' }] };
+  assert.equal(validateRun(run), null);
+  const body = JSON.parse('{"answers":{"__proto__":{"type":"noul","noul":0.75},"constructor":{"type":"noul","noul":0.25}}}');
+  const parsed = parseResponse(body, run);
+  assert.deepEqual(Object.keys(parsed.answers), ['__proto__', 'constructor']);
+  assert.equal(parsed.answers.__proto__.noul, 0.75);
+  assert.equal(parsed.answers.constructor.noul, 0.25);
+  const reply = JSON.parse('{"answers":{"__proto__":{"type":"noul","noul":0.75},"constructor":{"type":"noul","noul":0.25}}}');
+  const checked = checkOutcome(reply, run);
+  assert.equal(checked.answers.__proto__.noul, 0.75);
+  assert.equal(JSON.parse(JSON.stringify(checked)).answers.__proto__.noul, 0.75);
+  // An answer missing for such a key is not taken from the prototype.
+  assert.throws(() => checkOutcome({ answers: {} }, run), { message: 'The model endpoint sent an answer this app does not understand.' });
 });

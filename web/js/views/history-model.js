@@ -1,5 +1,6 @@
 // History's state and actions, without any DOM: the entries newest first, remove and clear with
 // an undo, the headline of an entry and the time it is shown with.
+import { requestText } from '../client-server.js';
 import { nearestLevel, noulIsYes, scoreText } from '../format.js';
 import { levelClass, optionClass } from '../ui/colors.js';
 
@@ -37,8 +38,13 @@ export function headline(entry) {
   return { text, answer: noulIsYes(a.noul) ? 'Yes' : 'No', cls: 'ms-accent' };
 }
 
-// The result of an entry in the shape the bench keeps for a run.
-export const benchResult = (entry) => ({ ...entry.reply, totalMs: entry.totalMs });
+// The result of an entry in the shape the bench keeps for a run. Server-mode entries do not keep
+// the request (it is the run), so it is written out again as the server client sends it.
+export const benchResult = (entry) => ({
+  ...entry.reply,
+  request: typeof entry.reply?.request === 'string' ? entry.reply.request : requestText(entry.run),
+  totalMs: entry.totalMs,
+});
 
 export function createHistoryModel(store) {
   let list = [];

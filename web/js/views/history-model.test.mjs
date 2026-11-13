@@ -90,3 +90,11 @@ test('formatWhen shows the time today, the day this year and the year before', (
   assert.equal(formatWhen(at(2025, 10, 12), now), '12 Nov 2025');
   assert.equal(formatWhen(at(2026, 10, 13, 9, 5), now), '09:05');
 });
+
+test('an entry without a request shows the run as the server client sends it', () => {
+  const e = entry('a', '2026-11-12T10:00:00Z');
+  assert.equal(benchResult(e).request, '{}');
+  delete e.reply.request;
+  e.run = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
+  assert.equal(benchResult(e).request, '{"state":"Rain.","questions":[{"key":"q1","type":"noul","text":"Wet?"}]}');
+});

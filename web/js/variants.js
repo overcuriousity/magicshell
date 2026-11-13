@@ -67,7 +67,7 @@ function compareScore(qa, a, qb, b) {
 }
 
 export function compare(runA, outA, runB, outB) {
-  const result = {};
+  const result = Object.create(null);
   for (const qa of runA.questions) {
     const qb = runB.questions.find((q) => q.key === qa.key);
     const a = outA.answers[qa.key];

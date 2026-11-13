@@ -2,11 +2,12 @@
 // every question's result, the run line and the request and response; from there a run goes
 // back to the bench (as baseline A), back into the guide, or away. Deleting and clearing act at
 // once with an undo notice.
+import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { resultsSection } from './bench-results.js';
 import { queueRun } from './bench-model.js';
-import { createGuidedModel } from './guided-model.js';
+import { loadable, queueGuidedRun } from './guided-model.js';
 import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
 
 const LIST = '#/history';
@@ -23,7 +24,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
   let loaded = false;
 
   const notify = (text, opts) => ctx.notify(text, opts);
-  const fail = (e) => notify(e?.message ?? 'Something went wrong. Try again.', { kind: 'danger' });
+  const fail = (e) => notify(messageOf(e), { kind: 'danger' });
 
   function undoNotice(text, undo) {
     notify(text, {
@@ -98,8 +99,13 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     ctx.navigate('#/ask/bench');
   }
 
+  // A run the guide cannot take (more than one question) opens in the bench instead.
   function askAgain(entry) {
-    createGuidedModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate }).load(entry.run);
+    if (!loadable(entry.run)) {
+      openInBench(entry);
+      return;
+    }
+    queueGuidedRun(entry.run);
     ctx.navigate('#/ask');
   }
 
@@ -133,6 +139,14 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     );
   }
 
+  // The list could not be read: the heading and the sentence, in place of the list.
+  function renderFailed(e) {
+    root.replaceChildren(
+      h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'History')),
+      h('div', { class: 'oc-notice oc-notice--danger ms-inline-notice', role: 'alert' }, icon('danger'), h('span', { class: 'oc-notice__text' }, messageOf(e))),
+    );
+  }
+
   function render() {
     if (!root || !loaded) return;
     const entry = openId ? model.find(openId) : null;
@@ -156,7 +170,9 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       model.load().then(() => {
         loaded = true;
         render();
-      }).catch(fail);
+      }).catch((e) => {
+        if (root === el) renderFailed(e);
+      });
     },
     unmount() {
       // ctx stays: an Undo still in flight finishes against the store after leaving.

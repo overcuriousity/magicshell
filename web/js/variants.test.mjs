@@ -142,3 +142,11 @@ test('a question with a different type is not compared', () => {
   const out = compare(a, outcome({ angry: { type: 'noul', noul: 0.1 } }), b, outcome({ angry: { type: 'score', score: 0, probabilities: [1, 0], confidence: 1 } }));
   assert.equal(out.angry, null);
 });
+
+test('a question named __proto__ is compared like any other', () => {
+  const r = { state: '', questions: [{ key: '__proto__', type: 'noul', text: 'Odd?' }] };
+  const out = (noul) => JSON.parse(`{"answers":{"__proto__":{"type":"noul","noul":${noul}}}}`);
+  const diff = compare(r, out(0.75), r, out(0.25));
+  assert.deepEqual(Object.keys(diff), ['__proto__']);
+  assert.equal(diff.__proto__.pickChanged, true);
+});

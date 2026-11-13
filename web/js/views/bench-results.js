@@ -58,7 +58,7 @@ function block(qa, state, d, variant) {
 
 const ms = (v) => `${Math.round(v)} ms`;
 
-export function runLine(result, mode) {
+function runLine(result, mode) {
   const parts = [ms(result.totalMs)];
   if (mode !== 'pages' && typeof result.upstreamMs === 'number') parts.push(`${ms(result.upstreamMs)} at the model`);
   parts.push(`${result.inputTokens} tokens`);

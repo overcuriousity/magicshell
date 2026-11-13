@@ -2,13 +2,15 @@
 // The working A run is kept in sessionStorage so it survives sign-in and reload.
 import { compare, VARIANTS } from '../variants.js';
 import { createRunOnce } from './run-once.js';
+import { sessionStore } from './session.js';
 
 export const SESSION_KEY = 'magicshell.bench';
 
-// A run with its result, left by History for the bench that mounts next (the result is not kept
-// in sessionStorage, so it cannot ride along any other way). Taken once.
+// A run (with its result, from History) left for the bench that mounts next, by every view that
+// hands one over: Setups, History and the guided view. In memory, so it works without storage.
+// Taken once.
 let pending = null;
-export const queueRun = (run, result) => { pending = { run, result }; };
+export const queueRun = (run, result = null) => { pending = { run, result }; };
 export function takeRun() {
   const taken = pending;
   pending = null;
@@ -18,13 +20,6 @@ export function takeRun() {
 const copy = (v) => JSON.parse(JSON.stringify(v));
 const emptyRun = () => ({ state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
 
-function defaultSession() {
-  try {
-    return globalThis.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
-}
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const looksLikeRun = (r) =>
@@ -114,7 +109,7 @@ export function createBenchModel({
   uuid = () => crypto.randomUUID(),
   mode = 'pages',
   navigate = () => {},
-  session = defaultSession(),
+  session = sessionStore(),
 }) {
   const edits = runEdits(uuid);
   const listeners = new Set();

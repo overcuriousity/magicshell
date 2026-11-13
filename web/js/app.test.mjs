@@ -47,16 +47,38 @@ const fakeEl = (tag) => {
 };
 
 const { createAskView } = await import('./app.js');
+const { takeRun } = await import('./views/bench-model.js');
+const { loadable, takeGuidedRun } = await import('./views/guided-model.js');
 
-const fakeSide = (run) => {
+// A side that keeps a draft and takes what is handed to it the way the real views do: the bench
+// takes any run, the guide only one it can ask (and keeps its own draft otherwise).
+// The guide also hands nothing back right after refusing a run, until something changes.
+const fakeSide = (draft, take, canTake = () => true) => {
   const seen = [];
-  return { seen, mount(_el, ctx) { seen.push(ctx.carry); this.ctx = ctx; }, unmount() {}, currentRun: () => run };
+  let refused = false;
+  const side = {
+    seen,
+    draft,
+    mount(_el, ctx) {
+      const handed = take ? take() : null;
+      refused = Boolean(handed) && !canTake(handed);
+      seen.push(refused ? 'refused' : handed);
+      if (handed && !refused) side.draft = handed;
+      side.ctx = ctx;
+    },
+    unmount() {},
+    currentRun: () => (refused ? null : side.draft),
+  };
+  return side;
 };
+const benchSide = (draft) => fakeSide(draft, () => takeRun()?.run ?? null);
+const guidedSide = (draft) => fakeSide(draft, takeGuidedRun, loadable);
+const at = (id) => ({ route: id ? { view: 'ask', id } : { view: 'ask' } });
 
 test('the guided view opens at #/ask and the bench at #/ask/bench', () => {
   globalThis.document = { createElement: fakeEl };
-  const guided = fakeSide(null);
-  const bench = fakeSide(null);
+  const guided = guidedSide(null);
+  const bench = benchSide(null);
   const ask = createAskView({ guided, bench });
   const slot = fakeEl('div');
   ask.mount({}, { route: { view: 'ask' }, modeSwitch: slot, navigate() {} });
@@ -74,54 +96,97 @@ test('the guided view opens at #/ask and the bench at #/ask/bench', () => {
 test('switching carries the entered run to the other side, once', () => {
   globalThis.document = { createElement: fakeEl };
   const run = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
-  const guided = fakeSide(run);
-  const bench = fakeSide({ state: '', questions: [] });
+  const guided = guidedSide(run);
+  const bench = benchSide(null);
   const ask = createAskView({ guided, bench });
   const slot = fakeEl('div');
-  ask.mount({}, { route: { view: 'ask' }, modeSwitch: slot, navigate() {} });
+  ask.mount({}, { ...at(), modeSwitch: slot, navigate() {} });
   slot.children[0].click();
   ask.unmount();
-  ask.mount({}, { route: { view: 'ask', id: 'bench' }, modeSwitch: slot, navigate() {} });
+  ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
   assert.deepEqual(bench.seen, [run]);
   ask.unmount();
-  ask.mount({}, { route: { view: 'ask', id: 'bench' }, modeSwitch: slot, navigate() {} });
+  ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
   assert.deepEqual(bench.seen, [run, null]);
 });
 
-test('something else in the guide opens the bench with the run it hands over', () => {
+test('a round trip bench, guide, bench keeps both drafts', () => {
   globalThis.document = { createElement: fakeEl };
-  const guided = fakeSide(null);
-  const bench = fakeSide(null);
+  const several = {
+    state: 'Ticket.',
+    questions: [{ key: 'urgent', type: 'noul', text: 'Urgent?' }, { key: 'angry', type: 'noul', text: 'Angry?' }],
+  };
+  const guideDraft = { state: 'Context.', questions: [{ key: 'q1', type: 'noul', text: 'Mine?' }] };
+  for (const draft of [null, guideDraft]) {
+    const guided = guidedSide(draft);
+    const bench = benchSide(several);
+    const ask = createAskView({ guided, bench });
+    const slot = fakeEl('div');
+    ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
+    slot.children[0].click();
+    ask.unmount();
+    // Several questions cannot be asked in the guide: it keeps its own draft.
+    ask.mount({}, { ...at(), modeSwitch: slot, navigate() {} });
+    assert.deepEqual(guided.seen, ['refused']);
+    assert.equal(guided.draft, draft);
+    slot.children[0].click();
+    ask.unmount();
+    // Straight back: nothing is handed over, the bench keeps its several questions.
+    ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
+    assert.deepEqual(bench.seen, [null, null]);
+    assert.equal(bench.draft, several);
+    ask.unmount();
+  }
+});
+
+test('switching to the bench from an empty guide leaves the bench as it was', () => {
+  globalThis.document = { createElement: fakeEl };
+  const kept = { state: '', questions: [{ key: 'a', type: 'noul', text: 'A?' }, { key: 'b', type: 'noul', text: 'B?' }] };
+  const guided = guidedSide(null);
+  const bench = benchSide(kept);
+  const ask = createAskView({ guided, bench });
+  const slot = fakeEl('div');
+  ask.mount({}, { ...at(), modeSwitch: slot, navigate() {} });
+  slot.children[0].click();
+  ask.unmount();
+  ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
+  assert.deepEqual(bench.seen, [null]);
+  assert.equal(bench.draft, kept);
+});
+
+test('something else in the guide opens the bench as it was left', () => {
+  globalThis.document = { createElement: fakeEl };
+  const guided = guidedSide(null);
+  const bench = benchSide(null);
   const ask = createAskView({ guided, bench });
   const went = [];
-  ask.mount({}, { route: { view: 'ask' }, modeSwitch: fakeEl('div'), navigate: (h) => went.push(h) });
-  const empty = { state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] };
-  guided.ctx.toBench(empty);
+  ask.mount({}, { ...at(), modeSwitch: fakeEl('div'), navigate: (h) => went.push(h) });
+  guided.ctx.toBench();
   assert.deepEqual(went, ['#/ask/bench']);
   ask.unmount();
-  ask.mount({}, { route: { view: 'ask', id: 'bench' }, modeSwitch: fakeEl('div'), navigate() {} });
-  assert.deepEqual(bench.seen, [empty]);
+  ask.mount({}, { ...at('bench'), modeSwitch: fakeEl('div'), navigate() {} });
+  assert.deepEqual(bench.seen, [null]);
 });
 
 test('a modifier-click on the switch carries nothing', () => {
   globalThis.document = { createElement: fakeEl };
   const run = { state: '', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
-  const guided = fakeSide(run);
-  const bench = fakeSide(null);
+  const guided = guidedSide(run);
+  const bench = benchSide(null);
   const ask = createAskView({ guided, bench });
   const slot = fakeEl('div');
-  ask.mount({}, { route: { view: 'ask' }, modeSwitch: slot, navigate() {} });
+  ask.mount({}, { ...at(), modeSwitch: slot, navigate() {} });
   slot.children[0].click({ ctrlKey: true });
   slot.children[0].click({ button: 1 });
   ask.unmount();
-  ask.mount({}, { route: { view: 'ask', id: 'bench' }, modeSwitch: slot, navigate() {} });
+  ask.mount({}, { ...at('bench'), modeSwitch: slot, navigate() {} });
   assert.deepEqual(bench.seen, [null]);
 });
 
 test('without a saved endpoint Ask points to Settings instead of the guide', () => {
   globalThis.document = { createElement: fakeEl };
-  const guided = fakeSide(null);
-  const bench = fakeSide(null);
+  const guided = guidedSide(null);
+  const bench = benchSide(null);
   const missing = fakeSide(null);
   const ask = createAskView({ guided, bench, missing });
   ask.mount({}, { route: { view: 'ask' }, modeSwitch: fakeEl('div'), navigate() {}, needsEndpoint: true });

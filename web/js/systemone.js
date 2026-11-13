@@ -83,7 +83,7 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // level index (the endpoint sorts a choice's probabilities by name).
 export function parseResponse(body, run) {
   if (!isObject(body) || !isObject(body.answers)) throw new Error(BAD_ANSWER);
-  const answers = {};
+  const answers = Object.create(null);
   for (const q of run.questions) {
     const a = has(body.answers, q.key) ? body.answers[q.key] : undefined;
     if (!isObject(a) || a.type !== q.type) throw new Error(BAD_ANSWER);
@@ -130,7 +130,7 @@ export function checkOutcome(body, run) {
     if (!Array.isArray(v) || v.length !== n || !v.every(isNumber)) throw new Error(BAD_ANSWER);
     return v;
   };
-  const answers = {};
+  const answers = Object.create(null);
   for (const q of run.questions) {
     const a = has(body.answers, q.key) ? body.answers[q.key] : undefined;
     if (!isObject(a) || a.type !== q.type) throw new Error(BAD_ANSWER);

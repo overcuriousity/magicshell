@@ -1,13 +1,5 @@
 // Setups and history on this app's own server (modes 2 and 3).
-import { RunError } from './run-error.js';
-
-const OFFLINE = 'The server cannot be reached. Check your connection and try again.';
-
-function sentence(text, status) {
-  const t = text.trim();
-  if (t === '' || t.startsWith('<')) return `The server answered with an error (${status}). Try again later.`;
-  return t;
-}
+import { OFFLINE, RunError, serverSentence as sentence } from './run-error.js';
 
 export function createServerStore(fetchFn) {
   async function call(method, url, body) {

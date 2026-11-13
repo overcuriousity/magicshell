@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::Json;
@@ -9,7 +10,7 @@ use axum::http::request::Parts;
 use super::ApiState;
 use super::auth::SignedIn;
 use crate::error::AppError;
-use crate::kit::security::ClientIp;
+use crate::kit::security::{ClientIp, client_key};
 use crate::systemone::Run;
 use crate::upstream::Reply;
 
@@ -25,8 +26,13 @@ impl FromRequestParts<Arc<ApiState>> for Caller {
             return Ok(Self(format!("user:{}", user.id)));
         }
         let ClientIp(ip) = ClientIp::from_request_parts(parts, st).await?;
-        Ok(Self(format!("ip:{ip}")))
+        Ok(Self(ip_caller(ip)))
     }
+}
+
+/// An open-mode caller: the client address, an IPv6 client by its /64.
+fn ip_caller(ip: IpAddr) -> String {
+    format!("ip:{}", client_key(ip))
 }
 
 pub async fn post(
@@ -46,4 +52,18 @@ pub async fn post(
     })?;
     run.validate()?;
     Ok(Json(st.upstream.run(&run).await?))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ipv6_callers_in_one_64_are_one_caller() {
+        let a = ip_caller("2001:db8:1:2::1".parse().unwrap());
+        assert_eq!(a, ip_caller("2001:db8:1:2:dead:beef:0:7".parse().unwrap()));
+        assert_ne!(a, ip_caller("2001:db8:1:3::1".parse().unwrap()));
+        assert_ne!(ip_caller("192.0.2.1".parse().unwrap()), ip_caller("192.0.2.2".parse().unwrap()));
+    }
 }

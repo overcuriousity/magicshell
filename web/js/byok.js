@@ -17,7 +17,7 @@ export function loadByok(storage) {
 }
 
 // The values as they are kept, or the sentence that refuses them.
-export function checkByok({ endpoint, key, model }) {
+function checkByok({ endpoint, key, model }) {
   const checked = normaliseEndpoint(endpoint);
   if (checked.error) return { error: checked.error };
   const name = String(model ?? '').trim();
@@ -37,9 +37,4 @@ export function applyByok(storage, values) {
     kept = false;
   }
   return { value: checked.value, kept };
-}
-
-// null when the values are fine (kept if the browser allows), else the sentence that refuses them.
-export function saveByok(storage, values) {
-  return applyByok(storage, values).error ?? null;
 }

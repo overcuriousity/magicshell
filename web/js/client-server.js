@@ -1,18 +1,10 @@
 // Modes 2 and 3: the browser talks to this app's own server.
-import { RunError } from './run-error.js';
+import { OFFLINE, RunError, serverSentence as sentence } from './run-error.js';
 import { checkOutcome } from './systemone.js';
 
 export { RunError };
 
-const OFFLINE = 'The server cannot be reached. Check your connection and try again.';
 const KINDS = { 401: 'auth', 413: 'validation', 422: 'validation', 429: 'limit' };
-
-// The server's one-sentence body, or a fallback when it is empty or a web page.
-function sentence(text, status) {
-  const t = text.trim();
-  if (t === '' || t.startsWith('<')) return `The server answered with an error (${status}). Try again later.`;
-  return t;
-}
 
 function send(fetchFn, url, body) {
   const init = { method: 'POST' };
@@ -35,10 +27,13 @@ function wire(run) {
   };
 }
 
+// The request body for a run, as this client sends it.
+export const requestText = (run) => JSON.stringify(wire(run));
+
 export function createServerClient(fetchFn, now = () => performance.now()) {
   return {
     async run(run) {
-      const request = JSON.stringify(wire(run));
+      const request = requestText(run);
       const started = now();
       const reply = await send(fetchFn, 'api/run', request);
       const response = await reply.text().catch(() => '');

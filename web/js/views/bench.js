@@ -1,6 +1,8 @@
 // The bench: the situation and question cards on one side, results on the other (side by side from
 // 90rem). Typing edits the model quietly; structural changes rebuild the form and focus finds its way
 // back by data-fid. Results always come from the run that produced them (state.ranA / ranB).
+import { LIMITS } from '../limits.js';
+import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -126,8 +128,11 @@ export function createBenchView(deps = {}) {
       hosts.saveAs.replaceChildren(saveAsControl());
       hosts.saveAs.querySelector('button')?.focus({ preventScroll: true });
     };
+    // One save at a time: a second Enter or click while the first is on its way does nothing.
+    let saving = false;
     const submit = async (e) => {
       e.preventDefault();
+      if (saving) return;
       const setup = fromRun(model.state.a, input.value.trim());
       const text = validateSetup(setup);
       if (text) {
@@ -136,12 +141,15 @@ export function createBenchView(deps = {}) {
         hosts.saveAs.querySelector('input').focus({ preventScroll: true });
         return;
       }
+      saving = true;
       try {
         await store.saveSetup(setup);
       } catch (err) {
-        hosts.saveAs.replaceChildren(saveAsControl(true, err?.message ?? 'The setup could not be saved. Try again.'));
+        hosts.saveAs.replaceChildren(saveAsControl(true, messageOf(err)));
         hosts.saveAs.querySelector('input').value = input.value;
         return;
+      } finally {
+        saving = false;
       }
       setups = [...setups.filter((s) => s.id !== setup.id), setup];
       hosts.picker.replaceChildren(setupPicker());
@@ -163,7 +171,7 @@ export function createBenchView(deps = {}) {
       situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v))),
       h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)))),
       h('div', { class: 'oc-row' },
-        h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= 8, onclick: () => model.addQuestion('noul') },
+        h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= LIMITS.questions, onclick: () => model.addQuestion('noul') },
           icon('plus'), 'Add question'),
       ),
     );
@@ -321,8 +329,7 @@ export function createBenchView(deps = {}) {
       deps = { ...deps, mode: ctx.mode, notify: ctx.notify };
       store = ctx.store;
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
-      // A run handed over by the guided view replaces the one kept from last time.
-      if (ctx.carry) model.loadRun(ctx.carry);
+      // A run handed over (by the guide, Setups or History) replaces the one kept from last time.
       const queued = takeRun();
       if (queued) model.loadRun(queued.run, queued.result);
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());

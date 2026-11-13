@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RunError } from '../run-error.js';
-import { createGuidedModel, SESSION_KEY } from './guided-model.js';
+import { createGuidedModel, loadable, queueGuidedRun, SESSION_KEY, takeGuidedRun } from './guided-model.js';
 
 const memory = () => {
   const data = new Map();
@@ -332,4 +332,37 @@ test('subscribers hear every change', () => {
   off();
   model.back();
   assert.equal(heard, 2);
+});
+
+test('a run the guide cannot take leaves its draft alone', () => {
+  const { model } = make();
+  model.setQuestion('Mine?');
+  model.setContext('Kept.');
+  const two = { state: 'x', questions: [{ key: 'a', type: 'noul', text: 'A?' }, { key: 'b', type: 'noul', text: 'B?' }] };
+  assert.equal(loadable(two), false);
+  assert.equal(model.load(two), false);
+  assert.equal(model.state.question, 'Mine?');
+  assert.equal(model.state.context, 'Kept.');
+});
+
+test('the guide holds something once a question, an option or context is entered', () => {
+  const { model } = make();
+  assert.equal(model.holdsSomething(), false);
+  model.setKind('score');
+  assert.equal(model.holdsSomething(), false);
+  model.setContext('  ');
+  assert.equal(model.holdsSomething(), false);
+  model.setContext('Rain.');
+  assert.equal(model.holdsSomething(), true);
+  model.setContext('');
+  model.setKind('choice');
+  model.addOption('Red');
+  assert.equal(model.holdsSomething(), true);
+});
+
+test('a run queued for the guide is taken once', () => {
+  const run = { state: '', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
+  queueGuidedRun(run);
+  assert.equal(takeGuidedRun(), run);
+  assert.equal(takeGuidedRun(), null);
 });

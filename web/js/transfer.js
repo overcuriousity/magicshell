@@ -1,5 +1,6 @@
 // Setup validation, export and import of setup files.
 import { LIMITS } from './limits.js';
+import { RunError } from './run-error.js';
 import { validateRun } from './systemone.js';
 
 const NOT_SETUPS = 'This file does not hold magicshell setups.';
@@ -48,7 +49,9 @@ function usable(raw) {
       typeof q.key === 'string' &&
       typeof q.text === 'string' &&
       ['choice', 'score', 'noul'].includes(q.type) &&
-      (q.options === undefined || (Array.isArray(q.options) && q.options.every((o) => isObject(o) && typeof o.name === 'string'))) &&
+      (q.options === undefined ||
+        (Array.isArray(q.options) &&
+          q.options.every((o) => isObject(o) && typeof o.name === 'string' && (o.description === undefined || typeof o.description === 'string')))) &&
       (q.levels === undefined || (Array.isArray(q.levels) && q.levels.every((l) => isObject(l) && typeof l.text === 'string'))),
   );
 }
@@ -58,9 +61,9 @@ export function importSetups(text, uuid = () => crypto.randomUUID()) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(NOT_SETUPS);
+    throw new RunError(NOT_SETUPS, 'validation');
   }
-  if (!isObject(data) || data.magicshell !== 2 || !Array.isArray(data.setups)) throw new Error(NOT_SETUPS);
+  if (!isObject(data) || data.magicshell !== 2 || !Array.isArray(data.setups)) throw new RunError(NOT_SETUPS, 'validation');
   const setups = [];
   let skipped = 0;
   for (const raw of data.setups) {

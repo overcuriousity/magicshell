@@ -9,12 +9,11 @@ import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 import { answerResult, guidedVerdict } from '../ui/results.js';
-import { createGuidedModel } from './guided-model.js';
+import { createGuidedModel, takeGuidedRun } from './guided-model.js';
 
 const SPINNER_AFTER_MS = 400;
-const EMPTY_RUN = () => ({ state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
 
-export const ASK_KINDS = [
+const ASK_KINDS = [
   { id: 'noul', label: 'a yes-or-no question', hint: 'The model answers yes or no' },
   { id: 'choice', label: 'a choice between options', hint: 'You name the options, it picks one' },
   { id: 'score', label: 'for a rating', hint: 'A rating on a scale' },
@@ -41,6 +40,7 @@ export function createGuidedView() {
   let lastBusy = false;
   let lastStep = null;
   let shownError = null;
+  let refused = false;
   const hosts = {};
 
   const typing = (fn) => (...args) => {
@@ -219,7 +219,7 @@ export function createGuidedView() {
     const back = state.step === 1 ? null : button('Back', () => model.back(), { fid: 'back', disabled: state.busy });
     if (state.step === 3) return [back, button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy })];
     const next = () => {
-      if (state.step === 1 && other) ctx.toBench(EMPTY_RUN());
+      if (state.step === 1 && other) ctx.toBench();
       else model.next();
     };
     return [back, button('Next', next, { primary: true, fid: 'next' })];
@@ -311,18 +311,26 @@ export function createGuidedView() {
       shownError = null;
       root.classList.add('ms-guide');
       model = createGuidedModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
-      // A run handed over by the bench: one question lands at step 2, anything else starts over.
-      if (ctx.carry && !model.load(ctx.carry)) model.startOver();
+      // A run handed over (by the bench or History): one question lands at step 2; any other
+      // run cannot be asked here, and the guide keeps its own draft.
+      // `refused` until the next edit: switching straight back then hands nothing to the bench,
+      // so a round trip leaves both drafts as they were.
+      const handed = takeGuidedRun();
+      refused = Boolean(handed) && !model.load(handed);
       hosts.body = h('div', { class: 'ms-guide__body' });
       hosts.error = h('div', { class: 'ms-error-host' });
       hosts.actions = h('div', { class: 'oc-row ms-guide__actions' });
       root.append(h('section', { class: 'ms-guide__panel', 'aria-label': 'Ask' }, hosts.body, hosts.error, hosts.actions));
       root.addEventListener('keydown', onKey);
-      off = model.subscribe((s) => render(s));
+      off = model.subscribe((s) => {
+        refused = false;
+        render(s);
+      });
       render(model.state);
     },
-    // The setup as entered, for the bench when the user switches over.
-    currentRun: () => (model ? model.toRun() : null),
+    // The setup as entered, for the bench when the user switches over; null when nothing was, or
+    // when the bench's run was refused and nothing changed since.
+    currentRun: () => (model && !refused && model.holdsSomething() ? model.toRun() : null),
     unmount() {
       off?.();
       clearTimeout(spinnerTimer);

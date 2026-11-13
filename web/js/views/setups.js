@@ -1,12 +1,14 @@
 // Setups: built-in ones first, then the user's by name. Own setups can be edited (name, sample
 // situation, question cards), deleted with an undo, exported and imported. From 90rem the list and
 // the editor sit side by side; below, the editor replaces the list.
+import { LIMITS } from '../limits.js';
+import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { exportSetups, importSetups, validateSetup } from '../transfer.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { questionCards } from './bench-cards.js';
-import { createBenchModel, runEdits } from './bench-model.js';
+import { queueRun, runEdits } from './bench-model.js';
 import { duplicate } from './setup-model.js';
 
 const copy = (v) => JSON.parse(JSON.stringify(v));
@@ -39,7 +41,7 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
   const edits = runEdits(uuid);
 
   const notify = (text, opts) => ctx.notify(text, opts);
-  const fail = (e) => notify(e?.message ?? 'Something went wrong. Try again.', { kind: 'danger' });
+  const fail = (e) => notify(messageOf(e), { kind: 'danger' });
 
   async function reload() {
     own = (await ctx.store.listSetups()).slice().sort(byName);
@@ -47,8 +49,8 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
     if (root) renderList();
   }
 
-  async function openInBench(setup) {
-    createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate }).loadSetup(setup);
+  function openInBench(setup) {
+    queueRun({ state: setup.sampleState ?? '', questions: copy(setup.questions) });
     ctx.navigate('#/ask/bench');
   }
 
@@ -211,7 +213,7 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
     try {
       await ctx.store.saveSetup(setup);
     } catch (e) {
-      setError(e?.message ?? 'The setup could not be saved. Try again.');
+      setError(messageOf(e));
       return;
     }
     if (!root) return;
@@ -239,7 +241,7 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
           ),
           h('div', { class: 'ms-cards' }, questionCards(draft, ops())),
           h('div', { class: 'oc-row' },
-            h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: draft.questions.length >= 8, onclick: () => rebuild(() => draft.questions.push(edits.newQuestion(draft, 'noul'))) },
+            h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: draft.questions.length >= LIMITS.questions, onclick: () => rebuild(() => draft.questions.push(edits.newQuestion(draft, 'noul'))) },
               icon('plus'), 'Add question'),
           ),
         ),

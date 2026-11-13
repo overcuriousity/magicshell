@@ -57,8 +57,6 @@ const PATHS = {
   upload: [p('M12 3v12'), p('m17 8-5-5-5 5'), p('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4')],
 };
 
-export const ICON_NAMES = Object.keys(PATHS);
-
 function svgEl(tag, attrs) {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
