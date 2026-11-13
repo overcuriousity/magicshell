@@ -197,3 +197,10 @@ test('the sentence for a trimmed history names how many entries went', async () 
   assert.equal(trimmedSentence(1), 'This browser is out of room, so History removed its oldest entry. It keeps making room this way.');
   assert.equal(trimmedSentence(3), 'This browser is out of room, so History removed its 3 oldest entries. It keeps making room this way.');
 });
+
+test('services carry the why limit in accounts mode only', async () => {
+  const { servicesFor } = await import('./app.js');
+  const why = { maxWords: 300 };
+  assert.deepEqual(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why }).why, why);
+  assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why }).why, null);
+});

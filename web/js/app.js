@@ -278,6 +278,12 @@ const NO_COOKIE = 'This browser did not keep the sign-in. Open the app over http
 const ENTERED = ['magicshell.bench', 'magicshell.guided'];
 const NO_SERVER = 'This app needs its magicshell server. Start it and reload the page.';
 
+// What every view gets from the server's config; Why? exists in accounts mode only.
+export function servicesFor(config) {
+  const { mode } = config;
+  return { mode, model: config.model, user: config.user, version: config.version, why: mode === 'accounts' ? config.why : null };
+}
+
 // Learns the mode and wires the client and store for it; Sign in changes them in place. Without
 // its server the app shows one line and nothing else.
 async function boot(shell) {
@@ -291,7 +297,7 @@ async function boot(shell) {
   }
   const storage = localStore();
   const kept = storage ?? memoryStorage();
-  const services = { mode, model: config.model, user: config.user, version: config.version };
+  const services = servicesFor(config);
   let shellApi = null;
   // The not-saving notice, once per page: at boot, or when storage stops taking writes later.
   let warned = false;

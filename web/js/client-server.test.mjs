@@ -100,3 +100,19 @@ test('only the server\'s own sentence is shown; a proxy\'s body is replaced', as
     assert.equal(serverSentence(body, 502), fallback, body);
   }
 });
+
+test('why posts the run to api/why and returns what run returns', async () => {
+  const body = JSON.stringify({ answers: GOOD_ANSWERS, model: 'm', inputTokens: 7, upstreamMs: 321 });
+  const seenRun = [];
+  const seenWhy = [];
+  const viaRun = await createServerClient(stub(200, body, seenRun), () => 0).run(run);
+  const viaWhy = await createServerClient(stub(200, body, seenWhy), () => 0).why(run);
+  assert.equal(seenWhy[0].url, 'api/why');
+  assert.equal(seenWhy[0].init.body, seenRun[0].init.body);
+  assert.deepEqual(viaWhy, viaRun);
+});
+
+test('why maps 429 to kind limit and 401 to auth', async () => {
+  await fails(createServerClient(stub(429, 'Slow down.')).why(run), 'limit', 'Slow down.');
+  await fails(createServerClient(stub(401, 'Sign in first.')).why(run), 'auth', 'Sign in first.');
+});
