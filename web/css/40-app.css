@@ -308,3 +308,28 @@
   .ms-guide__actions > .oc-btn--primary { max-width: none; }
   .ms-guide__actions > .oc-btn:not(.oc-btn--primary) { flex: 0 0 6rem; }
 }
+
+/* Setups: rows with their questions; the editor replaces the list below 90rem. */
+.ms-setup-list { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: flex; flex-direction: column; }
+.ms-setup-row { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
+.ms-setup-row__name { font-size: var(--text-body); font-weight: 600; margin: 0; }
+.ms-qlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.ms-qlist li { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.ms-qlist__text { color: var(--color-fg-secondary); overflow-wrap: anywhere; }
+.ms-setup-row__acts { flex-wrap: wrap; }
+.ms-empty { margin: var(--space-4) 0 0; color: var(--color-fg-secondary); }
+.ms-editor-host:empty { display: none; }
+.ms-save-as { display: flex; flex-direction: column; gap: var(--space-2); }
+.ms-save-as .oc-input { width: 12rem; }
+@container app (max-width: 89.99rem) {
+  .ms-editing > .ms-list { display: none; }
+}
+@container app (min-width: 90rem) {
+  .ms-back { display: none; }
+}
+.ms-head-tools { flex-wrap: wrap; min-width: 0; }
+.ms-save-as .oc-row { flex-wrap: wrap; }
+@container app (max-width: 47.99rem) {
+  .ms-save-as .oc-input { width: 100%; }
+  .ms-save-as .oc-row > .oc-input { flex: 1 1 100%; }
+}

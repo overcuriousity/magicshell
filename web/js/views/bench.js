@@ -5,8 +5,10 @@ import { BUILTIN } from '../setups-builtin.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
+import { validateSetup } from '../transfer.js';
 import { VARIANTS } from '../variants.js';
 import { createBenchModel } from './bench-model.js';
+import { fromRun } from './setup-model.js';
 import { questionCards } from './bench-cards.js';
 import { colorSlots, resultsSection, variantLabel } from './bench-results.js';
 
@@ -69,6 +71,7 @@ export function createBenchView(deps = {}) {
   let spinnerTimer = null;
   let lastBusy = null;
   let setups = [...BUILTIN];
+  let store = null;
   const hosts = {};
 
   // Typing goes through here: the model changes, the form is left alone.
@@ -108,6 +111,51 @@ export function createBenchView(deps = {}) {
     const control = picker(select);
     (control.querySelector?.('button') ?? control).setAttribute('data-fid', 'setup');
     return control;
+  }
+
+  // "Save as setup": a name field and Save appear in place of the button.
+  function saveAsControl(open = false, problem = null) {
+    if (!open) {
+      return h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'save-as', onclick: () => {
+        hosts.saveAs.replaceChildren(saveAsControl(true));
+        hosts.saveAs.querySelector('input')?.focus({ preventScroll: true });
+      } }, 'Save as setup');
+    }
+    const input = h('input', { type: 'text', class: 'oc-input', 'aria-label': 'Setup name', 'data-fid': 'save-as-name', autocomplete: 'off' });
+    const close = () => {
+      hosts.saveAs.replaceChildren(saveAsControl());
+      hosts.saveAs.querySelector('button')?.focus({ preventScroll: true });
+    };
+    const submit = async (e) => {
+      e.preventDefault();
+      const setup = fromRun(model.state.a, input.value.trim());
+      const text = validateSetup(setup);
+      if (text) {
+        hosts.saveAs.replaceChildren(saveAsControl(true, text));
+        hosts.saveAs.querySelector('input').value = input.value;
+        hosts.saveAs.querySelector('input').focus({ preventScroll: true });
+        return;
+      }
+      try {
+        await store.saveSetup(setup);
+      } catch (err) {
+        hosts.saveAs.replaceChildren(saveAsControl(true, err?.message ?? 'The setup could not be saved. Try again.'));
+        hosts.saveAs.querySelector('input').value = input.value;
+        return;
+      }
+      setups = [...setups.filter((s) => s.id !== setup.id), setup];
+      hosts.picker.replaceChildren(setupPicker());
+      close();
+      deps.notify?.(`Saved '${setup.name}'`);
+    };
+    return h('form', { class: 'ms-save-as', onsubmit: submit },
+      h('div', { class: 'oc-row' },
+        input,
+        h('button', { type: 'submit', class: 'oc-btn' }, 'Save'),
+        h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Cancel', 'data-oc-tip': 'Cancel', onclick: close }, icon('x')),
+      ),
+      problem ? errorNotice(problem) : null,
+    );
   }
 
   function renderForm(state) {
@@ -271,10 +319,12 @@ export function createBenchView(deps = {}) {
       setups = [...BUILTIN];
       root.classList.add('oc-columns--split', 'ms-bench');
       deps = { ...deps, mode: ctx.mode, notify: ctx.notify };
+      store = ctx.store;
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
       // A run handed over by the guided view replaces the one kept from last time.
       if (ctx.carry) model.loadRun(ctx.carry);
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());
+      hosts.saveAs = h('div', { class: 'ms-save-as-host' }, saveAsControl());
       hosts.form = h('div', { class: 'oc-stack' });
       hosts.errorA = h('div', { class: 'ms-error-host' });
       hosts.errorB = h('div', { class: 'ms-error-host' });
@@ -286,7 +336,7 @@ export function createBenchView(deps = {}) {
       hosts.results = h('div', {});
       root.append(
         h('section', { class: 'ms-setup', 'aria-label': 'Setup' },
-          h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'Bench'), hosts.picker),
+          h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'Bench'), h('div', { class: 'oc-row ms-head-tools' }, hosts.picker, hosts.saveAs)),
           hosts.form,
           hosts.errorA,
           hosts.actions,
