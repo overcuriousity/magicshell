@@ -5,6 +5,7 @@
 // only if web/css/40-app.css gives it the --color-border-control outline in that theme: an outline is one
 // declaration on :root, either a value for both themes or light-dark(light, dark), which follows the
 // color-scheme both dark token blocks set. Dark blocks in 40-app.css, if any come back, must agree.
+// Primary text on the strongest Why? shade (each diverging colour at 52 % into bg-elevated) needs 4.5:1.
 // Exits 1 naming each failure.
 // Usage: node scripts/check-contrast.mjs [web/css]
 import fs from 'node:fs';
@@ -18,6 +19,9 @@ const appCss = fs.readFileSync(path.join(dir, '40-app.css'), 'utf8');
 const SOFT = { share: 0.12, into: '--color-bg-elevated', css: '--k-soft: color-mix(in srgb, var(--k) 12%, var(--color-bg-elevated));' };
 const EDGE = { share: 0.45, into: '--color-fg-primary', css: '--k-edge: color-mix(in srgb, var(--k) 45%, var(--color-fg-primary));' };
 const OUTLINE = '--color-border-control';
+// Why?: the strongest word shade, a diverging colour into the card behind primary text.
+const WHY_TOP = { share: 0.52, into: '--color-bg-elevated', css: '.ms-why--s5 { background: color-mix(in srgb, var(--k) 52%, var(--color-bg-elevated)); }' };
+const WHY_DIRS = [['ms-why--towards', '--chart-div-pos'], ['ms-why--away', '--chart-div-neg']];
 
 const KEYS = [
   ...Array.from({ length: 8 }, (_, i) => [`opt-${i + 1}`, `--chart-cat-${i + 1}`]),
@@ -71,7 +75,7 @@ const tok = themes(tokensCss, HEX);
 for (const k of new Set([...Object.keys(tok.media), ...Object.keys(tok.attr)])) {
   if (tok.media[k] !== tok.attr[k]) errors.push(`tokens: the two dark blocks differ at ${k}`);
 }
-for (const rule of [SOFT, EDGE]) {
+for (const rule of [SOFT, EDGE, WHY_TOP]) {
   if (!appCss.includes(rule.css)) errors.push(`40-app.css: expected "${rule.css}"`);
 }
 
@@ -143,6 +147,9 @@ for (const name of ['light', 'dark']) {
     if (hasOutline) outlined.push(`${cls} ${ratio.toFixed(2)}`);
   }
   need('the bar outline (border-control) on bg-base', c(OUTLINE), base, 3);
+  for (const [cls, token] of WHY_DIRS) {
+    need(`fg-primary on the strongest ${cls} shade`, c('--color-fg-primary'), mix(c(token), WHY_TOP.share, c(WHY_TOP.into)), 4.5);
+  }
   notes.push(`${name}: outlined bars: ${outlined.join(', ') || 'none'}`);
 }
 

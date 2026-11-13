@@ -141,20 +141,38 @@ function signedNumber(value, text) {
   return value > 0 ? `+${text}` : `${MINUS}${text.replace('-', '')}`;
 }
 
+// A measured value as shown: "47 %" for choice and yes/no, "2.2" for a score.
+export const valueText = (question, v) => (question.type === 'score' ? scoreText(v) : pct(v));
+
+// A change as shown: "−26" (percentage points) or "+0.4" (score).
+export function changeText(question, delta) {
+  if (question.type === 'score') return signedNumber(delta, delta.toFixed(1));
+  const points = Math.round(delta * 100);
+  return signedNumber(points, String(points));
+}
+
+// What the pick becomes without the word: an option name, a level text, Yes or No.
+export function flipName(question, flip) {
+  if (question.type === 'choice') return trimmed(question.options[flip].name);
+  if (question.type === 'score') return question.levels[flip].text;
+  return flip ? 'Yes' : 'No';
+}
+
+// The name of what is measured: the picked option, "score" or "yes".
+export function measuredName(question, pick) {
+  if (question.type === 'choice') return trimmed(question.options[pick].name);
+  return question.type === 'score' ? 'score' : 'yes';
+}
+
+const FLIP_LEAD = { choice: 'pick', score: 'nearest', noul: 'answer' };
+
 // The numbers line of one word, e.g. "without it: sushi 47 % → 21 % (−26), pick becomes pizza".
 export function describe(question, info) {
-  if (question.type === 'score') {
-    const change = signedNumber(info.delta, info.delta.toFixed(1));
-    const head = `without it: ${scoreText(info.before)} → ${scoreText(info.after)} (${change})`;
-    return info.flip === undefined ? head : `${head}, nearest becomes ${question.levels[info.flip].text}`;
-  }
-  const points = Math.round(info.delta * 100);
-  const change = signedNumber(points, String(points));
-  const label = question.type === 'choice' ? trimmed(question.options[info.pick].name) : 'yes';
-  const head = `without it: ${label} ${pct(info.before)} → ${pct(info.after)} (${change})`;
+  const label = question.type === 'score' ? '' : `${measuredName(question, info.pick)} `;
+  const values = `${valueText(question, info.before)} → ${valueText(question, info.after)}`;
+  const head = `without it: ${label}${values} (${changeText(question, info.delta)})`;
   if (info.flip === undefined) return head;
-  if (question.type === 'choice') return `${head}, pick becomes ${trimmed(question.options[info.flip].name)}`;
-  return `${head}, answer becomes ${info.flip ? 'Yes' : 'No'}`;
+  return `${head}, ${FLIP_LEAD[question.type]} becomes ${flipName(question, info.flip)}`;
 }
 
 // The label of each direction of change.
