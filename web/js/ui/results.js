@@ -1,8 +1,9 @@
 // Drawing of answers: names, numbers and bars, never a sentence. Every function returns an Element.
 // Numbers are probabilities (two decimals) or, with { percent: true }, whole percents.
-// Bars are one grid, a row per option or level (label, bar, number); a later fourth column
-// (.ms-bars--delta) can take a change beside each number without restructuring the rows.
-import { nearestLevel, noulIsYes, pct, prob, scoreText } from '../format.js';
+// Bars are one grid, a row per option or level (label, bar, number); opts.deltas adds a fourth
+// column (.ms-bars--delta) with the change beside each number; opts.colors gives the rows
+// the colour slots of another order (a variant keeps each option's and level's colour from A).
+import { nearestLevel, noulIsYes, pct, prob, scoreText, signed } from '../format.js';
 import { levelClass, optionClass } from './colors.js';
 import { h } from './dom.js';
 import { icon } from './icons.js';
@@ -25,17 +26,23 @@ function pickLine(name, confidence, opts) {
   );
 }
 
-// One bar row: label, plain bar (an image with name and number), number. `cls` carries the colour.
-function barRow(label, p, cls, opts) {
+// One bar row: label, plain bar (an image with name and number), number, and with opts.deltas
+// the change beside it (a number, or null for none). `cls` carries the colour.
+function barRow(label, p, cls, opts, i) {
   const text = num(p, opts);
+  const delta = opts?.deltas ? opts.deltas[i] : undefined;
+  const change = typeof delta === 'number' ? signed(delta) : '';
   return h(
     'div',
     { class: 'ms-bar' },
     h('span', { class: 'ms-bar__label', 'aria-hidden': 'true' }, label),
-    setWidth(h('span', { class: `ms-bar__fill ${cls}`, role: 'img', 'aria-label': `${label} ${text}` }), p),
+    setWidth(h('span', { class: `ms-bar__fill ${cls}`, role: 'img', 'aria-label': change ? `${label} ${text} ${change}` : `${label} ${text}` }), p),
     h('span', { class: 'ms-bar__num', 'aria-hidden': 'true' }, text),
+    opts?.deltas ? h('span', { class: 'ms-bar__delta', 'aria-hidden': 'true' }, change) : null,
   );
 }
+
+const barsClass = (opts) => (opts?.deltas ? 'ms-bars ms-bars--delta' : 'ms-bars');
 
 const optionNames = (question) => question.options.map((o) => o.name.trim());
 const levelTexts = (question) => question.levels.map((l) => l.text.trim());
@@ -46,7 +53,7 @@ export function choiceResult(question, answer, opts = {}) {
     'div',
     { class: 'ms-answer' },
     pickLine(answer.choice, answer.confidence, opts),
-    h('div', { class: 'ms-bars' }, names.map((name, i) => barRow(name, answer.probabilities[i], optionClass(i), opts))),
+    h('div', { class: barsClass(opts) }, names.map((name, i) => barRow(name, answer.probabilities[i], optionClass(opts.colors?.[i] ?? i), opts, i))),
   );
 }
 
@@ -62,9 +69,9 @@ export function scoreResult(question, answer, opts = {}) {
     { class: 'ms-answer' },
     pickLine(`${scoreText(answer.score)} · ${texts[nearest]}`, answer.confidence, opts),
     mark,
-    h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: levelClass(i, count) }))),
+    h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: levelClass(opts.colors?.[i] ?? i, count) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),
-    h('div', { class: 'ms-bars' }, texts.map((text, i) => barRow(text, answer.probabilities[i], levelClass(i, count), opts))),
+    h('div', { class: barsClass(opts) }, texts.map((text, i) => barRow(text, answer.probabilities[i], levelClass(opts.colors?.[i] ?? i, count), opts, i))),
   );
 }
 

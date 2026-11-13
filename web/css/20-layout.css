@@ -48,3 +48,13 @@
   background: var(--color-bg-base);
 }
 .oc-notices:empty { display: none; }
+
+/* The bench: setup and results stack in the column; from 90rem they sit side by side
+   (.oc-columns--split, 28rem and 52rem). Each side is its own container so its rows can
+   fold by the width they actually get. */
+.ms-setup, .ms-output { container-type: inline-size; min-width: 0; }
+.ms-setup { container-name: setup; padding-bottom: var(--space-5); }
+.ms-output { container-name: output; display: flex; flex-direction: column; gap: var(--space-4); }
+@container app (min-width: 90rem) {
+  .ms-output { padding-top: var(--space-5); }
+}

@@ -95,3 +95,11 @@ test('any other thrown error says the endpoint could not be read', async () => {
   };
   await fails(createDirectClient(config, odd).run(run), 'network', 'The endpoint could not be read. Try again.');
 });
+
+test('the request text the bench shows never holds the key', async () => {
+  const seen = [];
+  const result = await createDirectClient(config, stub(200, good, seen), clock()).run(run);
+  assert.equal(seen[0].init.headers.Authorization, 'Bearer k-123');
+  assert.ok(!result.request.includes('k-123'));
+  assert.ok(!result.response.includes('k-123'));
+});

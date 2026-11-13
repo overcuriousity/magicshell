@@ -1,9 +1,16 @@
 // The app shell: top bar, navigation (top from 48rem, tab bar below), and the view of the current route.
 // Views register as { mount(el, ctx), unmount() }; until a later task adds one, a destination shows its heading.
+import { createDirectClient } from './client-direct.js';
+import { createServerClient } from './client-server.js';
+import { detectMode } from './mode.js';
+import { RunError } from './run-error.js';
+import { createBrowserStore } from './store-browser.js';
+import { createServerStore } from './store-server.js';
 import { h } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
+import { createBenchView } from './views/bench.js';
 
 export const DESTINATIONS = [
   { view: 'ask', label: 'Ask', icon: 'ask' },
@@ -91,7 +98,8 @@ function navLinks(withIcons) {
   );
 }
 
-export function mountShell(shell) {
+// services: { mode, client, store }, handed to every view with the route and navigate.
+export function mountShell(shell, services = {}) {
   const modeSwitch = h('div', { class: 'oc-topbar__slot', id: 'mode-switch' });
   const topnav = h('nav', { class: 'oc-topnav', 'aria-label': 'Main' }, navLinks(false));
   const tabbar = h('nav', { class: 'oc-tabbar', 'aria-label': 'Main' }, navLinks(true));
@@ -123,7 +131,7 @@ export function mountShell(shell) {
     const el = h('div', { class: 'oc-columns', 'data-view': r.view });
     main.replaceChildren(el);
     current = viewFor(r.view);
-    current.mount(el, { route: r, navigate, notify, modeSwitch });
+    current.mount(el, { ...services, route: r, navigate, notify, modeSwitch });
     if (!first) {
       window.scrollTo(0, 0);
       el.querySelector('h1')?.focus({ preventScroll: true });
@@ -136,7 +144,54 @@ export function mountShell(shell) {
   show();
 }
 
+function localStore() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+// The endpoint a visitor keeps in this browser (mode 1); Settings writes it.
+function byok(storage) {
+  try {
+    const v = JSON.parse(storage?.getItem('magicshell.byok') ?? 'null');
+    if (v && typeof v.endpoint === 'string' && v.endpoint && typeof v.model === 'string' && v.model) {
+      return { endpoint: v.endpoint, model: v.model, key: typeof v.key === 'string' ? v.key : '' };
+    }
+  } catch {
+    // Unreadable settings count as none.
+  }
+  return null;
+}
+
+const NO_ENDPOINT = { run: async () => { throw new RunError('Add your model endpoint in Settings.', 'validation'); } };
+const memoryStorage = () => {
+  const m = new Map();
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) };
+};
+
+// Learns the mode and wires the client and store for it. Task 17 adds settings and sign-in.
+async function boot(shell) {
+  const fetchFn = (...args) => fetch(...args);
+  if (!window.isSecureContext || !navigator.clipboard) document.documentElement.dataset.ocNoCopy = '';
+  const { mode } = await detectMode(fetchFn);
+  const storage = localStore();
+  let client;
+  let store;
+  if (mode === 'pages') {
+    const config = byok(storage);
+    client = config ? createDirectClient(config, fetchFn) : NO_ENDPOINT;
+    store = createBrowserStore(storage ?? memoryStorage());
+  } else {
+    client = createServerClient(fetchFn);
+    store = mode === 'accounts' ? createServerStore(fetchFn) : createBrowserStore(storage ?? memoryStorage());
+  }
+  registerView('ask', createBenchView());
+  mountShell(shell, { mode, client, store });
+}
+
 if (typeof document !== 'undefined') {
   const shell = document.getElementById('shell');
-  if (shell) mountShell(shell);
+  if (shell) boot(shell);
 }

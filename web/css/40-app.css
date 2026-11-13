@@ -160,3 +160,94 @@
 .ms-delta > .oc-icon { width: var(--icon-row); height: var(--icon-row); color: var(--color-warning); }
 
 .ms-runinfo { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
+
+/* Bench: the setup picker beside the heading, question cards, and the result side. */
+.ms-bench .oc-page-head { flex-wrap: wrap; }
+.ms-setup-picker .oc-menu-wrap > .oc-menu { left: auto; right: 0; }
+.ms-mono { font-family: var(--font-mono); font-size: var(--text-mono); }
+.ms-situation { min-height: 6rem; }
+.ms-cards { display: flex; flex-direction: column; gap: var(--space-3); }
+.ms-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+.ms-card__head { display: flex; align-items: center; gap: var(--space-2); }
+.ms-card__head .oc-menu-button { min-width: 7rem; }
+.ms-card__head > select { width: 7rem; }
+.ms-card__key { flex: 1 1 auto; width: 0; max-width: 14rem; }
+.ms-card__head > .oc-btn--row { margin-left: auto; }
+.ms-type {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  font-size: var(--text-micro);
+  font-weight: 500;
+}
+
+/* Option and level rows: mark, name, description, then move and remove. */
+.ms-rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.ms-rows__head, .ms-row {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 2fr) minmax(0, 3fr) auto;
+  grid-template-areas: "lead name desc acts";
+  gap: var(--space-2);
+  align-items: center;
+}
+.ms-rows__head { color: var(--color-fg-muted); font-size: var(--text-micro); font-weight: 500; }
+.ms-rows__head > .ms-row__name { grid-column: 2; }
+.ms-rows__head > .ms-row__desc { grid-column: 3; }
+.ms-rows__head--level > .ms-row__name { grid-column: 2 / 4; }
+.ms-row--level { grid-template-areas: "lead name name acts"; }
+.ms-row__lead { grid-area: lead; display: flex; justify-content: center; }
+.ms-row__name { grid-area: name; min-width: 0; }
+.ms-row__desc { grid-area: desc; min-width: 0; }
+.ms-row__acts { grid-area: acts; display: flex; }
+.ms-row .oc-input { width: 100%; }
+.ms-row__index { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
+@container setup (max-width: 34rem) {
+  .ms-rows__head { display: none; }
+  .ms-row {
+    grid-template-columns: 1rem minmax(0, 1fr) auto;
+    grid-template-areas: "lead name acts" ". desc desc";
+    row-gap: var(--space-1);
+  }
+  .ms-row--level { grid-template-areas: "lead name acts"; }
+  .ms-row__desc .oc-input { color: var(--color-fg-secondary); }
+}
+
+.ms-actions { flex-wrap: wrap; }
+.ms-inline-notice { border-top: 1px solid var(--color-border); }
+.ms-setup > .ms-error-host:not(:empty) { margin-top: var(--space-4); }
+.ms-actions-host { margin-top: var(--space-4); }
+
+/* B's editor, above its column. */
+.ms-variant { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.ms-variant__head { display: flex; align-items: center; justify-content: space-between; }
+.ms-variant__head > .ms-result__title { margin: 0; }
+
+/* Delta column beside the bar numbers. */
+.ms-bar__delta { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+.ms-runinfo { display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
+.ms-ios { display: flex; flex-direction: column; gap: var(--space-3); }
+.ms-io__head { display: flex; align-items: center; justify-content: space-between; color: var(--color-fg-muted); font-size: var(--text-micro); font-weight: 500; }
+.ms-io__body {
+  margin: 0;
+  max-height: 24rem;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

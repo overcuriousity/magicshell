@@ -24,3 +24,7 @@ test('an unknown route opens Ask', () => {
   assert.deepEqual(route('#/nope/abc'), { view: 'ask' });
   assert.deepEqual(route('history'), { view: 'ask' });
 });
+
+test('the bench lives under Ask', () => {
+  assert.deepEqual(route('#/ask/bench'), { view: 'ask', id: 'bench' });
+});

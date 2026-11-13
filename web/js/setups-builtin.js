@@ -28,7 +28,7 @@ export const BUILTIN = freeze([
   {
     id: 'builtin-triage',
     builtin: true,
-    name: 'Support triage',
+    name: 'Ticket triage',
     sampleState: 'I was charged twice for my order and the app shows an error when I open the invoice.',
     questions: [
       {

@@ -114,3 +114,27 @@ test('the captured responses draw without error', () => {
   const s = fixture('score');
   assert.ok(scoreResult(s.run.questions[0], s.expected.answers.urgency, {}));
 });
+
+test('deltas sit in a fourth column beside the numbers', () => {
+  const el = choiceResult(choice, choiceAnswer, { deltas: [-0.4, 0, null] });
+  const grid = all(el, (n) => cls(n).startsWith('ms-bars'))[0];
+  assert.equal(cls(grid), 'ms-bars ms-bars--delta');
+  const deltas = all(el, (n) => cls(n) === 'ms-bar__delta');
+  assert.deepEqual(deltas.map((n) => n.textContent), ['−0.40', '0.00', '']);
+  const s = scoreResult(score, scoreAnswer, { deltas: [0.1, null, null, null] });
+  assert.equal(all(s, (n) => cls(n) === 'ms-bar__delta')[0].textContent, '+0.10');
+  assert.equal(all(choiceResult(choice, choiceAnswer, {}), (n) => cls(n) === 'ms-bars ms-bars--delta').length, 0);
+});
+
+test('a choice can keep colours from another order', () => {
+  const b = bars(choiceResult(choice, choiceAnswer, { colors: [2, 1, 0] }));
+  assert.ok(cls(b[0]).includes('opt-3') && cls(b[2]).includes('opt-1'));
+});
+
+test('a score keeps level colours from another order', () => {
+  const el = scoreResult(score, scoreAnswer, { colors: [3, 2, 1, 0] });
+  const b = bars(el);
+  assert.ok(cls(b[0]).includes('lvl-4') && cls(b[3]).includes('lvl-1'));
+  const segs = all(el, (n) => cls(n) === 'ms-scale')[0].childNodes;
+  assert.ok(cls(segs[0]).includes('lvl-4') && cls(segs[3]).includes('lvl-1'));
+});
