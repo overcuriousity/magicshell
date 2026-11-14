@@ -1,5 +1,5 @@
-// Settings: theme and text size in every mode; in accounts mode the signed-in name, a new password (not under single sign-on)
-// and signing out.
+// Settings: theme and text size in every mode; in accounts mode the signed-in name, a new password (for an account that
+// has one, not for a provider account) and signing out.
 import { messageOf } from '../run-error.js';
 import { HREF } from '../routes.js';
 import { h } from '../ui/dom.js';

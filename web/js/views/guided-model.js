@@ -101,9 +101,10 @@ export function createGuidedModel({
     if (now && !wasAsking && preheat) client.preheat?.();
     wasAsking = now;
   };
+  // The draft is kept first, so a preheat that goes wrong cannot cost it.
   const changed = () => {
-    preheated();
     persist();
+    preheated();
     for (const fn of listeners) fn(state);
   };
   // Every edit clears a sentence the last attempt left, since it may no longer hold.

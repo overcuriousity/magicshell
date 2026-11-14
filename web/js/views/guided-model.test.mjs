@@ -532,6 +532,16 @@ test('preheat: a yes-or-no question calls once on step 2, not on edits, again af
   assert.equal(client.preheats, 2);
 });
 
+test('preheat: the draft is kept before the preheat goes out', () => {
+  const client = counting();
+  const session = memory();
+  let kept = null;
+  client.preheat = async () => { kept = JSON.parse(session.getItem(SESSION_KEY)).step; };
+  const { model } = make({ client, preheat: true, session });
+  model.next();
+  assert.equal(kept, 2);
+});
+
 test('preheat: a choice question calls on step 3 only', () => {
   const client = counting();
   const { model } = make({ client, preheat: true });
