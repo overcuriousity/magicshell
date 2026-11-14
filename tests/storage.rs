@@ -397,3 +397,81 @@ async fn a_why_part_at_the_size_cap_is_kept_and_one_over_is_refused() {
     assert_eq!(res.status(), 422);
     assert_eq!(res.text().await.unwrap(), "The kept Why? result of this entry is too large to keep.");
 }
+
+fn preview(chars: usize) -> String {
+    let prefix = "data:image/jpeg;base64,/9j/";
+    format!("{prefix}{}", "A".repeat(chars - prefix.len()))
+}
+
+fn entry_with_pictures(id: &str, pictures: Value) -> Value {
+    let mut e = entry(id, "2026-11-13T10:00:00Z");
+    e["pictures"] = pictures;
+    e
+}
+
+#[tokio::test]
+async fn an_entry_keeps_its_previews() {
+    let (app, ada, _) = two_users().await;
+    let pictures = json!([
+        { "preview": preview(4000), "width": 768, "height": 576, "bytes": 84_000 },
+        { "width": 640, "height": 480, "bytes": 51_000 },
+    ]);
+    let e = entry_with_pictures("e1", pictures.clone());
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+    let got = list(&app, "/api/history", &ada).await;
+    assert_eq!(got[0]["pictures"], pictures);
+}
+
+#[tokio::test]
+async fn an_entry_without_pictures_is_stored_as_before() {
+    let (app, ada, _) = two_users().await;
+    let e = entry("e1", "2026-11-13T10:00:00Z");
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+    let got = list(&app, "/api/history", &ada).await;
+    assert_eq!(got[0]["run"]["state"], e["run"]["state"]);
+    assert!(got[0].get("pictures").is_none());
+    assert!(got[0]["run"].get("images").is_none());
+}
+
+#[tokio::test]
+async fn an_entry_with_pictures_in_its_run_is_refused() {
+    let (app, ada, _) = two_users().await;
+    let mut e = entry("e1", "2026-11-13T10:00:00Z");
+    e["run"]["images"] = json!(["data:image/jpeg;base64,/9j/4AAQ"]);
+    let res = put(&app, "/api/history/e1", &e, Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "History does not keep pictures.");
+}
+
+#[tokio::test]
+async fn a_bad_preview_is_refused() {
+    let (app, ada, _) = two_users().await;
+    let part = |preview: String| json!([{ "preview": preview, "width": 1, "height": 1, "bytes": 1 }]);
+    let five = json!(vec![json!({ "width": 1, "height": 1, "bytes": 1 }); 5]);
+    for pictures in
+        [part(preview(4001)), part("data:image/png;base64,AAAA".into()), part("https://example.org/a.jpg".into()), five]
+    {
+        let res = put(&app, "/api/history/e1", &entry_with_pictures("e1", pictures), Some(&ada)).await;
+        assert_eq!(res.status(), 422);
+        assert_eq!(res.text().await.unwrap(), "A preview of this entry is not valid.");
+    }
+    let unknown = json!([{ "url": "x", "width": 1, "height": 1, "bytes": 1 }]);
+    assert_eq!(put(&app, "/api/history/e1", &entry_with_pictures("e1", unknown), Some(&ada)).await.status(), 422);
+}
+
+#[tokio::test]
+async fn previews_count_into_the_size_limit() {
+    let (app, ada, _) = two_users().await;
+    let four = json!(vec![json!({ "preview": preview(4000), "width": 1, "height": 1, "bytes": 1 }); 4]);
+    let mut e = entry_with_pictures("e1", four);
+    e["run"]["state"] = json!("a".repeat(7900));
+    e["reply"]["response"] = json!("r".repeat(40 * 1024));
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+    e["reply"]["response"] = json!("r".repeat(45 * 1024));
+    let res = put(&app, "/api/history/e1", &e, Some(&ada)).await;
+    // Over 64 KB with its previews: the body limit answers before the entry is looked at.
+    assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
+    e.as_object_mut().unwrap().remove("pictures");
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+}

@@ -294,3 +294,13 @@ test('history the browser store trims leaves the suggestions', async () => {
   assert.equal(store.suggest.current().rest('situation', 'Alp'), '');
   assert.equal(store.suggest.current().rest('situation', 'Del'), 'ta door sticks');
 });
+
+test('servicesFor passes the picture limits through, or null when the server takes none', async () => {
+  const { servicesFor } = await import('./app.js');
+  const base = { mode: 'open', model: 'm', user: null, version: null, why: null };
+  assert.deepEqual(servicesFor({ ...base, pictures: { max: 2, edge: 1024 } }).pictures, { max: 2, edge: 1024 });
+  assert.equal(servicesFor({ ...base, pictures: null }).pictures, null);
+  assert.equal(servicesFor(base).pictures, null);
+  assert.equal(servicesFor({ ...base, pictures: { max: 0, edge: 768 } }).pictures, null);
+  assert.equal(servicesFor({ ...base, pictures: 'yes' }).pictures, null);
+});

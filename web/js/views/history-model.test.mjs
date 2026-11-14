@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
+import { benchResult, createHistoryModel, entryPictureCount, formatWhen, headline } from './history-model.js';
 
 const memoryStore = (entries = []) => {
   let list = entries.map((e) => structuredClone(e));
@@ -187,4 +187,12 @@ test('a failed delete leaves the list as it was', async () => {
   await m.load();
   await assert.rejects(m.remove('b'), /nope/);
   assert.deepEqual(m.entries().map((e) => e.id), ['c', 'b', 'a']);
+});
+
+test('an entry with pictures shows them shortened in its request and counts them', () => {
+  const pictures = [{ preview: 'data:image/jpeg;base64,/9j/AA==', width: 768, height: 576, bytes: 84 * 1024 }, { width: 1, height: 1, bytes: 2048 }];
+  const e = entry('a', '2026-11-12T10:00:00Z', { pictures });
+  assert.deepEqual(JSON.parse(benchResult(e).request).images, ['data:image/jpeg;base64,…(84 KB)', 'data:image/jpeg;base64,…(2 KB)']);
+  assert.equal(entryPictureCount(e), 2);
+  assert.equal(entryPictureCount(entry('b', '2026-11-12T10:00:00Z')), 0);
 });

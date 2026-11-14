@@ -1,0 +1,16 @@
+{
+  "run": {
+    "state": "",
+    "images": [
+      "data:image/jpeg;base64,/9j/4AAQ!!!="
+    ],
+    "questions": [
+      {
+        "key": "q1",
+        "type": "noul",
+        "text": "Is it so?"
+      }
+    ]
+  },
+  "expected_error": "A picture in this request cannot be read. Add it again."
+}

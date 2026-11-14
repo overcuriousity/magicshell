@@ -1,4 +1,5 @@
 // The browser talks to this app's own server, in both modes.
+import { shortPicture } from './pictures.js';
 import { OFFLINE, RunError, serverSentence as sentence } from './run-error.js';
 import { checkOutcome } from './systemone.js';
 
@@ -6,18 +7,24 @@ export { RunError };
 
 const KINDS = { 401: 'auth', 413: 'validation', 422: 'validation', 429: 'limit' };
 
-function send(fetchFn, url, body) {
+function send(fetchFn, url, body, signal) {
   const init = { method: 'POST' };
   if (body !== undefined) Object.assign(init, { headers: { 'Content-Type': 'application/json' }, body });
+  if (signal) init.signal = signal;
   return fetchFn(url, init).catch(() => {
+    if (signal?.aborted) throw new RunError('', 'stopped');
     throw new RunError(OFFLINE, 'network');
   });
 }
 
-// Only what the server accepts: it denies unknown fields.
-function wire(run) {
+export const hasPictures = (run) => (run?.pictures?.length ?? 0) > 0;
+
+// Only what the server accepts: it denies unknown fields. The pictures a run holds in the page go
+// as `images`, each written by `image`.
+function wire(run, image) {
   return {
     state: run.state,
+    ...(hasPictures(run) ? { images: run.pictures.map(image) } : {}),
     questions: run.questions.map((q) => {
       const out = { key: q.key, type: q.type, text: q.text };
       if (q.options) out.options = q.options.map((o) => ({ id: o.id, name: o.name, description: o.description }));
@@ -28,14 +35,17 @@ function wire(run) {
 }
 
 // The request body for a run, as this client sends it.
-export const requestText = (run) => JSON.stringify(wire(run));
+const bodyText = (run) => JSON.stringify(wire(run, (p) => p.url));
+
+// The same for reading: each picture is its size, not its content.
+export const requestText = (run) => JSON.stringify(wire(run, (p) => shortPicture(p.bytes)));
 
 export function createServerClient(fetchFn, now = () => performance.now()) {
   // Run and Why? share the request, the checks and the reply; only the route differs.
-  async function post(url, run) {
+  async function post(url, run, { signal } = {}) {
     const request = requestText(run);
     const started = now();
-    const reply = await send(fetchFn, url, request);
+    const reply = await send(fetchFn, url, bodyText(run), signal);
     const response = await reply.text().catch(() => '');
     const totalMs = now() - started;
     if (!reply.ok) throw new RunError(sentence(response, reply.status), KINDS[reply.status] ?? 'upstream');
@@ -55,7 +65,7 @@ export function createServerClient(fetchFn, now = () => performance.now()) {
     return { ...outcome, totalMs, upstreamMs, request, response };
   }
   return {
-    run: (run) => post('api/run', run),
+    run: (run, opts) => post('api/run', run, opts),
     why: (run) => post('api/why', run),
     async signIn(username, password) {
       await expectNoContent(await send(fetchFn, 'api/auth/sign-in', JSON.stringify({ username, password })));

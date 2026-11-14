@@ -1,5 +1,7 @@
 // The bench's state and actions, without any DOM: run A, a variant B, their results and the error.
 // A, B and both results are kept in sessionStorage so they survive other views, sign-in and reload.
+import { hasPictures } from '../client-server.js';
+import { pictureMemory } from '../pictures.js';
 import { checkOutcome } from '../systemone.js';
 import { copy, isObject } from '../util.js';
 import { compare, VARIANTS } from '../variants.js';
@@ -47,6 +49,22 @@ function keptResult(result, run) {
     return null;
   }
 }
+
+// The bench's pictures while the tab lives; see pictureMemory.
+const benchPictures = pictureMemory();
+
+const picturesOf = (run) => run?.pictures ?? [];
+// A run as the session keeps it: its pictures by id only.
+const sessionRun = (run) => {
+  if (!run) return run;
+  const { pictures, ...rest } = run;
+  return hasPictures(run) ? { ...rest, pictureIds: pictures.map((p) => p.id) } : rest;
+};
+const withPictures = (run, pictures) => {
+  if (pictures.length > 0) run.pictures = pictures;
+  else delete run.pictures;
+  return run;
+};
 
 const textIn = (s) => typeof s === 'string' && s.trim() !== '';
 
@@ -124,11 +142,24 @@ export function createBenchModel({
   mode = 'open',
   navigate = () => {},
   session = sessionStore(),
+  pictures: memory = benchPictures,
 }) {
   const edits = runEdits(uuid);
   const listeners = new Set();
 
-  const keptRun = (r) => (looksLikeRun(r) ? runOf(r.state, r.questions) : null);
+  // How many pictures were found gone while restoring; the view says so once (takeLost).
+  let lost = 0;
+  // A kept run with its pictures from memory. When they are gone (a reload) the run comes back
+  // without them and marked `gone`, so that a result made with them is dropped.
+  const keptRun = (r) => {
+    if (!looksLikeRun(r)) return null;
+    const run = runOf(r.state, r.questions);
+    const ids = Array.isArray(r.pictureIds) ? r.pictureIds.filter((id) => typeof id === 'string') : [];
+    if (ids.length === 0) return { run, gone: false };
+    const found = memory.recall(ids);
+    if (!found) lost = Math.max(lost, ids.length);
+    return { run: withPictures(run, found ?? []), gone: !found };
+  };
   // A, then what depends on it: A's result, the variant B, B's result. A part that does not fit
   // drops what depends on it.
   const restore = () => {
@@ -139,17 +170,19 @@ export function createBenchModel({
     } catch {
       return none;
     }
-    const a = isObject(saved) ? keptRun(saved.a) : null;
+    const a = isObject(saved) ? keptRun(saved.a)?.run : null;
     if (!a) return none;
-    const ranA = keptRun(saved.ranA);
+    const keptA = keptRun(saved.ranA);
+    const ranA = keptA && !keptA.gone ? keptA.run : null;
     const resultA = keptResult(saved.resultA, ranA);
     if (!resultA) return { ...none, a };
     // The entry belongs to the result: kept with it, dropped without it.
     const entryA = isObject(saved.entryA) && typeof saved.entryA.id === 'string' ? saved.entryA : null;
-    const b = keptRun(saved.b);
+    const b = keptRun(saved.b)?.run;
     if (!b) return { ...none, a, ranA, resultA, entryA };
     const variant = VARIANTS.some((v) => v.id === saved.variant) ? saved.variant : null;
-    const ranB = keptRun(saved.ranB);
+    const keptB = keptRun(saved.ranB);
+    const ranB = keptB && !keptB.gone ? keptB.run : null;
     const resultB = keptResult(saved.resultB, ranB);
     return { a, ranA, resultA, entryA, b, variant, ranB: resultB ? ranB : null, resultB };
   };
@@ -165,12 +198,16 @@ export function createBenchModel({
 
   const persist = () => {
     const { a, ranA, resultA, entryA, b, variant, ranB, resultB } = state;
+    memory.keep([a, ranA, b, ranB].flatMap(picturesOf));
     try {
-      session?.setItem(SESSION_KEY, JSON.stringify({ a, ranA, resultA, entryA, b, variant, ranB, resultB }));
+      const kept = { a: sessionRun(a), ranA: sessionRun(ranA), resultA, entryA, b: sessionRun(b), variant, ranB: sessionRun(ranB), resultB };
+      session?.setItem(SESSION_KEY, JSON.stringify(kept));
     } catch {
       // Without session storage the bench still works; it just does not survive a reload.
     }
   };
+  // What is gone is forgotten at once, so the next reload does not report it again.
+  if (lost > 0) persist();
   const changed = () => {
     persist();
     for (const fn of listeners) fn(state);
@@ -203,6 +240,10 @@ export function createBenchModel({
         state.errorFor = which;
         changed();
       },
+      stopped() {
+        state.busy = null;
+        changed();
+      },
     });
 
   const model = {
@@ -215,6 +256,15 @@ export function createBenchModel({
     },
 
     setState: (text) => editA((a) => { a.state = text; }),
+    setPictures: (list) => editA((a) => { withPictures(a, [...list]); }),
+    // Gives up waiting for the run in flight.
+    stop: () => runner.stop(),
+    // How many pictures a restored or loaded run had that are gone; told once.
+    takeLost() {
+      const n = lost;
+      lost = 0;
+      return n;
+    },
     addQuestion: (type) => editA((a) => { a.questions.push(edits.newQuestion(a, type)); }),
     updateQuestion(key, patch) {
       const q = edits.find(state.a, key);
@@ -248,6 +298,7 @@ export function createBenchModel({
     // Whether anything was entered in A: the situation, a question, an option or a level.
     holdsSomething: () =>
       textIn(state.a.state) ||
+      hasPictures(state.a) ||
       state.a.questions.some(
         (q) =>
           textIn(q.text) ||
@@ -257,15 +308,20 @@ export function createBenchModel({
 
     loadSetup(setup) {
       model.closeWhy();
-      state.a = runOf(setup.sampleState ?? '', copy(setup.questions));
+      state.a = withPictures(runOf(setup.sampleState ?? '', copy(setup.questions)), picturesOf(state.a));
       state.error = null;
       state.errorFor = null;
       changed();
     },
-    loadRun(run, result = null, entry = null) {
+    // A run from History that had pictures says how many in `lost`: they are gone, so it loads
+    // as a draft, without the result that was made with them.
+    loadRun(run, given = null, entry = null) {
       model.closeWhy();
+      const gone = Number.isInteger(run.lost) && run.lost > 0 ? run.lost : 0;
+      lost = gone;
+      const result = gone ? null : given;
       state.entryA = result ? entry : null;
-      state.a = runOf(run.state, copy(run.questions));
+      state.a = withPictures(runOf(run.state, copy(run.questions)), [...picturesOf(run)]);
       state.ranA = result ? copy(state.a) : null;
       state.resultA = result;
       model.dropVariant();
@@ -295,8 +351,10 @@ export function createBenchModel({
     // Why? is for run A only, and needs its saved entry. The panel is kept by the view across
     // changes, so saveWhy stays quiet. It saves the entry it is given, never state.entryA: the
     // panel's last save arrives after it was closed, when entryA may be gone or a newer run's.
+    // Why? asks once per word, and every call would read the pictures again.
+    canWhy: () => Boolean(state.resultA) && !hasPictures(state.ranA),
     openWhy() {
-      if (state.busy || !state.resultA || !state.entryA || state.whyOpen) return;
+      if (state.busy || !state.resultA || !state.entryA || state.whyOpen || !model.canWhy()) return;
       state.whyOpen = true;
       changed();
     },

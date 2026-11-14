@@ -4,6 +4,26 @@
 // into the text "null", so lists that may hold one go through here (h() already drops them).
 export const present = (nodes) => nodes.filter((n) => n != null && n !== false);
 
+// Where the caret is in a text field, to put it back on the field a rebuild puts in its place;
+// null for anything without one.
+export function caretOf(el) {
+  try {
+    if (el == null || typeof el.selectionStart !== 'number') return null;
+    return { start: el.selectionStart, end: el.selectionEnd, scroll: el.scrollTop ?? 0 };
+  } catch {
+    return null;
+  }
+}
+export function restoreCaret(el, caret) {
+  if (!el || !caret) return;
+  try {
+    el.setSelectionRange(caret.start, caret.end);
+    el.scrollTop = caret.scroll;
+  } catch {
+    // Not a text field after all.
+  }
+}
+
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {

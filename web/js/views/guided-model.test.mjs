@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { pictureMemory } from '../pictures.js';
 import { RunError } from '../run-error.js';
 import { createGuidedModel, loadable, queueGuidedRun, SESSION_KEY, takeGuidedRun } from './guided-model.js';
 
@@ -611,4 +612,103 @@ test('preheat: off by default and a client without preheat does not throw', () =
   bare.back();
   bare.next();
   assert.equal(bare.state.step, 2);
+});
+
+// Pictures.
+const jpegUrl = 'data:image/jpeg;base64,/9j/AAAA';
+const pic = (id) => ({ id, url: jpegUrl, width: 768, height: 576, bytes: 5, preview: jpegUrl });
+const yesNo = (model) => {
+  model.next();
+  model.setQuestion('Is the total legible?');
+};
+
+test('the guide asks with its pictures and shows them with the result', async () => {
+  const { model, client, store } = make({ pictures: pictureMemory() });
+  yesNo(model);
+  model.setPictures([pic('a')]);
+  assert.deepEqual(model.toRun().pictures.map((p) => p.id), ['a']);
+  await model.next();
+  assert.deepEqual(client.calls[0].pictures.map((p) => p.id), ['a']);
+  assert.deepEqual(model.state.result.pictures.map((p) => p.id), ['a']);
+  assert.equal(store.entries[0].pictures.length, 1);
+  assert.equal(model.canWhy(), false);
+  model.openWhy();
+  assert.equal(model.state.whyOpen, false);
+});
+
+test('a run without pictures has no pictures field and may ask why', async () => {
+  const { model } = make({ pictures: pictureMemory() });
+  yesNo(model);
+  assert.equal('pictures' in model.toRun(), false);
+  await model.next();
+  assert.equal(model.canWhy(), true);
+});
+
+test('a picture alone counts as something entered in the guide', () => {
+  const { model } = make({ pictures: pictureMemory() });
+  assert.equal(model.holdsSomething(), false);
+  model.setPictures([pic('a')]);
+  assert.equal(model.holdsSomething(), true);
+});
+
+test('the guide keeps nothing of a picture in the session and loses them on reload', () => {
+  const session = memory();
+  const pictures = pictureMemory();
+  const { model } = make({ session, pictures });
+  yesNo(model);
+  model.setPictures([pic('a'), pic('b')]);
+  assert.equal(session.getItem(SESSION_KEY).includes('base64'), false);
+  const sameTab = make({ session, pictures }).model;
+  assert.deepEqual(sameTab.state.pictures.map((p) => p.id), ['a', 'b']);
+  assert.equal(sameTab.takeLost(), 0);
+  const reloaded = make({ session, pictures: pictureMemory() }).model;
+  assert.deepEqual(reloaded.state.pictures, []);
+  assert.equal(reloaded.state.question, 'Is the total legible?');
+  assert.equal(reloaded.takeLost(), 2);
+  assert.equal(reloaded.takeLost(), 0);
+});
+
+test('a guide session saved before pictures existed restores as before', () => {
+  const session = memory();
+  session.setItem(SESSION_KEY, JSON.stringify({ step: 2, kind: 'noul', question: 'Wet?', options: [], scaleId: '1-5', levels: [], context: 'Rain.' }));
+  const { model } = make({ session, pictures: pictureMemory() });
+  assert.equal(model.state.question, 'Wet?');
+  assert.equal(model.state.context, 'Rain.');
+  assert.deepEqual(model.state.pictures, []);
+});
+
+test('the guide loads a history run with lost pictures and one handed over with them', () => {
+  const { model } = make({ pictures: pictureMemory() });
+  const run = { state: 'A receipt.', questions: [{ key: 'q1', type: 'noul', text: 'Legible?' }] };
+  assert.equal(model.load({ ...run, lost: 3 }), true);
+  assert.deepEqual(model.state.pictures, []);
+  assert.equal(model.takeLost(), 3);
+  assert.equal(model.load({ ...run, pictures: [pic('a')] }), true);
+  assert.deepEqual(model.state.pictures.map((p) => p.id), ['a']);
+  assert.equal(model.takeLost(), 0);
+});
+
+test('asking another question keeps the pictures, starting over drops them', async () => {
+  const { model } = make({ pictures: pictureMemory() });
+  yesNo(model);
+  model.setPictures([pic('a')]);
+  await model.next();
+  model.askAnother();
+  assert.equal(model.state.pictures.length, 1);
+  model.startOver();
+  assert.deepEqual(model.state.pictures, []);
+});
+
+test('stop frees the guide without a result', () => {
+  const signals = [];
+  const client = { run: (run, opts) => new Promise(() => signals.push(opts.signal)) };
+  const { model } = make({ client, pictures: pictureMemory() });
+  yesNo(model);
+  model.next();
+  assert.equal(model.state.busy, true);
+  model.stop();
+  assert.equal(model.state.busy, false);
+  assert.equal(signals[0].aborted, true);
+  assert.equal(model.state.result, null);
+  assert.equal(model.state.error, null);
 });

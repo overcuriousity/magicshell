@@ -12,12 +12,19 @@ use axum::Router;
 use axum::middleware::{from_fn_with_state, map_response};
 use axum::routing::{get, post, put};
 use sqlx::SqlitePool;
+use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::kit::oidc::Oidc;
 use crate::kit::security::rate_limit;
 use crate::limit::Limiter;
 use crate::preheat::Preheat;
 use crate::upstream::Upstream;
+
+/// The body `POST /api/run` takes: 600 KB of pictures as base64 and the rest of the run, under the
+/// 1 MB of the shipped nginx template.
+pub const RUN_BODY_BYTES: usize = 960 * 1024;
+/// The body every other route takes.
+const BODY_BYTES: usize = 64 * 1024;
 
 pub struct ApiState {
     pub upstream: Upstream,
@@ -31,6 +38,10 @@ pub struct ApiState {
     pub oidc: Option<Arc<Oidc>>,
     /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off or in open mode.
     pub preheat: Option<Preheat>,
+    /// Pictures a run may carry on this server; 0 is off.
+    pub max_pictures: usize,
+    /// The edge the page shrinks pictures to.
+    pub picture_max_edge: u32,
 }
 
 pub struct Why {
@@ -39,7 +50,7 @@ pub struct Why {
 }
 
 pub fn router(state: Arc<ApiState>) -> Router {
-    let mut router = Router::new().route("/api/config", get(config::get)).route("/api/run", post(run::post));
+    let mut router = Router::new().route("/api/config", get(config::get));
     if state.preheat.is_some() {
         router = router.route("/api/preheat", post(run::preheat));
     }
@@ -72,5 +83,6 @@ pub fn router(state: Arc<ApiState>) -> Router {
             router = router.route("/api/why", post(run::post_why));
         }
     }
-    router.with_state(state)
+    // Only a run carries pictures; everything else keeps the small limit.
+    router.layer(RequestBodyLimitLayer::new(BODY_BYTES)).route("/api/run", post(run::post)).with_state(state)
 }

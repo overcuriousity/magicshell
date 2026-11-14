@@ -3,6 +3,7 @@ use url::Url;
 
 use crate::kit::OcError;
 use crate::kit::config::{OcConfig, OidcConfig, Secret};
+use crate::systemone::MAX_PICTURES;
 
 fn runs_per_minute() -> u32 {
     60
@@ -22,6 +23,14 @@ fn preheat() -> bool {
 
 fn upstream_timeout_secs() -> u64 {
     60
+}
+
+fn max_pictures() -> u32 {
+    4
+}
+
+fn picture_max_edge() -> u32 {
+    768
 }
 
 /// The `[app]` section. `endpoint` and `model` have no default.
@@ -48,6 +57,12 @@ pub struct AppConfig {
     pub preheat: bool,
     #[serde(default = "upstream_timeout_secs")]
     pub upstream_timeout_secs: u64,
+    /// Pictures one run may carry, 0 to 4; 0 turns pictures off.
+    #[serde(default = "max_pictures")]
+    pub max_pictures: u32,
+    /// Longest edge, in pixels, the page shrinks a picture to; 256 to 2048.
+    #[serde(default = "picture_max_edge")]
+    pub picture_max_edge: u32,
     /// From `[auth.oidc]`, filled by [`AppConfig::from_config`].
     #[serde(skip)]
     pub oidc: Option<OidcConfig>,
@@ -63,6 +78,14 @@ impl AppConfig {
             app.deserialize().map_err(|e| OcError::Config(format!("Invalid [app] configuration: {e}.")))?;
         if app.model.trim().is_empty() {
             return Err(OcError::Config("Invalid [app] configuration: `model` must not be empty.".into()));
+        }
+        if app.max_pictures as usize > MAX_PICTURES {
+            return Err(OcError::Config(format!(
+                "Invalid [app] configuration: max_pictures must be 0 to {MAX_PICTURES}."
+            )));
+        }
+        if !(256..=2048).contains(&app.picture_max_edge) {
+            return Err(OcError::Config("Invalid [app] configuration: picture_max_edge must be 256 to 2048.".into()));
         }
         if let Some(oidc) = &cfg.auth.oidc {
             if app.database.is_none() {

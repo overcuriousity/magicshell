@@ -3,6 +3,19 @@ import { LIMITS } from './limits.js';
 import { isObject, len, trimmed } from './util.js';
 
 const BAD_ANSWER = 'The model endpoint sent an answer this app does not understand.';
+const BAD_PICTURE = 'A picture in this request cannot be read. Add it again.';
+const PICTURE_PREFIX = 'data:image/jpeg;base64,';
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+// The decoded size of a JPEG data URL, from its length and padding; null when it is not one.
+// "/9j/" is how the JPEG magic bytes FF D8 FF begin in base64.
+export function dataUrlBytes(url) {
+  if (typeof url !== 'string' || !url.startsWith(PICTURE_PREFIX)) return null;
+  const data = url.slice(PICTURE_PREFIX.length);
+  if (!BASE64.test(data)) return null;
+  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+  return (data.length / 4) * 3 - padding;
+}
 
 
 // Returns the first problem as a sentence, or null. The first sentence in the list wins:
@@ -12,6 +25,16 @@ export function validateRun(run, { allowEmptyText = false } = {}) {
   if (questions.length < 1) return 'Add at least one question.';
   if (questions.length > LIMITS.questions) return `Use at most ${LIMITS.questions} questions.`;
   if (len(run.state) > LIMITS.state) return 'Shorten the situation to 8,000 characters or fewer.';
+  // A run in the page holds `pictures`; on the wire they are `images`.
+  const images = run.images ?? (run.pictures ?? []).map((p) => p.url);
+  if (images.length > LIMITS.pictures) return `Use at most ${LIMITS.pictures} pictures.`;
+  let together = 0;
+  for (const image of images) {
+    const bytes = dataUrlBytes(image);
+    if (bytes === null || bytes > LIMITS.pictureBytes || !image.startsWith(`${PICTURE_PREFIX}/9j/`)) return BAD_PICTURE;
+    together += bytes;
+  }
+  if (together > LIMITS.picturesBytes) return 'These pictures are too large together. Remove one first.';
   const keys = questions.map((q) => q.key);
   if (new Set(keys).size !== keys.length) return 'Name each question differently.';
   const keyOk = new RegExp(`^[a-z0-9_]{1,${LIMITS.key}}$`);

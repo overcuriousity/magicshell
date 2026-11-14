@@ -1,6 +1,6 @@
 [package]
 name = "magicshell"
-version = "2026.11.8"
+version = "2026.11.9"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"
@@ -23,6 +23,7 @@ name = "magicshell"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.23"
 argon2 = { version = "0.5", features = ["std"] }
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }

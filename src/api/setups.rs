@@ -43,7 +43,7 @@ impl Setup {
         if self.sample_state.chars().count() > MAX_STATE {
             return Err(AppError::Invalid("Shorten the situation to 8,000 characters or fewer.".into()));
         }
-        Run { state: String::new(), questions: self.questions.clone() }.validate_questions(true)
+        Run { state: String::new(), images: Vec::new(), questions: self.questions.clone() }.validate_questions(true)
     }
 }
 

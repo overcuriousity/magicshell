@@ -210,3 +210,11 @@ test('storage that cannot be read at all behaves the same', async () => {
   await store.saveSetup(setup('a'));
   assert.deepEqual(await store.listSetups(), [setup('a')]);
 });
+
+test('history entries with pictures survive a reload of the store', async () => {
+  const storage = memory();
+  const pictures = [{ preview: 'data:image/jpeg;base64,/9j/AAAA', width: 768, height: 576, bytes: 84000 }, { width: 1, height: 1, bytes: 1 }];
+  await createBrowserStore(storage).saveEntry(entry('e1', '2026-01-01T00:00:00Z', { pictures }));
+  const [got] = await createBrowserStore(storage).listHistory();
+  assert.deepEqual(got.pictures, pictures);
+});

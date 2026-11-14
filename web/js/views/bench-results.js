@@ -4,6 +4,7 @@ import { signed } from '../format.js';
 import { prettyJson } from '../json-text.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { thumbs } from '../ui/picture-field.js';
 import { answerResult } from '../ui/results.js';
 import { VARIANTS } from '../variants.js';
 
@@ -98,12 +99,26 @@ function copyButton(text, label, notify) {
   return button;
 }
 
+// A request with pictures is shown and copied with each picture as its size (see requestText).
+const SHORTENED = 'data:image/jpeg;base64,…(';
+
 function jsonPane(head, text, notify) {
   const pretty = prettyJson(text ?? '');
   return h('div', { class: 'ms-io' },
     h('div', { class: 'ms-io__head' }, h('span', {}, head), copyButton(pretty, `Copy ${head}`, notify)),
     h('pre', { class: 'ms-io__body', tabindex: '0' }, h('code', {}, pretty)),
+    (text ?? '').includes(SHORTENED) ? h('p', { class: 'ms-io__note' }, 'Pictures are shortened here.') : null,
   );
+}
+
+// The pictures the answers are about: A's, and B's beside them when they differ.
+function askedPictures(state) {
+  const a = state.ranA.pictures ?? [];
+  const b = state.resultB ? (state.ranB.pictures ?? []) : a;
+  const same = a.length === b.length && a.every((p, i) => p.id === b[i].id);
+  if (same) return a.length > 0 ? h('div', { class: 'ms-asked-pictures' }, thumbs(a)) : null;
+  const side = (name, list) => h('div', { class: 'ms-asked-pictures__side' }, h('span', { class: 'ms-ab__head' }, name), thumbs(list) ?? h('span', { class: 'ms-asked-pictures__none' }, 'no pictures'));
+  return h('div', { class: 'ms-asked-pictures' }, side('A', a), side('B', b));
 }
 
 // view: { showIO, toggleIO(), notify, why? }; why is an element (the Why? button) for run A.
@@ -122,6 +137,7 @@ export function resultsSection(state, diff, view) {
         }))
     : null;
   return [
+    askedPictures(state),
     h('div', { class: 'ms-results' }, blocks),
     view.why ?? null,
     h('div', { class: 'ms-runinfo' }, lines),

@@ -3,7 +3,9 @@
 // Boot learns the mode and wires client and store for it; accounts mode shows only Sign in until
 // someone is signed in.
 import { createServerClient } from './client-server.js';
+import { LIMITS } from './limits.js';
 import { detectMode } from './mode.js';
+import { forgetPictures } from './pictures.js';
 import { HREF, hrefOf } from './routes.js';
 import { RunError } from './run-error.js';
 import { askedAfterCheck, markChecked, silentCheck } from './sso.js';
@@ -11,6 +13,7 @@ import { createBrowserStore } from './store-browser.js';
 import { createServerStore } from './store-server.js';
 import { withSuggestions } from './suggest-store.js';
 import { h } from './ui/dom.js';
+import { guardStrayDrops } from './ui/picture-field.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
@@ -284,7 +287,10 @@ const NO_SERVER = 'This app needs its magicshell server. Start it and reload the
 export function servicesFor(config) {
   const { mode } = config;
   const accounts = mode === 'accounts';
-  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true };
+  // Pictures: { max, edge } when the server takes them, in both modes.
+  const p = config.pictures;
+  const pictures = Number.isInteger(p?.max) && p.max > 0 && Number.isInteger(p.edge) ? { max: Math.min(p.max, LIMITS.pictures), edge: p.edge } : null;
+  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures };
 }
 
 // Every store call that fails because the session ran out calls onAuthLost, and still fails.
@@ -328,6 +334,7 @@ export const accountsActions = (services, { userChanged, navigate, asked, sessio
     await services.client.signOut();
     // Nothing one user entered or handed over stays for the next.
     forget(ENTERED);
+    forgetPictures();
     takeRun();
     takeGuidedRun();
     // The provider may still know them; sign-out must not bounce straight back in.
@@ -403,6 +410,7 @@ async function boot(shell) {
   registerView('setups', createSetupsView());
   registerView('settings', createSettingsView());
   registerView('sign-in', createSignInView());
+  if (services.pictures) guardStrayDrops(window);
   shellApi = mountShell(shell, services, askedAfterCheck(session) ?? HREF.ask);
   if (showsNotSaving({ mode, storage, store: services.store })) warnNotSaving();
 }

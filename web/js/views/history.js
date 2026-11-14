@@ -6,13 +6,17 @@ import { HREF, hrefOf } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { h } from '../ui/dom.js';
 import { inlineError } from '../ui/notice.js';
+import { thumbs } from '../ui/picture-field.js';
 import { resultsSection } from './bench-results.js';
 import { queueRun } from './bench-model.js';
 import { loadable, queueGuidedRun } from './guided-model.js';
-import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
+import { benchResult, createHistoryModel, entryPictureCount, formatWhen, headline } from './history-model.js';
 import { createWhyPanel, whyButton } from './why-panel.js';
 
 const LIST = HREF.history;
+
+// The run of an entry as the bench and the guide take it: its pictures are gone, `lost` says how many.
+const lostRun = (entry) => (entryPictureCount(entry) > 0 ? { ...entry.run, lost: entryPictureCount(entry) } : entry.run);
 
 export function createHistoryView({ now = () => new Date() } = {}) {
   let root = null;
@@ -82,7 +86,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
     const more = entry.run.questions.length - 1;
     return h('li', {},
       h('a', { class: 'ms-hrow', href: hrefOf('history', entry.id), 'data-entry': entry.id },
-        h('span', { class: 'ms-hrow__text' }, text),
+        h('span', { class: 'ms-hrow__text' }, entryPictureCount(entry) > 0 ? thumbs(entry.pictures.slice(0, 1), { small: true }) : null, text),
         answer ? h('span', { class: `ms-chip ms-hrow__chip ${cls}` }, answer) : null,
         more > 0 ? h('span', { class: 'ms-hrow__more' }, `+${more}`) : null,
         h('span', { class: 'ms-hrow__ms' }, `${Math.round(entry.totalMs)} ms`),
@@ -108,7 +112,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
 
   function openInBench(entry) {
     closeWhy();
-    queueRun(entry.run, benchResult(entry), entry);
+    queueRun(lostRun(entry), benchResult(entry), entry);
     ctx.navigate(HREF.bench);
   }
 
@@ -119,7 +123,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       openInBench(entry);
       return;
     }
-    queueGuidedRun(entry.run);
+    queueGuidedRun(lostRun(entry));
     ctx.navigate(HREF.ask);
   }
 
@@ -152,7 +156,8 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       closeWhy();
       view.why = whyButton({
         entry,
-        why: ctx.why,
+        // Not for a run with pictures: History does not have them to ask again.
+        why: entryPictureCount(entry) > 0 ? null : ctx.why,
         onOpen() {
           whyId = entry.id;
           renderEntry(entry);
@@ -171,6 +176,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
           ? [panel.el]
           : [
               entry.run.state.trim() ? h('pre', { class: 'ms-hentry__state' }, entry.run.state) : null,
+              thumbs(entry.pictures, { sizes: true }),
               ...resultsSection(state, null, view),
             ]),
         h('div', { class: 'oc-row ms-actions' },

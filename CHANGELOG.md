@@ -4,9 +4,17 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.9] - 2026-11-14
+
 ### Added
 
+- Pictures in the situation: up to four per question, in the guided view and the bench, in both modes. Add them with the phone's camera or gallery, the file picker, by dropping them on the situation or by pasting. They are shrunk in the browser (JPEG, 768 px on the longer edge, at most 300 KB each and 600 KB together), which also removes their metadata. A question with pictures says that the model is reading them and can be stopped. History keeps previews only. New keys `[app] max_pictures` (0 turns pictures off) and `picture_max_edge`.
 - magicshell installs as an app on phones and desktops (web app manifest and icons). Over HTTPS, a small service worker shows an offline page when the server cannot be reached; it caches only that page and its styles, never setups, history or answers.
+
+### Changed
+
+- `POST /api/run` takes a request of up to 960 KB (it was 64 KB), which stays under the 1 MB of the shipped nginx template; every other route keeps 64 KB.
+- A 504 from the model endpoint, for example from a proxy in front of the model, is reported as "The model took too long to answer" instead of an error with a number.
 
 ## [2026.11.8] - 2026-11-14
 

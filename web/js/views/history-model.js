@@ -44,9 +44,12 @@ export function headline(entry) {
 // (it is the run), so it is written out again as the server client sends it.
 export const benchResult = (entry) => ({
   ...entry.reply,
-  request: requestText(entry.run),
+  request: requestText({ ...entry.run, pictures: entry.pictures ?? [] }),
   totalMs: entry.totalMs,
 });
+
+// How many pictures the run of an entry had; History keeps their previews only.
+export const entryPictureCount = (entry) => (Array.isArray(entry?.pictures) ? entry.pictures.length : 0);
 
 export function createHistoryModel(store) {
   let list = [];
