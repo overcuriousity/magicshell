@@ -497,7 +497,11 @@ button.ms-why__w:hover { text-decoration: underline dotted; text-underline-offse
   pointer-events: none;
 }
 .ms-complete__ghost > span { flex: none; }
+/* A long textarea scrolls; both reserve the same scrollbar gutter (none with overlay scrollbars),
+   so the ghost's text box is as narrow as the field's and lines wrap at the same points. */
+.ms-complete__box > textarea { scrollbar-gutter: stable; }
 .ms-complete__box > textarea + .ms-complete__ghost {
+  scrollbar-gutter: stable;
   display: block;
   padding: var(--space-2) var(--space-3);
   line-height: 1.6;

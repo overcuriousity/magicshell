@@ -24,6 +24,9 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   // Escape hides the suggestion until the text changes.
   let dismissed = false;
   let timer = null;
+  // Set by blur, cleared by focus: when the window loses focus the field gets `blur`
+  // but stays document.activeElement, so that alone cannot tell.
+  let away = false;
 
   const typed = h('span', { class: 'ms-complete__typed' });
   const restEl = h('span', { class: 'ms-complete__rest' });
@@ -65,7 +68,7 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   };
 
   const update = () => {
-    const show = document.activeElement === field && !composing && !dismissed && caretAtEnd();
+    const show = !away && document.activeElement === field && !composing && !dismissed && caretAtEnd();
     const next = show ? suggest.current().rest(pool, field.value, { limit, pairedName: pairedName() }) : '';
     typed.textContent = field.value;
     restEl.textContent = next;
@@ -107,7 +110,11 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     update();
     renderRow();
   });
-  for (const type of ['focus', 'keyup', 'click', 'select']) field.addEventListener(type, update);
+  for (const type of ['keyup', 'click', 'select']) field.addEventListener(type, update);
+  field.addEventListener('focus', () => {
+    away = false;
+    update();
+  });
   field.addEventListener('compositionstart', () => {
     composing = true;
     update();
@@ -116,7 +123,10 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     composing = false;
     update();
   });
-  field.addEventListener('blur', update);
+  field.addEventListener('blur', () => {
+    away = true;
+    update();
+  });
   field.addEventListener('scroll', sync);
   field.addEventListener('keydown', (e) => {
     if (!rest) return;

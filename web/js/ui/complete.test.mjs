@@ -213,6 +213,21 @@ test('blur clears it', () => {
   assert.equal(rest(), '');
 });
 
+test('a window blur clears it too, though the field stays the active element', () => {
+  const { field, rest, strip } = setup();
+  field.focus();
+  type(field, 'Which te');
+  // Switching windows: the field gets `blur` but document.activeElement does not change.
+  fire(field, 'blur');
+  assert.equal(document.activeElement, field);
+  assert.equal(rest(), '');
+  assert.equal(strip().hidden, true);
+  assert.equal(key(field, 'Tab').prevented, false);
+  // Coming back gives the field `focus`, and the suggestion returns.
+  fire(field, 'focus');
+  assert.equal(rest(), 'am should handle this?');
+});
+
 test('the limit holds', () => {
   const { field, rest } = setup({ limit: 10 });
   field.focus();
