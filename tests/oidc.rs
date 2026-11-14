@@ -168,3 +168,203 @@ async fn config_reports_no_sso_in_password_mode() {
     assert!(config(&app, None).await.get("sso").is_some());
     assert_eq!(no_redirects().get(format!("{}/auth/oidc/start", app.base)).send().await.unwrap().status(), 404);
 }
+
+// Failures, replay and the mode switch.
+
+/// `GET /auth/oidc/callback?<query>`: where it redirects and the cookie it sets, if any.
+async fn callback(app: &TestApp, query: &str, cookie: Option<&str>) -> SsoResult {
+    let mut req = no_redirects().get(format!("{}/auth/oidc/callback?{query}", app.base));
+    if let Some(c) = cookie {
+        req = req.header("cookie", c);
+    }
+    let res = req.send().await.unwrap();
+    assert_eq!(res.status(), 303);
+    assert_eq!(res.headers()["cache-control"], "no-store");
+    let location = res.headers()["location"].to_str().unwrap().to_owned();
+    let cookie = res.headers().get("set-cookie").map(|_| cookie_of(&res));
+    SsoResult { location, cookie }
+}
+
+/// The callback query the provider would send for this authorize URL.
+fn granted(idp: &Idp, authorize: &url::Url) -> String {
+    format!("code={}&state={}", idp.grant(authorize), query(authorize, "state").unwrap())
+}
+
+async fn users(app: &TestApp) -> i64 {
+    magicshell::kit::identity::users::count(app.pool.as_ref().unwrap()).await.unwrap()
+}
+
+const FAILED: &str = "/#/sign-in/failed";
+
+/// A sign-in against a provider scripted to misbehave ends in `failed` and makes no account.
+async fn refused(change: impl FnOnce(&mut fake_idp::Script)) {
+    let (idp, app) = sso_app(true).await;
+    change(&mut idp.script.lock().unwrap());
+    assert_eq!(sso_sign_in(&app, &idp, "#/history").await.location, FAILED);
+    assert_eq!(users(&app).await, 0);
+}
+
+#[tokio::test]
+async fn a_token_for_another_nonce_is_refused() {
+    refused(|s| s.nonce = Some("other".into())).await;
+}
+
+#[tokio::test]
+async fn a_token_for_another_audience_is_refused() {
+    refused(|s| s.aud = Some("someone-else".into())).await;
+}
+
+#[tokio::test]
+async fn an_expired_token_is_refused() {
+    refused(|s| s.expired = true).await;
+}
+
+#[tokio::test]
+async fn a_failing_token_endpoint_is_refused() {
+    refused(|s| s.token_status = 500).await;
+}
+
+#[tokio::test]
+async fn a_wrong_state_is_refused() {
+    let (idp, app) = sso_app(true).await;
+    let (authorize, cookie) = sso_start(&app, "").await;
+    let query = format!("code={}&state=not-the-state", idp.grant(&authorize));
+    assert_eq!(callback(&app, &query, Some(&cookie)).await.location, FAILED);
+    assert_eq!(users(&app).await, 0);
+}
+
+#[tokio::test]
+async fn a_callback_without_the_session_is_refused() {
+    let (idp, app) = sso_app(true).await;
+    let (authorize, _cookie) = sso_start(&app, "").await;
+    assert_eq!(callback(&app, &granted(&idp, &authorize), None).await.location, FAILED);
+    assert_eq!(users(&app).await, 0);
+}
+
+#[tokio::test]
+async fn a_refusal_at_the_provider_is_refused_here() {
+    let (_idp, app) = sso_app(true).await;
+    let (authorize, cookie) = sso_start(&app, "").await;
+    let query = format!("error=access_denied&state={}", query(&authorize, "state").unwrap());
+    assert_eq!(callback(&app, &query, Some(&cookie)).await.location, FAILED);
+    assert_eq!(users(&app).await, 0);
+}
+
+#[tokio::test]
+async fn a_callback_cannot_be_replayed() {
+    let (idp, app) = sso_app(true).await;
+    let (authorize, cookie) = sso_start(&app, "").await;
+    let query = granted(&idp, &authorize);
+    assert_eq!(callback(&app, &query, Some(&cookie)).await.location, "/");
+    assert_eq!(callback(&app, &query, Some(&cookie)).await.location, FAILED);
+}
+
+#[tokio::test]
+async fn reopening_the_callback_keeps_the_person_signed_in() {
+    let (idp, app) = sso_app(true).await;
+    let (authorize, cookie) = sso_start(&app, "").await;
+    let query = granted(&idp, &authorize);
+    let signed_in = callback(&app, &query, Some(&cookie)).await.cookie.unwrap();
+    assert_eq!(callback(&app, &query, Some(&signed_in)).await.location, FAILED);
+    assert_eq!(config(&app, Some(&signed_in)).await["user"]["username"], "ada");
+}
+
+#[tokio::test]
+async fn a_failing_userinfo_does_not_stop_the_sign_in() {
+    let (idp, app) = sso_app(true).await;
+    {
+        let mut s = idp.script.lock().unwrap();
+        s.preferred_username = None;
+        s.userinfo_status = 500;
+    }
+    assert_eq!(signed_in_name(&app, &idp).await, "sub-ada");
+}
+
+#[tokio::test]
+async fn a_second_start_replaces_the_first() {
+    let (idp, app) = sso_app(true).await;
+    let (first, cookie) = sso_start(&app, "").await;
+    let res =
+        no_redirects().get(format!("{}/auth/oidc/start", app.base)).header("cookie", &cookie).send().await.unwrap();
+    assert_eq!(res.status(), 303);
+    let cookie = res.headers().get("set-cookie").map_or(cookie, |_| cookie_of(&res));
+    assert_eq!(callback(&app, &granted(&idp, &first), Some(&cookie)).await.location, FAILED);
+    // The failed attempt used up the pending entry; one more click starts over and works.
+    assert_eq!(sso_sign_in(&app, &idp, "").await.location, "/");
+}
+
+#[tokio::test]
+async fn without_auto_provision_nobody_new_gets_in() {
+    let (idp, app) = sso_app(false).await;
+    assert_eq!(sso_sign_in(&app, &idp, "").await.location, "/#/sign-in/no-account");
+    assert_eq!(users(&app).await, 0);
+    magicshell::kit::identity::users::find_or_provision_oidc(
+        app.pool.as_ref().unwrap(),
+        &idp.issuer,
+        "sub-ada",
+        "ada",
+        true,
+        time::OffsetDateTime::now_utc(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(sso_sign_in(&app, &idp, "").await.location, "/");
+}
+
+#[tokio::test]
+async fn the_server_starts_while_the_provider_is_down() {
+    let idp = fake_idp::spawn().await;
+    idp.script.lock().unwrap().down = true;
+    let app = spawn(&sso_toml(&idp.issuer, true)).await;
+    assert_eq!(get_with(&app, "/healthz", None).await.status(), 200);
+    let res = sso_start_response(&app, "").await;
+    assert_eq!(res.status(), 303);
+    assert_eq!(res.headers()["location"], "/#/sign-in/unreachable");
+    idp.script.lock().unwrap().down = false;
+    assert_eq!(sso_sign_in(&app, &idp, "").await.location, "/");
+}
+
+#[tokio::test]
+async fn an_issuer_that_differs_from_the_providers_is_unreachable() {
+    let idp = fake_idp::spawn().await;
+    let app = spawn(&sso_toml(&format!("{}/", idp.issuer), true)).await;
+    let res = sso_start_response(&app, "").await;
+    assert_eq!(res.headers()["location"], "/#/sign-in/unreachable");
+}
+
+#[tokio::test]
+async fn a_password_session_ends_when_sso_is_switched_on() {
+    let app = spawn(ACCOUNTS).await;
+    add_user(&app, "ada", "a long enough password").await;
+    let cookie = sign_in(&app, "ada", "a long enough password").await;
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
+    let idp = fake_idp::spawn().await;
+    let app = spawn_in(&sso_toml(&idp.issuer, true), app.dir).await;
+    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
+    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 401);
+}
+
+#[tokio::test]
+async fn an_sso_session_ends_when_sso_is_switched_off() {
+    let (idp, app) = sso_app(true).await;
+    let cookie = sso_sign_in(&app, &idp, "").await.cookie.unwrap();
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
+    let app = spawn_in(ACCOUNTS, app.dir).await;
+    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
+    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 401);
+    for password in ["", "anything-at-all"] {
+        let res = post_json(&app, "/api/auth/sign-in", &json!({"username": "ada", "password": password}), None).await;
+        assert_eq!(res.status(), 401, "{password:?}");
+    }
+}
+
+#[tokio::test]
+async fn the_start_route_is_rate_limited() {
+    let (_idp, app) = sso_app(true).await;
+    let mut limited = false;
+    for _ in 0..8 {
+        let res = sso_start_response(&app, "").await;
+        limited |= res.status() == 429;
+    }
+    assert!(limited);
+}

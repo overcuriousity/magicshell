@@ -19,11 +19,12 @@ use crate::kit::session::PENDING_KEY;
 
 const MAX_NEXT: usize = 512;
 
-/// `next` when it is a fragment of at most 512 bytes with no space, control byte or backslash; else `""`.
+/// `next` when it is a fragment of at most 512 bytes of printable ASCII without a backslash; else `""`.
+/// Browsers percent-encode everything else in a fragment, and a `Location` header takes nothing else.
 /// The final redirect is `/` followed by it, so it cannot leave the origin.
 pub fn safe_next(next: &str) -> &str {
     let ok =
-        next.starts_with('#') && next.len() <= MAX_NEXT && !next.bytes().any(|b| b <= 0x20 || b == 0x7f || b == b'\\');
+        next.starts_with('#') && next.len() <= MAX_NEXT && !next.bytes().any(|b| b <= 0x20 || b >= 0x7f || b == b'\\');
     if ok { next } else { "" }
 }
 
@@ -128,4 +129,33 @@ async fn finish(
     let epoch = users::session_epoch(pool, user.id).await.map_err(|e| internal(&e))?.ok_or(SignInError::Failed)?;
     auth::start(session, user.id, epoch).await.map_err(|e| internal(&e))?;
     Ok(pending.next)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_is_a_short_fragment_of_printable_ascii() {
+        assert_eq!(safe_next("#/history"), "#/history");
+        assert_eq!(safe_next("#/setups/a%20b"), "#/setups/a%20b");
+        let longest = format!("#{}", "a".repeat(511));
+        assert_eq!(safe_next(&longest), longest);
+        let too_long = format!("#{}", "a".repeat(512));
+        for bad in [
+            "",
+            "/x",
+            "//evil.example",
+            "https://evil.example",
+            "#a b",
+            "#a\tb",
+            "#a\r\nb",
+            "#a\u{7f}",
+            "#a\\b",
+            "#\u{e4}",
+            &too_long,
+        ] {
+            assert_eq!(safe_next(bad), "", "{bad:?}");
+        }
+    }
 }
