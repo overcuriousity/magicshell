@@ -17,12 +17,15 @@ use super::auth::SignedIn;
 use super::storage::{check_id, pool_of, read_body};
 use crate::error::AppError;
 use crate::kit::OcError;
-use crate::systemone::Run;
+use crate::systemone::{MAX_PICTURES, Run};
 
 const MAX_ENTRIES: i64 = 500;
 const MAX_STORED: usize = 64 * 1024;
 /// The kept Why? part, measured on its own so the whole request stays under the 64 KB body limit.
 const MAX_WHY: usize = 40 * 1024;
+/// A preview is a small JPEG data URL; an entry has at most one per picture of a run.
+const MAX_PREVIEW_CHARS: usize = 4000;
+const PREVIEW_PREFIX: &str = "data:image/jpeg;base64,";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -39,6 +42,27 @@ pub struct Entry {
     /// `check_why` parses it as a `WhyPart`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<Value>,
+    /// What is kept of the run's pictures: a preview and the size, never the picture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pictures: Option<Vec<PicturePart>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PicturePart {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub bytes: u32,
+}
+
+fn check_pictures(pictures: &[PicturePart]) -> Result<(), AppError> {
+    let preview_ok = |p: &str| p.starts_with(PREVIEW_PREFIX) && p.len() <= MAX_PREVIEW_CHARS;
+    if pictures.len() > MAX_PICTURES || !pictures.iter().all(|p| p.preview.as_deref().is_none_or(preview_ok)) {
+        return Err(AppError::Invalid("A preview of this entry is not valid.".into()));
+    }
+    Ok(())
 }
 
 /// How each word of the situation moved the answers; see `check_why` for what must hold.
@@ -128,8 +152,14 @@ pub async fn put(
     if !entry.total_ms.as_f64().is_some_and(|ms| ms.is_finite() && ms >= 0.0) {
         return Err(AppError::Invalid("The duration of this entry is not valid.".into()));
     }
+    if !entry.run.images.is_empty() {
+        return Err(AppError::Invalid("History does not keep pictures.".into()));
+    }
+    let pictures = entry.pictures.as_deref().unwrap_or_default();
+    check_pictures(pictures)?;
     let stored = serde_json::to_string(&entry.run).map_err(OcError::internal)?.len()
-        + serde_json::to_string(&entry.reply).map_err(OcError::internal)?.len();
+        + serde_json::to_string(&entry.reply).map_err(OcError::internal)?.len()
+        + serde_json::to_string(pictures).map_err(OcError::internal)?.len();
     if stored > MAX_STORED {
         return Err(AppError::Invalid("This entry is too large to keep.".into()));
     }
