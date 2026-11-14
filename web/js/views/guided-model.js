@@ -2,7 +2,9 @@
 // then the options or the scale (a yes-or-no question has neither and is asked from step 2), then
 // the result. What was entered is kept in sessionStorage so it survives sign-in and reload;
 // the result is not.
+import { hasPictures } from '../client-server.js';
 import { LIMITS } from '../limits.js';
+import { pictureMemory } from '../pictures.js';
 import { SCALES } from '../setups-builtin.js';
 import { isObject } from '../util.js';
 import { createRunOnce } from './run-once.js';
@@ -29,8 +31,11 @@ export function loadable(run) {
   return Boolean(q && KINDS.includes(q.type) && typeof q.text === 'string');
 }
 
+// The guide's pictures while the tab lives; see pictureMemory.
+const guidePictures = pictureMemory();
+
 const isScale = (id) => id === 'own' || SCALES.some((s) => s.id === id);
-const fresh = () => ({ step: 1, kind: 'noul', question: '', options: [], scaleId: FIRST_SCALE, levels: [], context: '' });
+const fresh = () => ({ step: 1, kind: 'noul', question: '', options: [], scaleId: FIRST_SCALE, levels: [], context: '', pictures: [] });
 // The step that asks: a yes-or-no question has no details to set.
 const lastStepOf = (kind) => (kind === 'noul' ? 2 : 3);
 const sameTexts = (a, b) => a.length === b.length && a.every((t, i) => t === b[i]);
@@ -58,6 +63,7 @@ function restored(saved) {
     scaleId,
     levels: levels.map((l) => ({ id: l.id, text: l.text })),
     context,
+    pictureIds: Array.isArray(saved.pictureIds) ? saved.pictureIds.filter((id) => typeof id === 'string') : [],
   };
 }
 
@@ -70,28 +76,43 @@ export function createGuidedModel({
   navigate = () => {},
   preheat = false,
   session = sessionStore(),
+  pictures: memory = guidePictures,
 }) {
   const listeners = new Set();
+  // How many pictures a restored or loaded draft had that are gone; the view says so once.
+  let lost = 0;
   const runner = createRunOnce({ client, store, now, uuid, mode, navigate, guided: true });
 
   const restore = () => {
+    let draft = null;
     try {
-      return restored(JSON.parse(session?.getItem(SESSION_KEY) ?? 'null')) ?? fresh();
+      draft = restored(JSON.parse(session?.getItem(SESSION_KEY) ?? 'null'));
     } catch {
-      return fresh();
+      // A damaged draft is no draft.
     }
+    if (!draft) return fresh();
+    // Pictures are found in memory by id; after a reload they are gone.
+    const { pictureIds, ...rest } = draft;
+    const found = memory.recall(pictureIds);
+    if (!found) lost = pictureIds.length;
+    return { ...rest, pictures: found ?? [] };
   };
 
   const state = { ...restore(), busy: false, result: null, whyOpen: false, error: null };
 
   const persist = () => {
-    const { step, kind, question, options, scaleId, levels, context } = state;
+    const { step, kind, question, options, scaleId, levels, context, pictures } = state;
+    memory.keep(pictures);
     try {
-      session?.setItem(SESSION_KEY, JSON.stringify({ step: step === 'result' ? lastStepOf(kind) : step, kind, question, options, scaleId, levels, context }));
+      const kept = { step: step === 'result' ? lastStepOf(kind) : step, kind, question, options, scaleId, levels, context };
+      if (pictures.length > 0) kept.pictureIds = pictures.map((p) => p.id);
+      session?.setItem(SESSION_KEY, JSON.stringify(kept));
     } catch {
       // Without session storage the guide still works; it just does not survive a reload.
     }
   };
+  // What is gone is forgotten at once, so the next reload does not report it again.
+  if (lost > 0) persist();
   // Every step change ends in changed(), so this is the one place that sees arriving on the
   // asking step (also from the result page); edits within the step do not count again.
   const asking = () => state.step === lastStepOf(state.kind);
@@ -150,6 +171,14 @@ export function createGuidedModel({
     },
     setLevels: (levels) => edit(() => { state.levels = levels.map((l) => ({ id: l.id, text: l.text })); }),
     setContext: (text) => edit(() => { state.context = text; }),
+    setPictures: (list) => edit(() => { state.pictures = [...list]; }),
+    // Gives up waiting for the answer.
+    stop: () => runner.stop(),
+    takeLost() {
+      const n = lost;
+      lost = 0;
+      return n;
+    },
 
     // The step with the Ask button: 2 for a yes-or-no question, 3 otherwise.
     lastStep: () => lastStepOf(state.kind),
@@ -178,13 +207,15 @@ export function createGuidedModel({
     },
 
     // Whether anything was entered: a question, an option or the context.
-    holdsSomething: () => state.question.trim() !== '' || state.options.length > 0 || state.context.trim() !== '',
+    holdsSomething: () => state.question.trim() !== '' || state.options.length > 0 || state.context.trim() !== '' || state.pictures.length > 0,
 
     toRun() {
       const q = { key: KEY, type: state.kind, text: state.question };
       if (state.kind === 'choice') q.options = state.options.map((o) => ({ id: o.id, name: o.name, description: o.description ?? '' }));
       if (state.kind === 'score') q.levels = levelsOf();
-      return { state: state.context, questions: [q] };
+      const run = { state: state.context, questions: [q] };
+      if (state.pictures.length > 0) run.pictures = [...state.pictures];
+      return run;
     },
 
     ask() {
@@ -198,7 +229,7 @@ export function createGuidedModel({
         },
         done(result) {
           state.busy = false;
-          mine = { question: run.questions[0], answer: result.answers[KEY], entry: null };
+          mine = { question: run.questions[0], answer: result.answers[KEY], entry: null, pictures: run.pictures ?? [] };
           state.result = mine;
           state.step = 'result';
           changed();
@@ -206,6 +237,10 @@ export function createGuidedModel({
         fail(sentence) {
           state.busy = false;
           state.error = sentence;
+          changed();
+        },
+        stopped() {
+          state.busy = false;
           changed();
         },
         saved(entry) {
@@ -217,8 +252,10 @@ export function createGuidedModel({
       });
     },
     // Why? needs the saved entry; the panel is kept across changes, so saveWhy stays quiet.
+    // Why? asks once per word, and every call would read the pictures again.
+    canWhy: () => Boolean(state.result) && state.result.pictures.length === 0,
     openWhy() {
-      if (state.step !== 'result' || !state.result?.entry || state.whyOpen) return;
+      if (state.step !== 'result' || !state.result?.entry || state.whyOpen || !model.canWhy()) return;
       state.whyOpen = true;
       changed();
     },
@@ -253,6 +290,9 @@ export function createGuidedModel({
       const q = run.questions[0];
       edit(() => {
         Object.assign(state, fresh(), { result: null, whyOpen: false });
+        // From History the pictures are gone and `lost` says how many; the bench hands its own over.
+        lost = Number.isInteger(run.lost) && run.lost > 0 ? run.lost : 0;
+        state.pictures = hasPictures(run) ? [...run.pictures] : [];
         state.step = 2;
         state.kind = q.type;
         state.question = q.text;

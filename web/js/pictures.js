@@ -92,6 +92,35 @@ export function browserCodec(doc = document) {
   };
 }
 
+// Pictures stay in memory only: a draft in sessionStorage names them by id, and this is where a
+// model built again in the same tab (another view, sign-in) finds them. After a reload it is
+// empty, and the draft says how many are gone.
+const memories = new Set();
+export function pictureMemory() {
+  let held = new Map();
+  const memory = {
+    keep(pictures) {
+      held = new Map(pictures.map((p) => [p.id, p]));
+    },
+    // The pictures with these ids, in this order; null when one of them is gone.
+    recall(ids) {
+      const found = ids.map((id) => held.get(id));
+      return found.every(Boolean) ? found : null;
+    },
+  };
+  memories.add(memory);
+  return memory;
+}
+// Nothing one person added stays for the next.
+export function forgetPictures() {
+  for (const m of memories) m.keep([]);
+}
+
+export const lostNotice = (n) =>
+  n === 1
+    ? 'This run had 1 picture. History keeps only previews; add it again to ask the same.'
+    : `This run had ${n} pictures. History keeps only previews; add them again to ask the same.`;
+
 const kb = (bytes) => `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 // "1 of 4 · 768×576 · 84 KB", "2 of 4 · 212 KB together", or '' without pictures.

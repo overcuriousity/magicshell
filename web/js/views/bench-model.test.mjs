@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { pictureMemory } from '../pictures.js';
 import { RunError } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { createBenchModel, queueRun, SESSION_KEY, takeRun } from './bench-model.js';
@@ -612,4 +613,169 @@ test('Why? cannot be opened during a run and does not open itself for the new re
   await pending;
   assert.equal(m.state.whyOpen, false);
   assert.ok(m.state.entryA);
+});
+
+// Pictures.
+const jpegUrl = 'data:image/jpeg;base64,/9j/AAAA';
+const pic = (id) => ({ id, url: 'data:image/jpeg;base64,/9j/BBBB', width: 768, height: 576, bytes: 5, preview: jpegUrl });
+const asked = (m) => {
+  m.updateQuestion('q1', { text: 'Wet?' });
+  return m.run();
+};
+
+test('pictures are part of the run that is asked', async () => {
+  const client = fakeClient();
+  const m = make({ client, pictures: pictureMemory() });
+  m.setPictures([pic('a'), pic('b')]);
+  await asked(m);
+  assert.deepEqual(client.calls[0].pictures.map((p) => p.id), ['a', 'b']);
+  assert.deepEqual(m.state.ranA.pictures.map((p) => p.id), ['a', 'b']);
+});
+
+test('removing the last picture leaves a run without the field', () => {
+  const m = make({ pictures: pictureMemory() });
+  m.setPictures([pic('a')]);
+  m.setPictures([]);
+  assert.deepEqual(m.state.a, { state: '', questions: [{ key: 'q1', type: 'noul', text: '' }] });
+});
+
+test('a variant starts with the baseline\'s pictures and may change them', async () => {
+  const client = fakeClient();
+  const m = make({ client, pictures: pictureMemory() });
+  m.setPictures([pic('a'), pic('b')]);
+  await asked(m);
+  m.startVariant('reversed');
+  assert.deepEqual(m.state.b.pictures.map((p) => p.id), ['a', 'b']);
+  m.editVariant((b) => { b.pictures = b.pictures.slice(1); });
+  await m.runVariant();
+  assert.deepEqual(client.calls[1].pictures.map((p) => p.id), ['b']);
+  assert.deepEqual(m.state.ranA.pictures.map((p) => p.id), ['a', 'b']);
+});
+
+test('nothing of a picture is kept in the session', async () => {
+  const session = memory();
+  const m = make({ session, pictures: pictureMemory() });
+  m.setPictures([pic('a')]);
+  await asked(m);
+  m.startVariant(null);
+  const kept = session.getItem(SESSION_KEY);
+  // The entry's previews may be there; the pictures themselves never.
+  assert.equal(kept.includes('/9j/BBBB'), false);
+  assert.deepEqual(JSON.parse(kept).a.pictureIds, ['a']);
+  assert.deepEqual(JSON.parse(kept).b.pictureIds, ['a']);
+});
+
+test('pictures survive another view, which builds the model again', async () => {
+  const session = memory();
+  const pictures = pictureMemory();
+  const m = make({ session, pictures });
+  m.setPictures([pic('a')]);
+  await asked(m);
+  const again = make({ session, pictures });
+  assert.deepEqual(again.state.a.pictures.map((p) => p.id), ['a']);
+  assert.ok(again.state.resultA);
+  assert.equal(again.takeLost(), 0);
+});
+
+test('after a reload a picture run is a draft without its result', async () => {
+  const session = memory();
+  const m = make({ session, pictures: pictureMemory() });
+  m.setState('A receipt.');
+  m.setPictures([pic('a'), pic('b')]);
+  await asked(m);
+  m.startVariant('reversed');
+  await m.runVariant();
+  const reloaded = make({ session, pictures: pictureMemory() });
+  assert.equal(reloaded.state.a.state, 'A receipt.');
+  assert.equal('pictures' in reloaded.state.a, false);
+  assert.equal(reloaded.state.resultA, null);
+  assert.equal(reloaded.state.ranA, null);
+  assert.equal(reloaded.state.b, null);
+  assert.equal(reloaded.takeLost(), 2);
+  assert.equal(reloaded.takeLost(), 0);
+  assert.equal(JSON.parse(session.getItem(SESSION_KEY)).a.pictureIds, undefined);
+});
+
+test('after a reload a variant that alone had pictures loses only its result', async () => {
+  const session = memory();
+  const m = make({ session, pictures: pictureMemory() });
+  await asked(m);
+  m.startVariant(null);
+  m.editVariant((b) => { b.pictures = [pic('x')]; });
+  await m.runVariant();
+  const reloaded = make({ session, pictures: pictureMemory() });
+  assert.ok(reloaded.state.resultA);
+  assert.ok(reloaded.state.b);
+  assert.equal(reloaded.state.resultB, null);
+  assert.equal(reloaded.takeLost(), 1);
+});
+
+test('a session saved before pictures existed restores as before', () => {
+  const session = memory();
+  const a = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
+  const resultA = { answers: { q1: { type: 'noul', noul: 0.25 } }, model: 'm', inputTokens: 1, totalMs: 5, upstreamMs: 4, request: '{}', response: '{}' };
+  session.setItem(SESSION_KEY, JSON.stringify({ a, ranA: a, resultA, entryA: null, b: null, variant: null, ranB: null, resultB: null }));
+  const m = make({ session, pictures: pictureMemory() });
+  assert.deepEqual(m.state.a, a);
+  assert.equal(m.state.resultA.answers.q1.noul, 0.25);
+  assert.equal(m.takeLost(), 0);
+});
+
+test('a history entry with pictures loads as a draft with a notice count', () => {
+  const m = make({ pictures: pictureMemory() });
+  const run = { state: 'A receipt.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }], lost: 2 };
+  const result = { answers: { q1: { type: 'noul', noul: 0.25 } }, model: 'm', inputTokens: 1, totalMs: 5, upstreamMs: 4, request: '{}', response: '{}' };
+  m.loadRun(run, result, { id: 'e1' });
+  assert.deepEqual(m.state.a, { state: 'A receipt.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] });
+  assert.equal(m.state.resultA, null);
+  assert.equal(m.state.entryA, null);
+  assert.equal(m.takeLost(), 2);
+});
+
+test('a run handed over with its pictures keeps them', () => {
+  const m = make({ pictures: pictureMemory() });
+  m.loadRun({ state: '', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }], pictures: [pic('a')] });
+  assert.deepEqual(m.state.a.pictures.map((p) => p.id), ['a']);
+  assert.equal(m.takeLost(), 0);
+});
+
+test('a setup keeps the pictures', () => {
+  const m = make({ pictures: pictureMemory() });
+  m.setPictures([pic('a')]);
+  m.loadSetup(triage);
+  assert.deepEqual(m.state.a.pictures.map((p) => p.id), ['a']);
+  assert.equal(m.state.a.questions.length, triage.questions.length);
+});
+
+test('why is not offered after a run with pictures', async () => {
+  const m = make({ pictures: pictureMemory() });
+  await asked(m);
+  assert.equal(m.canWhy(), true);
+  m.setPictures([pic('a')]);
+  assert.equal(m.canWhy(), true);
+  await m.run();
+  assert.equal(m.canWhy(), false);
+  m.openWhy();
+  assert.equal(m.state.whyOpen, false);
+});
+
+test('a picture alone counts as something entered', () => {
+  const m = make({ pictures: pictureMemory() });
+  assert.equal(m.holdsSomething(), false);
+  m.setPictures([pic('a')]);
+  assert.equal(m.holdsSomething(), true);
+});
+
+test('stop frees the bench without a result', async () => {
+  const calls = [];
+  const client = { run: (run, opts) => new Promise(() => calls.push(opts.signal)) };
+  const m = make({ client, pictures: pictureMemory() });
+  m.updateQuestion('q1', { text: 'Wet?' });
+  m.run();
+  assert.equal(m.state.busy, 'a');
+  m.stop();
+  assert.equal(m.state.busy, null);
+  assert.equal(calls[0].aborted, true);
+  assert.equal(m.state.resultA, null);
+  assert.equal(m.state.error, null);
 });

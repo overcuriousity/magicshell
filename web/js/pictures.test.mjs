@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LIMITS } from './limits.js';
-import { addFiles, picturesLine, shortUrl, shrink, targetSize } from './pictures.js';
+import { addFiles, forgetPictures, lostNotice, pictureMemory, picturesLine, shortUrl, shrink, targetSize } from './pictures.js';
 import { RunError } from './run-error.js';
 import { dataUrlBytes, validateRun } from './systemone.js';
 
@@ -145,4 +145,22 @@ test('the line under the pictures', () => {
 test('a short url names the size', () => {
   assert.equal(shortUrl(jpeg(84 * 1024)), 'data:image/jpeg;base64,…(84 KB)');
   assert.equal(shortUrl('something else'), 'something else');
+});
+
+test('a picture memory recalls what it was last given, all or nothing', () => {
+  const m = pictureMemory();
+  const a = { id: 'a' };
+  const b = { id: 'b' };
+  m.keep([a, b]);
+  assert.deepEqual(m.recall(['b', 'a']), [b, a]);
+  assert.equal(m.recall(['a', 'c']), null);
+  m.keep([a]);
+  assert.equal(m.recall(['b']), null);
+  forgetPictures();
+  assert.equal(m.recall(['a']), null);
+});
+
+test('the notice for pictures that are gone', () => {
+  assert.equal(lostNotice(1), 'This run had 1 picture. History keeps only previews; add it again to ask the same.');
+  assert.equal(lostNotice(3), 'This run had 3 pictures. History keeps only previews; add them again to ask the same.');
 });

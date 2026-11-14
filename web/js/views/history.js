@@ -9,10 +9,13 @@ import { inlineError } from '../ui/notice.js';
 import { resultsSection } from './bench-results.js';
 import { queueRun } from './bench-model.js';
 import { loadable, queueGuidedRun } from './guided-model.js';
-import { benchResult, createHistoryModel, formatWhen, headline } from './history-model.js';
+import { benchResult, createHistoryModel, entryPictureCount, formatWhen, headline } from './history-model.js';
 import { createWhyPanel, whyButton } from './why-panel.js';
 
 const LIST = HREF.history;
+
+// The run of an entry as the bench and the guide take it: its pictures are gone, `lost` says how many.
+const lostRun = (entry) => (entryPictureCount(entry) > 0 ? { ...entry.run, lost: entryPictureCount(entry) } : entry.run);
 
 export function createHistoryView({ now = () => new Date() } = {}) {
   let root = null;
@@ -108,7 +111,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
 
   function openInBench(entry) {
     closeWhy();
-    queueRun(entry.run, benchResult(entry), entry);
+    queueRun(lostRun(entry), benchResult(entry), entry);
     ctx.navigate(HREF.bench);
   }
 
@@ -119,7 +122,7 @@ export function createHistoryView({ now = () => new Date() } = {}) {
       openInBench(entry);
       return;
     }
-    queueGuidedRun(entry.run);
+    queueGuidedRun(lostRun(entry));
     ctx.navigate(HREF.ask);
   }
 
