@@ -562,3 +562,12 @@ button.ms-why__w:hover { text-decoration: underline dotted; text-underline-offse
 }
 /* After the touch size, as .ms-mono comes after .oc-input for the field. */
 .ms-complete__box > .ms-mono + .ms-complete__ghost { font-family: var(--font-mono); font-size: var(--text-mono); }
+
+/* The offline page the service worker shows when the server cannot be reached. */
+.oc-offline {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: calc(var(--space-6) + env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) var(--space-6) max(var(--space-4), env(safe-area-inset-left));
+  display: grid;
+  gap: var(--space-4);
+}

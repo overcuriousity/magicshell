@@ -14,7 +14,7 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 ### Knowing departures
 
 - Browser-first app of plain ES modules under `web/` instead of server-rendered Askama + htmx.
-- No MCP endpoint, OpenAPI document or PWA install (spec non-goals).
+- No MCP endpoint or OpenAPI document (spec non-goals).
 - The manifest's categorical chart colours colour choice options and its ordered ramp colours score levels; always paired with a name, a number or a symbol.
 - Kit code is copied into `src/kit/` from oc-kit v2026.11.1 instead of depending on oc-kit, so the build has no git dependency (see `src/kit/mod.rs`); the OIDC module is the kit's without bearer tokens and resource metadata.
 - Password sign-in always stands beside `[auth.oidc]`; there is no `auth.local` switch to turn it off.

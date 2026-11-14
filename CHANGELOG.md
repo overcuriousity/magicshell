@@ -4,6 +4,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- magicshell installs as an app on phones and desktops (web app manifest and icons). Over HTTPS, a small service worker shows an offline page when the server cannot be reached; it caches only that page and its styles, never setups, history or answers.
+
 ## [2026.11.8] - 2026-11-14
 
 ### Added
