@@ -8,7 +8,7 @@ import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
 import { levelClass, optionClass } from '../ui/colors.js';
 import { completing } from '../ui/complete.js';
-import { h, present } from '../ui/dom.js';
+import { caretOf, h, present, restoreCaret } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
@@ -345,6 +345,8 @@ export function createGuidedView() {
     const stepChanged = state.step !== lastStep;
     const ended = trackBusy(state);
     const fid = root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null;
+    // A picture arriving rebuilds the step under a field being typed in: the caret goes back too.
+    const caret = fid ? caretOf(document.activeElement) : null;
     // The heading is rebuilt with the body (the history save lands after the result shows), so
     // focus on it has to follow to the new one.
     const headingFocused = document.activeElement === root.querySelector('h1');
@@ -370,6 +372,7 @@ export function createGuidedView() {
       root.querySelector('h1')?.focus({ preventScroll: true });
     } else if (fid && !root.contains(document.activeElement)) {
       refocus(fid);
+      if (document.activeElement?.getAttribute('data-fid') === fid) restoreCaret(document.activeElement, caret);
     } else if (headingFocused && !root.contains(document.activeElement)) {
       root.querySelector('h1')?.focus({ preventScroll: true });
     }

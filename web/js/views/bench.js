@@ -8,7 +8,7 @@ import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { completing } from '../ui/complete.js';
-import { h } from '../ui/dom.js';
+import { caretOf, h, restoreCaret } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
@@ -334,8 +334,13 @@ export function createBenchView(deps = {}) {
   const focusedFid = () => (root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null);
   const keepFocus = (fn) => {
     const fid = focusedFid();
+    // A picture arriving rebuilds the form under a field being typed in: the caret goes back too.
+    const caret = fid ? caretOf(document.activeElement) : null;
     fn();
-    if (fid && !root.contains(document.activeElement)) refocus(fid);
+    if (fid && !root.contains(document.activeElement)) {
+      refocus(fid);
+      if (document.activeElement?.getAttribute('data-fid') === fid) restoreCaret(document.activeElement, caret);
+    }
   };
 
   // Returns true when a run attempt just ended.

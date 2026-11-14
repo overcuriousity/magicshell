@@ -43,3 +43,9 @@ test('errors become RunErrors with the server sentence', async () => {
   const down = createServerStore(async () => { throw new Error('x'); });
   await assert.rejects(down.listSetups(), (e) => e.kind === 'network');
 });
+
+test('a request that is too large is a validation error, like an entry that is', async () => {
+  const sentence = 'This request is too large. Shorten it and try again.';
+  const store = createServerStore(async () => reply(413, sentence));
+  await assert.rejects(store.saveEntry({ id: 'e1' }), (e) => e.kind === 'validation' && e.message === sentence);
+});

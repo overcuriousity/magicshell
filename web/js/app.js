@@ -13,6 +13,7 @@ import { createBrowserStore } from './store-browser.js';
 import { createServerStore } from './store-server.js';
 import { withSuggestions } from './suggest-store.js';
 import { h } from './ui/dom.js';
+import { guardStrayDrops } from './ui/picture-field.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
 import { applyTextSize, applyTheme, nextTheme, storedTextSize, storedTheme, THEME_LABELS } from './ui/theme.js';
@@ -409,6 +410,7 @@ async function boot(shell) {
   registerView('setups', createSetupsView());
   registerView('settings', createSettingsView());
   registerView('sign-in', createSignInView());
+  if (services.pictures) guardStrayDrops(window);
   shellApi = mountShell(shell, services, askedAfterCheck(session) ?? HREF.ask);
   if (showsNotSaving({ mode, storage, store: services.store })) warnNotSaving();
 }

@@ -14,7 +14,8 @@ export function createServerStore(fetchFn) {
     if (reply.status === 204) return undefined;
     const text = await reply.text().catch(() => '');
     if (!reply.ok) {
-      const kind = reply.status === 401 ? 'auth' : reply.status === 422 ? 'validation' : 'upstream';
+      // 413 is the body limit refusing what 422 would refuse as too large to keep.
+      const kind = reply.status === 401 ? 'auth' : reply.status === 422 || reply.status === 413 ? 'validation' : 'upstream';
       throw new RunError(sentence(text, reply.status), kind);
     }
     try {

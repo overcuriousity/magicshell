@@ -14,7 +14,20 @@ export const sizeLabel = (p) => `${p.width}×${p.height} · ${kilobytes(p.bytes)
 
 // The image files of a paste or a drop.
 export const imageFiles = (transfer) => [...(transfer?.files ?? [])].filter((f) => typeof f.type === 'string' && f.type.startsWith('image/'));
+// The pictures of a paste. A paste that also has text is text: a spreadsheet copies its cells as
+// text and as a rendering of them, and the rendering is not what was meant.
+export const pastedPictures = (clipboard) => ([...(clipboard?.types ?? [])].includes('text/plain') ? [] : imageFiles(clipboard));
 export const carriesFiles = (transfer) => [...(transfer?.types ?? [])].includes('Files');
+
+// A file dropped beside the situation would open in the tab in place of the app, and the pictures
+// already added would be gone. The situation's own handler takes the drops meant for it first.
+export function guardStrayDrops(target) {
+  for (const type of ['dragover', 'drop']) {
+    target.addEventListener(type, (e) => {
+      if (carriesFiles(e.dataTransfer)) e.preventDefault();
+    });
+  }
+}
 
 const FULL = 'That is the most this server takes.';
 
@@ -37,23 +50,28 @@ export function thumbs(parts, { sizes = false, small = false } = {}) {
 // get(): the pictures held now; set(list): the new list; limits: { max, edge } from the server;
 // notify(text, opts) for problems; announce(text) for screen readers; id prefixes the data-fids.
 export function createPictureField({ get, set, limits, notify, announce = () => {}, codec = browserCodec(), id }) {
-  let adding = false;
+  // Adds wait for each other: a second paste while the first picture is still being shrunk is
+  // added after it, not dropped.
+  let queue = Promise.resolve();
 
   // Adds what fits and says what did not. `set` rebuilds the form, so nothing here is kept.
-  async function add(files) {
-    if (adding || files.length === 0) return;
-    adding = true;
-    try {
-      const before = get();
-      const { pictures, problems } = await addFiles(files, before, { max: limits.max, edge: limits.edge, uid: () => crypto.randomUUID(), ...codec });
-      if (pictures.length > before.length) {
-        set(pictures);
-        announce(added(pictures.length - before.length, pictures.length));
-      }
-      for (const text of problems) notify?.(text, { kind: 'warning' });
-    } finally {
-      adding = false;
+  async function addNow(files) {
+    const before = get();
+    const { pictures, problems } = await addFiles(files, before, { max: limits.max, edge: limits.edge, uid: () => crypto.randomUUID(), ...codec });
+    const fresh = pictures.slice(before.length);
+    if (fresh.length > 0) {
+      // Onto what is held now: a picture removed while these were shrunk stays removed.
+      const merged = [...get(), ...fresh];
+      set(merged);
+      announce(added(fresh.length, merged.length));
     }
+    for (const text of problems) notify?.(text, { kind: 'warning' });
+  }
+
+  function add(files) {
+    if (files.length === 0) return queue;
+    queue = queue.then(() => addNow(files)).catch(() => {});
+    return queue;
   }
 
   function remove(index) {
@@ -138,7 +156,7 @@ export function createPictureField({ get, set, limits, notify, announce = () => 
       add([...e.dataTransfer.files]);
     });
     zone.addEventListener('paste', (e) => {
-      const files = imageFiles(e.clipboardData);
+      const files = pastedPictures(e.clipboardData);
       if (files.length === 0) return;
       e.preventDefault();
       add(files);
