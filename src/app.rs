@@ -59,6 +59,8 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?,
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
+        max_pictures: app.max_pictures as usize,
+        picture_max_edge: app.picture_max_edge,
         pool,
         why,
         oidc,
@@ -69,7 +71,8 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         api = api.layer(sessions);
     }
     let router = Router::new().route("/healthz", get(|| async { "ok" })).merge(api).fallback(assets::serve);
-    let limits = Limits { body_bytes: 64 * 1024, timeout: timeout + Duration::from_secs(15) };
+    // The widest body any route takes; `api::router` keeps every route but `/api/run` at 64 KB.
+    let limits = Limits { body_bytes: api::RUN_BODY_BYTES, timeout: timeout + Duration::from_secs(15) };
     Ok(secure(router, &dep, &cfg.trusted_proxies, limits).layer(from_fn(too_large_sentence)))
 }
 

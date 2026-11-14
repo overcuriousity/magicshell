@@ -31,7 +31,7 @@ async fn the_configuration_names_the_mode_and_the_model() {
     let body: Value = res.json().await.unwrap();
     assert_eq!(
         body,
-        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "sso": null, "preheat": false, "version": env!("CARGO_PKG_VERSION")})
+        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "sso": null, "pictures": {"max": 4, "edge": 768}, "preheat": false, "version": env!("CARGO_PKG_VERSION")})
     );
 }
 
@@ -139,7 +139,7 @@ async fn an_oversized_request_is_refused_with_one_sentence() {
     let fake = fake_upstream(vec![fixture_reply("response-triage")]).await;
     let app = spawn_against(support::OPEN, &fake).await;
     let mut run = triage_run();
-    run["questions"] = json!("x".repeat(65 * 1024));
+    run["questions"] = json!("x".repeat(961 * 1024));
     let res = post_run(&app, &run).await;
     assert_eq!(res.status(), 413);
     assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");

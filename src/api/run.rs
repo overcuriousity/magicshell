@@ -45,6 +45,7 @@ pub async fn post(
     body: Result<Json<Run>, JsonRejection>,
 ) -> Result<Json<Reply>, AppError> {
     let run = read_run(&st.limiter, &caller, body)?;
+    check_pictures(&run, st.max_pictures)?;
     touch(&st);
     Ok(Json(st.upstream.run(&run).await?))
 }
@@ -60,6 +61,9 @@ pub async fn post_why(
         return Err(OcError::NotFound.into());
     };
     let run = read_run(&why.limiter, &format!("user:{}", user.id), body)?;
+    if !run.images.is_empty() {
+        return Err(AppError::Invalid("Why? does not work with pictures.".into()));
+    }
     let words = word_count(&run.state);
     if words > why.max_words as usize {
         return Err(AppError::Invalid(format!(
@@ -90,6 +94,17 @@ pub async fn preheat(State(st): State<Arc<ApiState>>, _caller: Caller) -> Status
         });
     }
     StatusCode::NO_CONTENT
+}
+
+/// The server's own picture limit, which may be below what a run can carry at most.
+fn check_pictures(run: &Run, max: usize) -> Result<(), AppError> {
+    let sentence = match (run.images.len(), max) {
+        (n, max) if n <= max => return Ok(()),
+        (_, 0) => "This server does not take pictures.".to_owned(),
+        (_, 1) => "Use at most 1 picture.".to_owned(),
+        (_, max) => format!("Use at most {max} pictures."),
+    };
+    Err(AppError::Invalid(sentence))
 }
 
 /// Takes from `limiter`, then reads and validates the body.

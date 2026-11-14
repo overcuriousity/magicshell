@@ -30,6 +30,10 @@ why_per_minute = 600
 preheat = true
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
 upstream_timeout_secs = 60
+# Pictures one question may carry, 0 to 4; 0 turns pictures off, for a model that cannot read them. Environment: MAGICSHELL__APP__MAX_PICTURES
+max_pictures = 4
+# Longest edge in pixels a picture is shrunk to in the browser before it is sent, 256 to 2048. Larger is slower: the model spends about one token per 1000 pixels. Environment: MAGICSHELL__APP__PICTURE_MAX_EDGE
+picture_max_edge = 768
 
 # Single sign-on through an OpenID Connect provider. When present, the page first checks silently whether the person is signed in at the provider, and the sign-in page offers a button beside the password form; it needs database under [app].
 # Redirect URI to register: scheme, host and port of public_url, then /auth/oidc/callback

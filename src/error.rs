@@ -17,6 +17,9 @@ pub enum AppError {
     /// The model endpoint did not answer in time (504).
     #[error("The model took too long to answer. Try again.")]
     UpstreamTimeout,
+    /// The same for a run with pictures, which are what takes the time (504).
+    #[error("The model took too long to read the pictures. Try fewer or smaller ones.")]
+    PicturesTimeout,
     /// A sign-in that matched no user and password (401).
     #[error("Wrong username or password.")]
     WrongLogin,
@@ -34,7 +37,7 @@ impl AppError {
             Self::Kit(e) => e.status(),
             Self::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
-            Self::UpstreamTimeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::UpstreamTimeout | Self::PicturesTimeout => StatusCode::GATEWAY_TIMEOUT,
             Self::WrongLogin => StatusCode::UNAUTHORIZED,
             Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
