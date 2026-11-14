@@ -300,6 +300,17 @@ const signInOnAuth = (store, onAuthLost) => {
   return wrapped;
 };
 
+// The open-mode store. History the browser store trims to make room leaves the suggestions too.
+export const browserStoreWithSuggestions = (storage, { onNotSaving, onTrimmed = () => {} } = {}) => {
+  let wrapped = null;
+  const refreshing = (n) => {
+    onTrimmed(n);
+    wrapped?.suggest.refresh();
+  };
+  wrapped = withSuggestions(createBrowserStore(storage, { onNotSaving, onTrimmed: refreshing }));
+  return wrapped;
+};
+
 // The accounts-mode store. Suggestions go outside: the auth wrap copies functions only, so the
 // other way round would drop `suggest` and leave every field plain.
 export const serverStore = (fetchFn, onAuthLost) => withSuggestions(signInOnAuth(createServerStore(fetchFn), onAuthLost));
@@ -368,7 +379,6 @@ async function boot(shell) {
     trimmedOnce = true;
     notify(trimmedSentence(n), { kind: 'warning', ms: 12000 });
   };
-  const browserStore = () => createBrowserStore(kept, { onNotSaving: warnNotSaving, onTrimmed: warnTrimmed });
   const navigate = (hash) => shellApi.navigate(hash);
 
   // Accounts mode: a session that ran out during use leads to Sign in, whichever view noticed.
@@ -383,7 +393,7 @@ async function boot(shell) {
   };
 
   services.client = createServerClient(fetchFn);
-  services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : withSuggestions(browserStore());
+  services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : browserStoreWithSuggestions(kept, { onNotSaving: warnNotSaving, onTrimmed: warnTrimmed });
   if (mode === 'accounts') {
     Object.assign(services, accountsActions(services, { userChanged, navigate, asked: () => shellApi.asked(), session }));
   }

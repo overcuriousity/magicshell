@@ -39,12 +39,16 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   // At the caret, which is at the end whenever this is called. insertText keeps the browser's undo
   // and fires its own `input`; without it the value is set and the event sent once by hand. Either
   // way the field is scrolled to its end, where the new text is: Chromium's insertText does not.
+  // A word went in without insertText since the last `change`.
+  let unchanged = false;
   const insert = (text) => {
     const word = cut(text, limit - field.value.length);
     if (!word) return;
     if (!(document.activeElement === field && document.execCommand?.('insertText', false, word))) {
       field.value += word;
       field.dispatchEvent(new Event('input', { bubbles: true }));
+      // A value set by script gets no `change` on leaving; the blur listener sends it, as a browser does.
+      unchanged = true;
     }
     // Only one of the two moves anything: an input scrolls sideways, a textarea down.
     field.scrollLeft = field.scrollWidth;
@@ -149,9 +153,18 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     composing = false;
     update();
   });
+  field.addEventListener('change', () => {
+    unchanged = false;
+  });
+  // A browser's own `change` comes before `blur`. A window blur leaves the field active and
+  // sends no `change`.
   field.addEventListener('blur', () => {
     away = true;
     update();
+    if (unchanged && document.activeElement !== field) {
+      unchanged = false;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   });
   field.addEventListener('scroll', sync);
   field.addEventListener('keydown', (e) => {

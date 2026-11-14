@@ -59,6 +59,21 @@ function better(a, b) {
 const isHigh = (c) => c >= 0xd800 && c <= 0xdbff;
 const isLow = (c) => c >= 0xdc00 && c <= 0xdfff;
 
+// Where the typed part ends in `text`, whose lowercase starts with `lowerTyped`. Lowercasing can
+// change a string's length ("İ" becomes "i̇"), so the typed length is only the usual answer; -1
+// when no whole character ends there.
+export function typedEnd(text, lowerTyped) {
+  if (text.slice(0, lowerTyped.length).toLowerCase() === lowerTyped) return lowerTyped.length;
+  let end = 0;
+  for (const ch of text) {
+    const lower = text.slice(0, end).toLowerCase();
+    if (lower === lowerTyped) return end;
+    if (lower.length > lowerTyped.length) break;
+    end += ch.length;
+  }
+  return text.toLowerCase() === lowerTyped ? text.length : -1;
+}
+
 // The first `room` code units of rest, never splitting a surrogate pair.
 export function cut(rest, room) {
   if (room >= rest.length) return rest;
@@ -106,7 +121,8 @@ export function createSuggestions({ history = [], setups = [], scales = [] } = {
         }
       }
       if (!best) return '';
-      return cut(best.text.slice(typed.length), limit - typed.length);
+      const end = typedEnd(best.text, t);
+      return end < 0 ? '' : cut(best.text.slice(end), limit - typed.length);
     },
     recent(pool, n = 5) {
       return history_(pool)

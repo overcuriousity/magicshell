@@ -70,23 +70,24 @@ fn is_silent(q: &Params) -> bool {
     param(q, "silent").as_deref() == Some("1")
 }
 
-/// The allowances of the start route. The page goes to a silent start by itself, so a person
-/// who used up the button's allowance still gets the check, and the reverse.
+/// The allowances of a sign-in route, one for the silent check and one for the button. The page
+/// goes to a silent start by itself, so a person who used up the button's allowance still gets the
+/// check, and the reverse. Anyone can ask for a silent start, so its allowance is only twice the
+/// button's: a limited silent check costs the person nothing but the trip, they see the form.
 #[derive(Clone)]
-pub struct StartLimits {
+pub struct SignInLimits {
     silent: Limiter,
     interactive: Limiter,
 }
 
-impl StartLimits {
+impl SignInLimits {
     pub fn new() -> Self {
-        Self { silent: Limiter::new(60), interactive: Limiter::with_burst(10, 5) }
+        Self { silent: Limiter::with_burst(20, 10), interactive: Limiter::with_burst(10, 5) }
     }
-}
 
-/// The callback's allowance.
-pub fn callback_limit() -> Limiter {
-    Limiter::with_burst(10, 5)
+    fn of(&self, silent: bool) -> &Limiter {
+        if silent { &self.silent } else { &self.interactive }
+    }
 }
 
 /// False when the client has used up `limiter`. Without a client address nothing is counted,
@@ -95,17 +96,41 @@ fn allowed(limiter: &Limiter, req: &Request) -> bool {
     req.extensions().get::<ClientIp>().is_none_or(|ClientIp(ip)| limiter.take(&client_key(*ip).to_string()))
 }
 
-const LIMITED: &str = "/#/sign-in/limited";
-
 /// A limited silent start goes back to the form as a declined check would; the button says why.
-pub async fn limit_start(State(l): State<StartLimits>, req: Request, next: Next) -> Response {
+pub async fn limit_start(State(l): State<SignInLimits>, req: Request, next: Next) -> Response {
     let silent = is_silent(&Query::try_from_uri(req.uri()));
-    let (limiter, limited) = if silent { (&l.silent, "/#/sign-in") } else { (&l.interactive, LIMITED) };
-    if allowed(limiter, &req) { next.run(req).await } else { see_other(limited) }
+    if allowed(l.of(silent), &req) {
+        next.run(req).await
+    } else if silent {
+        see_other("/#/sign-in")
+    } else {
+        failure(SignInError::Limited)
+    }
 }
 
-pub async fn limit_callback(State(l): State<Limiter>, req: Request, next: Next) -> Response {
-    if allowed(&l, &req) { next.run(req).await } else { see_other(LIMITED) }
+/// The callback counts against the allowance its sign-in started with, so the silent checks of
+/// many tabs behind one address cannot use up the button's callbacks. A callback without a
+/// pending sign-in counts as the button's.
+pub async fn limit_callback(State(l): State<SignInLimits>, req: Request, next: Next) -> Response {
+    let session = req.extensions().get::<Session>().cloned();
+    let pending = match &session {
+        Some(s) => s.get::<Pending>(PENDING_KEY).await.ok().flatten(),
+        None => None,
+    };
+    let silent = pending.is_some_and(|p| p.silent);
+    if allowed(l.of(silent), &req) {
+        return next.run(req).await;
+    }
+    match session {
+        // Single use, as in the callback itself.
+        Some(s) if silent => {
+            if let Err(e) = s.remove::<Pending>(PENDING_KEY).await {
+                tracing::warn!(error = %e, "could not remove the pending sign-in of a limited silent check");
+            }
+            quiet(&s).await
+        }
+        _ => failure(SignInError::Limited),
+    }
 }
 
 pub async fn start(State(st): State<Arc<ApiState>>, session: Session, q: Params) -> Response {

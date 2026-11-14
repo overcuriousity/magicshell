@@ -97,16 +97,16 @@ test('Ctrl+Enter in the key field commits the new key before the run sees it', (
   assert.deepEqual(calls[1], ['updateText', 'where', 'Where now?']);
 });
 
-test('a key changed without typing (a taken word) is committed on leaving the field', () => {
+test('a key is committed once, on change, not again on blur', () => {
   const { ops, calls } = recordingOps();
   const [card] = questionCards(run(), ops);
   const key = byFid(card, 'q0:key');
   key.value = 'where';
   key.dispatch('input');
   assert.equal(calls.length, 0);
-  key.dispatch('blur');
-  assert.deepEqual(calls, [['renameQuestion', 'dinner', 'where']]);
   key.dispatch('change');
+  assert.deepEqual(calls, [['renameQuestion', 'dinner', 'where']]);
+  key.dispatch('blur');
   assert.equal(calls.length, 1);
 });
 

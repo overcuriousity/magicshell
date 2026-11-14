@@ -504,6 +504,47 @@ test('without insertText the value is set, reported once, and scrolled to its en
   assert.equal(field.scrollTop, 90);
 });
 
+test('a word set without insertText sends one change on leaving the field', (t) => {
+  withExecCommand(t, false);
+  const changes = [];
+  const { field } = setup({}, { onchange: (e) => changes.push(e.target.value) });
+  field.focus();
+  type(field, 'Which te');
+  key(field, 'Tab');
+  // A window blur: the field stays active, and a browser sends no change.
+  fire(field, 'blur');
+  assert.deepEqual(changes, []);
+  fire(field, 'focus');
+  field.blur();
+  assert.deepEqual(changes, ['Which team']);
+  field.focus();
+  field.blur();
+  assert.equal(changes.length, 1);
+});
+
+test("a browser's own change before blur is not sent twice", (t) => {
+  withExecCommand(t, false);
+  const changes = [];
+  const { field } = setup({}, { onchange: (e) => changes.push(e.target.value) });
+  field.focus();
+  type(field, 'Which te');
+  key(field, 'Tab');
+  fire(field, 'change');
+  field.blur();
+  assert.equal(changes.length, 1);
+});
+
+test('a word taken through insertText leaves change to the browser', (t) => {
+  withExecCommand(t);
+  const changes = [];
+  const { field } = setup({}, { onchange: (e) => changes.push(e.target.value) });
+  field.focus();
+  type(field, 'Which te');
+  key(field, 'Tab');
+  field.blur();
+  assert.deepEqual(changes, []);
+});
+
 test('a row pick longer than the limit is cut to it', () => {
   const { field } = setup({ limit: 5, row: { label: 'Recent:', items: (s) => s.recent('question') } });
   const wrap = field.parentNode.parentNode;

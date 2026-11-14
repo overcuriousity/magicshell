@@ -503,6 +503,29 @@ async fn a_limited_callback_returns_to_the_form_with_a_reason() {
     assert_eq!(last, "/#/sign-in/limited");
 }
 
+#[tokio::test]
+async fn silent_callbacks_leave_the_buttons_callbacks() {
+    let (idp, app) = sso_app(true).await;
+    // More silent checks than the button's burst of five, all from one address.
+    for _ in 0..8 {
+        let (authorize, cookie) = start_with(&app, "silent=1").await;
+        let q = format!("error=login_required&state={}", query(&authorize, "state").unwrap());
+        assert_eq!(callback(&app, &q, Some(&cookie)).await.location, "/#/sign-in");
+    }
+    assert_eq!(sso_sign_in(&app, &idp, "#/history").await.location, "/#/history");
+}
+
+#[tokio::test]
+async fn the_silent_allowance_is_twice_the_buttons() {
+    let (_idp, app) = sso_app(true).await;
+    let mut granted = 0;
+    while start_raw(&app, "silent=1").await.2.starts_with("http") {
+        granted += 1;
+        assert!(granted <= 12, "silent=1 was not limited near ten");
+    }
+    assert_eq!(granted, 10);
+}
+
 // The silent check: `start?silent=1` asks the provider with `prompt=none`.
 
 /// `GET /auth/oidc/start?<query>`: the provider URL and the session cookie.
@@ -544,8 +567,8 @@ async fn a_silent_refusal_returns_to_the_form_quietly() {
         assert_eq!(config(&app, res.cookie.as_deref()).await["user"], Value::Null, "{error}");
         last = Some((q, cookie));
     }
-    // Once, since the callback's allowance is five at once: the pending sign-in is gone, so the
-    // same answer again is a plain failure.
+    // The pending sign-in is gone, so the same answer again is a plain failure (and counts
+    // against the button's allowance, which the silent callbacks above left alone).
     let (q, cookie) = last.unwrap();
     assert_eq!(callback(&app, &q, Some(&cookie)).await.location, FAILED);
     assert_eq!(users(&app).await, 0);

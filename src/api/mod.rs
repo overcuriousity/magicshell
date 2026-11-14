@@ -29,7 +29,7 @@ pub struct ApiState {
     pub why: Option<Why>,
     /// Sign-in through `[auth.oidc]`: accounts mode only; password sign-in stays routed beside it.
     pub oidc: Option<Arc<Oidc>>,
-    /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off.
+    /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off or in open mode.
     pub preheat: Option<Preheat>,
 }
 
@@ -52,13 +52,13 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .route(
                     "/auth/oidc/start",
                     get(oidc::start)
-                        .layer(from_fn_with_state(oidc::StartLimits::new(), oidc::limit_start))
+                        .layer(from_fn_with_state(oidc::SignInLimits::new(), oidc::limit_start))
                         .layer(map_response(oidc::no_store)),
                 )
                 .route(
                     "/auth/oidc/callback",
                     get(oidc::callback)
-                        .layer(from_fn_with_state(oidc::callback_limit(), oidc::limit_callback))
+                        .layer(from_fn_with_state(oidc::SignInLimits::new(), oidc::limit_callback))
                         .layer(map_response(oidc::no_store)),
                 );
         }

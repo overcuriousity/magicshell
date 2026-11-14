@@ -6,7 +6,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ### Added
 
-- Preheat: when the guide reaches the step with the "Ask" button, the page asks the server to load the model with one small request, at most once a minute for the whole server. It does not count against `runs_per_minute` and is not in History. `[app] preheat = false` turns it off.
+- Preheat: when the guide reaches the step with the "Ask" button, the page asks the server to load the model with one small request, at most once a minute for the whole server. Accounts mode only, for signed-in users; open mode has no preheat. It does not count against `runs_per_minute` and is not in History. `[app] preheat = false` turns it off.
 - Text fields in the guided view, the bench and the setup editor show the rest of a matching earlier entry in grey, taken from History, setups and the ready scales. Tab takes the next word, and a button under the field does the same on touch screens and wherever the text has filled the field; Esc hides the suggestion.
 - "Recent:" rows under an empty guided question, guided context and bench situation, and an "Often used:" row under the guided new-option field, offer earlier values from History. Nothing leaves the app, and the browser's autofill is not used.
 

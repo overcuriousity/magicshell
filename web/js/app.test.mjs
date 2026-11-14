@@ -269,3 +269,28 @@ test('signing out marks the tab as checked so no silent trip follows', async () 
   assert.equal(stored.get(SSO_CHECKED), '#/ask');
   assert.deepEqual(went, ['#/ask']);
 });
+
+test('history the browser store trims leaves the suggestions', async () => {
+  const { browserStoreWithSuggestions } = await import('./app.js');
+  const data = {};
+  // Room for twelve entries; the store keeps at least ten.
+  const storage = {
+    getItem: (k) => data[k] ?? null,
+    setItem: (k, v) => {
+      if (k === 'magicshell.history' && JSON.parse(v).length > 12) throw new Error('QuotaExceededError');
+      data[k] = v;
+    },
+    removeItem: (k) => delete data[k],
+  };
+  const trimmed = [];
+  const store = browserStoreWithSuggestions(storage, { onTrimmed: (n) => trimmed.push(n) });
+  await store.suggest.load();
+  const states = ['Alpha printer jams', ...Array.from({ length: 11 }, (_, i) => `Filler ${i}`), 'Delta door sticks'];
+  for (const [i, state] of states.entries()) {
+    await store.saveEntry({ id: `e${i}`, at: new Date(2026, 0, 1, 0, 0, i).toISOString(), run: { state, questions: [] }, reply: {} });
+  }
+  await store.suggest.refresh();
+  assert.deepEqual(trimmed, [1]);
+  assert.equal(store.suggest.current().rest('situation', 'Alp'), '');
+  assert.equal(store.suggest.current().rest('situation', 'Del'), 'ta door sticks');
+});

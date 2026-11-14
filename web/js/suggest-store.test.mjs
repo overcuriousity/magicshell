@@ -117,19 +117,60 @@ test('a write that lands before the read finishes is not lost', async () => {
   assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), 'nter is on fire');
 });
 
-test('a failed read offers nothing and is tried again', async () => {
+test('a failed read offers nothing and is tried again after a while, not by every field', async () => {
   const store = memoryStore({ history: [fire] });
   store.failRead = 1;
-  const wrapped = withSuggestions(store);
+  let t = 0;
+  const wrapped = withSuggestions(store, { now: () => t });
   await wrapped.suggest.load();
   assert.equal(wrapped.suggest.current().rest('name', 'Ticket'), '');
   assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), '');
+  t = 29_999;
+  await Promise.all([wrapped.suggest.load(), wrapped.suggest.load()]);
+  assert.equal(store.calls.listHistory, 1);
+  t = 30_000;
   await wrapped.suggest.load();
   assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), 'nter is on fire');
   assert.equal(store.calls.listHistory, 2);
 });
 
+test('refresh reads again and keeps the old copy until then, or when it fails', async () => {
+  const other = entry('b', '2026-11-12T11:00:00Z', 'Projector hums');
+  const store = memoryStore({ history: [fire, other] });
+  const wrapped = withSuggestions(store);
+  await wrapped.suggest.load();
+  // The store drops an entry by itself, as a browser store trims a full history.
+  await store.deleteEntry('a');
+  store.failRead = 1;
+  await wrapped.suggest.refresh();
+  assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), 'nter is on fire');
+  const refreshing = wrapped.suggest.refresh();
+  assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), 'nter is on fire');
+  await refreshing;
+  assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), '');
+  assert.equal(wrapped.suggest.current().rest('situation', 'Pro'), 'jector hums');
+});
+
+test('a write during a refresh is kept', async () => {
+  const store = memoryStore({ history: [fire] });
+  const wrapped = withSuggestions(store);
+  await wrapped.suggest.load();
+  const refreshing = wrapped.suggest.refresh();
+  // Written after the read took its copy, so the read does not have it.
+  await wrapped.saveEntry(entry('c', '2026-11-12T12:00:00Z', 'Kettle trips the fuse'));
+  await refreshing;
+  assert.equal(wrapped.suggest.current().rest('situation', 'Ket'), 'tle trips the fuse');
+});
+
 test("keeps the store's own properties", () => {
   const wrapped = withSuggestions({ persistent: true, listHistory: async () => [], listSetups: async () => [] });
   assert.equal(wrapped.persistent, true);
+});
+
+test("a getter on the store is read each time, as the browser store's persistent", () => {
+  let persistent = true;
+  const wrapped = withSuggestions({ get persistent() { return persistent; }, listHistory: async () => [], listSetups: async () => [] });
+  assert.equal(wrapped.persistent, true);
+  persistent = false;
+  assert.equal(wrapped.persistent, false);
 });

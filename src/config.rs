@@ -42,7 +42,8 @@ pub struct AppConfig {
     /// "Why?" questions one user may ask per minute, counted apart from runs.
     #[serde(default = "why_per_minute")]
     pub why_per_minute: u32,
-    /// `POST /api/preheat` loads the model before the first question; false leaves the route out.
+    /// `POST /api/preheat` loads the model before the first question, for signed-in users of accounts
+    /// mode; false, or open mode, leaves the route out.
     #[serde(default = "preheat")]
     pub preheat: bool,
     #[serde(default = "upstream_timeout_secs")]

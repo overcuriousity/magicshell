@@ -83,7 +83,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
 | `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
-| `[app] preheat` | load the model when the guide reaches its Ask step, at most once a minute for the whole server, default `true` |
+| `[app] preheat` | load the model when the guide reaches its Ask step, at most once a minute for the whole server, for signed-in users of accounts mode only; default `true`, ignored in open mode |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 | `[auth.oidc] issuer` | the provider's issuer URL, exactly as its discovery document states it; setting this section turns single sign-on on |
 | `[auth.oidc] client_id` | the client registered at the provider |

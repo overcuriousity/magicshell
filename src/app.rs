@@ -43,6 +43,8 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
     let why = (pool.is_some() && app.why_max_words > 0)
         .then(|| Why { limiter: Limiter::new(app.why_per_minute), max_words: app.why_max_words });
     let oidc = app.oidc.as_ref().map(|o| Oidc::new(o, &dep)).transpose()?;
+    // Accounts mode only: the route then needs a session, so nobody unknown can make upstream requests.
+    let preheat = (pool.is_some() && app.preheat).then(Preheat::new);
     let state = Arc::new(ApiState {
         upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?,
         limiter: Limiter::new(app.runs_per_minute),
@@ -50,7 +52,7 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         pool,
         why,
         oidc,
-        preheat: app.preheat.then(Preheat::new),
+        preheat,
     });
     let mut api = api::router(state);
     if let Some(sessions) = sessions {

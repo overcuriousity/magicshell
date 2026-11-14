@@ -138,9 +138,9 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix, sugges
     autocomplete: 'off',
     spellcheck: 'false',
     readonly: locked,
+    // A word taken from the grey suggestion ends in a `change` too: the helper sends one when the
+    // browser does not.
     onchange: (e) => commitKey(e.target),
-    // A word taken from the grey suggestion changes the value without a `change` on blur.
-    onblur: (e) => commitKey(e.target),
     // Ctrl+Enter runs from the view's listener above this one: commit the pending key first, so the
     // run does not go out with the old one (change fires only on blur).
     onkeydown: (e) => {
@@ -154,7 +154,7 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix, sugges
         h('span', { class: 'oc-field__label', 'aria-hidden': 'true' }, 'Type'),
         locked ? h('span', { class: 'ms-type' }, q.type) : typePicker(q, ref, ops, `${fq}:type`)),
       // A locked key is read-only and the helper leaves it alone. A taken word is an `input` event;
-      // the key is still committed on change, blur or Ctrl+Enter.
+      // the key is still committed on change or Ctrl+Enter.
       h('div', { class: 'oc-field ms-card__keyfield' }, h('label', { for: keyId }, 'Key'),
         completing(keyInput, { suggest, pool: 'key', limit: LIMITS.key })),
       locked ? null : iconButton('trash', 'Remove question', () => ops.removeQuestion(ref.key), { disabled: count <= 1, fid: `${fq}:drop` }),

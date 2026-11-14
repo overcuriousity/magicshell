@@ -29,6 +29,15 @@ test('pools do not mix, and setups and scales feed the grey text', () => {
   assert.equal(s.rest('key', 'te'), 'am');
   assert.equal(s.rest('name', 'Tick'), 'et triage');
 });
+test('the rest starts where the typed part ends, when lowercasing changes the length', () => {
+  const e = createSuggestions({ history: [entry('2026-11-01T00:00:00Z', 'İstanbul office', [])] });
+  // "İ" lowercases to two code units, "i̇".
+  assert.equal(e.rest('situation', 'i\u0307s'), 'tanbul office');
+  assert.equal(e.rest('situation', 'İst'), 'anbul office');
+  assert.equal(e.rest('situation', 'i\u0307stanbul '), 'office');
+  // Typed text that ends inside "İ"'s lowercase matches no whole character.
+  assert.equal(e.rest('situation', 'i'), '');
+});
 test('the rest stops at the limit and never inside a surrogate pair', () => {
   assert.equal(s.rest('question', 'Which te', { limit: 10 }), 'am');
   const e = createSuggestions({ history: [entry('2026-11-01T00:00:00Z', 'ab😀cd', [])] });
