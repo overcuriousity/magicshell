@@ -49,6 +49,8 @@ The script downloads the latest release bundle for x86_64 or aarch64, checks it 
 | `/etc/magicshell/config.toml` | the configuration, with `data_dir = "/var/lib/magicshell"` |
 | `/var/lib/magicshell/` | the database; created at the first start and private to the service |
 
+To update, run the same command again. It replaces the program and the unit, keeps `/etc/magicshell/config.toml` and the database, and restarts the service if it was running. Put your own changes to the unit in a drop-in (`systemctl edit magicshell`), since an update replaces the unit file.
+
 To try magicshell without a service, leave out `--system`: it installs to `~/.local/bin` (or `--prefix DIR`) and needs no root.
 
 Without network: `AIRGAP.md`.
