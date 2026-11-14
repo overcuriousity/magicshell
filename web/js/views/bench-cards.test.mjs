@@ -17,6 +17,7 @@ class FakeNode {
     this.attributes.set(k, String(v));
     if (k === 'value') this.value = String(v);
   }
+  hasAttribute(k) { return this.attributes.has(k); }
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   append(...nodes) {
     for (const n of nodes) {
@@ -31,8 +32,13 @@ class FakeNode {
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   dispatch(type, extra = {}) { for (const fn of this.listeners[type] ?? []) fn({ type, target: this, ...extra }); }
   get textContent() { return this.tagName === '#text' ? this.text : this.childNodes.map((c) => c.textContent).join(''); }
+  set textContent(t) { this.childNodes = []; this.text = ''; this.append(String(t)); }
+  replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
 }
 globalThis.document = {
+  activeElement: null,
+  body: new FakeNode('body'),
+  getElementById: () => null,
   createElement: (tag) => new FakeNode(tag),
   createElementNS: (_ns, tag) => new FakeNode(tag),
   createTextNode: (text) => new FakeNode('#text', text),
@@ -101,4 +107,42 @@ test('option dots take the colour slots given (B keeps A\'s colours)', () => {
   const [card] = questionCards(run(), ops, { locked: true, slotsFor: () => [2, 0, 3] });
   const dots = all(card, (n) => (n.getAttribute('class') ?? '').startsWith('ms-dot'));
   assert.deepEqual(dots.map((d) => d.getAttribute('class')), ['ms-dot opt-3', 'ms-dot opt-1', 'ms-dot opt-4']);
+});
+
+// A suggestion source that offers nothing; `asked` records every pairedName it was given.
+function stubSuggest(asked = []) {
+  const current = { rest: (_pool, _text, o) => { asked.push(o?.pairedName); return ''; }, recent: () => [], frequent: () => [] };
+  return { load: () => Promise.resolve(), current: () => current };
+}
+const wrappers = (card) => all(card, (n) => n.getAttribute('class') === 'ms-complete');
+
+test('without a suggestion source the cards are as before', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops);
+  assert.equal(wrappers(card).length, 0);
+});
+
+test('with a source every editable text field is wrapped, a locked key is not', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops, { suggest: stubSuggest() });
+  // key + question + 3 names + 3 descriptions
+  assert.equal(wrappers(card).length, 8);
+  const [locked] = questionCards(run(), ops, { suggest: stubSuggest(), locked: true });
+  assert.equal(wrappers(locked).length, 7);
+  assert.notEqual(byFid(locked, 'q0:key').parentNode.getAttribute('class'), 'ms-complete__box');
+});
+
+test('a description prefers the one used with the name in its row', () => {
+  const asked = [];
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops, { suggest: stubSuggest(asked) });
+  const name = byFid(card, 'q0:option:o1:name');
+  const desc = byFid(card, 'q0:option:o1:desc');
+  name.value = 'tech';
+  name.dispatch('input', { target: name });
+  asked.length = 0;
+  document.activeElement = desc;
+  desc.selectionStart = desc.selectionEnd = desc.value.length;
+  desc.dispatch('focus');
+  assert.ok(asked.includes('tech'), `asked ${JSON.stringify(asked)}`);
 });

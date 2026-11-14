@@ -162,9 +162,11 @@
   border-radius: var(--radius-md);
   background: var(--color-bg-elevated);
 }
-/* Leads line up at the top; the remove button sits level with the controls below them. */
+/* Leads line up at the top; the remove button is offset to the key field's centre: the label's line
+   (1.5 x the UI size) and gap, then half the difference of field and button, so a strip under the
+   key field moves nothing. The heights are set with the guide's, under "Rows with a completed field". */
 .ms-card__head { display: flex; align-items: flex-start; gap: var(--space-2); }
-.ms-card__head > .oc-btn--row { align-self: flex-end; margin-bottom: 0.375rem; }
+.ms-card__head > .oc-btn--row { margin-top: calc(1.5 * var(--text-ui) + var(--space-1) + (var(--ms-field-h) - var(--ms-row-h)) / 2); }
 .ms-card__type, .ms-card__keyfield { gap: var(--space-1); }
 .ms-card__keyfield { flex: 1 1 auto; min-width: 0; max-width: 14rem; }
 .ms-card__head .oc-menu-button { min-width: 7rem; }
@@ -200,6 +202,10 @@
 .ms-row__desc { grid-area: desc; min-width: 0; }
 .ms-row__acts { grid-area: acts; display: flex; }
 .ms-row .oc-input { width: 100%; }
+/* A completed field can grow a strip or row under it: top-align and offset the siblings to its centre. */
+.ms-row { align-items: start; }
+.ms-row__lead { align-items: center; min-height: var(--ms-field-h); }
+.ms-row__acts { margin-top: calc((var(--ms-field-h) - var(--ms-row-h)) / 2); }
 .ms-row__index { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
 @container setup (max-width: 34rem) {
   /* Stacked rows: the head names the list, and each description carries its own lead. */
@@ -312,9 +318,9 @@
    (field height - own height) / 2, so a strip or row under the field moves nothing. Field heights
    are the kit's: .oc-input 2.25rem, 44px (--target-touch) with a coarse pointer (30-components.css);
    .oc-btn is --target-tool high, .oc-btn--row --target-row, both 44px when coarse. */
-.ms-guide__add, .ms-guide__levels { --ms-field-h: 2.25rem; --ms-btn-h: var(--target-tool); --ms-row-h: var(--target-row); }
+.ms-guide__add, .ms-guide__levels, .ms-card, .ms-save-as { --ms-field-h: 2.25rem; --ms-btn-h: var(--target-tool); --ms-row-h: var(--target-row); }
 @media (pointer: coarse) {
-  .ms-guide__add, .ms-guide__levels { --ms-field-h: var(--target-touch); --ms-btn-h: var(--target-touch); --ms-row-h: var(--target-touch); }
+  .ms-guide__add, .ms-guide__levels, .ms-card, .ms-save-as { --ms-field-h: var(--target-touch); --ms-btn-h: var(--target-touch); --ms-row-h: var(--target-touch); }
 }
 .ms-guide__add > .oc-btn { margin-top: calc((var(--ms-field-h) - var(--ms-btn-h)) / 2); }
 .ms-chip__remove {
@@ -367,6 +373,11 @@
 .ms-editor-host:empty { display: none; }
 .ms-save-as { display: flex; flex-direction: column; gap: var(--space-2); }
 .ms-save-as .oc-input { width: 12rem; }
+/* Completed, the wrapper is the row's child: it takes the width, the field fills it. The buttons are
+   offset to the field's centre (see the guide's rows above). */
+.ms-save-as .oc-row > .ms-complete { width: 12rem; }
+.ms-save-as .oc-row { align-items: flex-start; }
+.ms-save-as .oc-row > .oc-btn { margin-top: calc((var(--ms-field-h) - var(--ms-btn-h)) / 2); }
 @container app (max-width: 89.99rem) {
   .ms-editing > .ms-list { display: none; }
 }
@@ -378,6 +389,9 @@
 @container app (max-width: 47.99rem) {
   .ms-save-as .oc-input { width: 100%; }
   .ms-save-as .oc-row > .oc-input { flex: 1 1 100%; }
+  .ms-save-as .oc-row > .ms-complete { width: auto; flex: 1 1 100%; }
+  /* The field takes the whole line, so the buttons wrap under it: nothing to centre on. */
+  .ms-save-as .oc-row > .oc-btn { margin-top: 0; }
 }
 
 /* History: one row per run (headline, answer chip, +n, latency, time); an opened entry below. */

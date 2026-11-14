@@ -5,6 +5,7 @@ import { LIMITS } from '../limits.js';
 import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
+import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
@@ -55,10 +56,12 @@ function opsForB(model) {
   };
 }
 
-function situationField(value, id, onText) {
+function situationField(value, id, onText, suggest) {
   return h('div', { class: 'oc-field' },
     h('label', { for: id }, 'Situation'),
-    h('textarea', { class: 'oc-input ms-situation', id, rows: '4', 'data-fid': `${id}`, oninput: (e) => onText(e.target.value) }, value),
+    completing(
+      h('textarea', { class: 'oc-input ms-situation', id, rows: '4', 'data-fid': `${id}`, oninput: (e) => onText(e.target.value) }, value),
+      { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }),
   );
 }
 
@@ -73,6 +76,7 @@ export function createBenchView(deps = {}) {
   let lastBusy = null;
   let setups = [...BUILTIN];
   let store = null;
+  let suggest = null;
   let ctx = null;
   let panel = null;
   let lastWhyOpen = false;
@@ -126,6 +130,7 @@ export function createBenchView(deps = {}) {
       } }, 'Save as setup');
     }
     const input = h('input', { type: 'text', class: 'oc-input', id: 'save-as-name', 'data-fid': 'save-as-name', autocomplete: 'off' });
+    const field = completing(input, { suggest, pool: 'name', limit: LIMITS.setupName });
     const close = () => {
       hosts.saveAs.replaceChildren(saveAsControl());
       hosts.saveAs.querySelector('button')?.focus({ preventScroll: true });
@@ -161,7 +166,7 @@ export function createBenchView(deps = {}) {
     return h('form', { class: 'ms-save-as', onsubmit: submit },
       h('label', { for: 'save-as-name', class: 'oc-field__label' }, 'Setup name'),
       h('div', { class: 'oc-row' },
-        input,
+        field,
         h('button', { type: 'submit', class: 'oc-btn' }, 'Save'),
         h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Cancel', 'data-oc-tip': 'Cancel', onclick: close }, icon('x')),
       ),
@@ -171,8 +176,8 @@ export function createBenchView(deps = {}) {
 
   function renderForm(state) {
     hosts.form.replaceChildren(
-      situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v))),
-      h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)), { idPrefix: 'bench-a' })),
+      situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v)), suggest),
+      h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)), { idPrefix: 'bench-a', suggest })),
       h('div', { class: 'oc-row' },
         h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= LIMITS.questions, onclick: () => model.addQuestion('noul') },
           icon('plus'), 'Add question'),
@@ -238,10 +243,11 @@ export function createBenchView(deps = {}) {
         h('h2', { class: 'ms-result__title' }, variantLabel(null)),
         h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Drop variant', 'data-oc-tip': 'Drop variant', 'data-fid': 'drop-b', onclick: () => model.dropVariant() }, icon('x')),
       ),
-      situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; }))),
+      situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; })), suggest),
       h('div', { class: 'ms-cards' }, questionCards(state.b, wrapOps(opsForB(model)), {
         locked: true,
         idPrefix: 'bench-b',
+        suggest,
         fidPrefix: 'b',
         slotsFor: (q) => colorSlots(state.ranA?.questions.find((x) => x.key === q.key), q),
       })),
@@ -372,6 +378,8 @@ export function createBenchView(deps = {}) {
       deps = { ...deps, notify: c.notify };
       ctx = c;
       store = ctx.store;
+      suggest = ctx.store?.suggest;
+      suggest?.load();
       panel = null;
       lastWhyOpen = false;
       model = createBenchModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
