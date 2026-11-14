@@ -9,6 +9,13 @@ base=${base%/}
 
 fail() { echo "$*" >&2; exit 1; }
 
+# Before the download: `sudo curl ... | sh` runs this script as the calling user.
+for arg in "$@"; do
+  if [ "$arg" = --system ] && [ "$(id -u)" -ne 0 ]; then
+    fail "--system needs root. Put sudo on the sh after the pipe: curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sudo sh -s -- --system"
+  fi
+done
+
 [ "$(uname -s)" = Linux ] || fail "magicshell releases are built for Linux only."
 case "$(uname -m)" in
   x86_64|amd64) arch=x86_64 ;;
