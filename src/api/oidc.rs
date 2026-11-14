@@ -65,14 +65,16 @@ pub async fn start(
     q: Result<Query<HashMap<String, String>>, QueryRejection>,
 ) -> Response {
     let next = param(&q, "next").unwrap_or_default();
-    match begin(&st, &session, safe_next(&next)).await {
+    // Only the exact value `1` is silent.
+    let silent = param(&q, "silent").as_deref() == Some("1");
+    match begin(&st, &session, safe_next(&next), silent).await {
         Ok(url) => see_other(&url),
         Err(e) => failure(e),
     }
 }
 
-async fn begin(st: &ApiState, session: &Session, next: &str) -> Result<String, SignInError> {
-    let (url, mut pending) = oidc(st)?.authorize().await?;
+async fn begin(st: &ApiState, session: &Session, next: &str, silent: bool) -> Result<String, SignInError> {
+    let (url, mut pending) = oidc(st)?.authorize(silent).await?;
     pending.next = next.to_owned();
     session.insert(PENDING_KEY, pending).await.map_err(|e| internal(&OcError::internal(e)))?;
     Ok(url)
@@ -84,17 +86,29 @@ pub async fn callback(
     q: Result<Query<HashMap<String, String>>, QueryRejection>,
 ) -> Response {
     match finish(&st, &session, &q).await {
-        Ok(next) => see_other(&format!("/{next}")),
+        Ok(Finished::SignedIn(next)) => see_other(&format!("/{next}")),
+        Ok(Finished::Declined) => see_other("/#/sign-in"),
         Err(e) => failure(e),
     }
 }
 
-/// Returns the `next` of the sign-in on success.
+enum Finished {
+    /// The `next` of the sign-in.
+    SignedIn(String),
+    /// A silent check that the provider could not answer without a page: back to the form, no failure.
+    Declined,
+}
+
+/// The errors a provider answers `prompt=none` with when the person has to act first.
+const QUIET_ERRORS: [&str; 4] =
+    ["login_required", "interaction_required", "consent_required", "account_selection_required"];
+
+/// Returns what the callback leads to.
 async fn finish(
     st: &ApiState,
     session: &Session,
     q: &Result<Query<HashMap<String, String>>, QueryRejection>,
-) -> Result<String, SignInError> {
+) -> Result<Finished, SignInError> {
     let o = oidc(st)?;
     let pool = st.pool.as_ref().ok_or(SignInError::Failed)?;
     // Single use: removed before anything can fail.
@@ -103,6 +117,13 @@ async fn finish(
         tracing::warn!("OIDC callback without a pending sign-in");
         return Err(SignInError::Failed);
     };
+    let quiet = pending.silent
+        && param(q, "error").is_some_and(|e| QUIET_ERRORS.contains(&e.as_str()))
+        && param(q, "state").is_some_and(|s| s == pending.state);
+    if quiet {
+        tracing::debug!("silent OIDC check declined by the provider");
+        return Ok(Finished::Declined);
+    }
     let (Some(code), Some(state)) = (param(q, "code"), param(q, "state")) else {
         tracing::warn!(error = ?param(q, "error"), "OIDC callback without a code or state");
         return Err(SignInError::Failed);
@@ -128,7 +149,7 @@ async fn finish(
     };
     let epoch = users::session_epoch(pool, user.id).await.map_err(|e| internal(&e))?.ok_or(SignInError::Failed)?;
     auth::start(session, user.id, epoch).await.map_err(|e| internal(&e))?;
-    Ok(pending.next)
+    Ok(Finished::SignedIn(pending.next))
 }
 
 #[cfg(test)]

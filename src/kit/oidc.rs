@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreProviderMetadata};
+use openidconnect::core::{CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreProviderMetadata};
 use openidconnect::{
     AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet,
     EndpointSet, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
@@ -41,6 +41,9 @@ pub struct Pending {
     pub nonce: String,
     pub verifier: String,
     pub next: String,
+    /// Started with `prompt=none`; absent in a session written before the silent check existed.
+    #[serde(default)]
+    pub silent: bool,
 }
 
 /// Who signed in: the account is matched on `(issuer, subject)`; `name` is only for a new one.
@@ -115,7 +118,8 @@ impl Oidc {
     }
 
     /// The provider URL to send the browser to, and what to keep for the callback (`next` left empty).
-    pub async fn authorize(&self) -> Result<(String, Pending), SignInError> {
+    /// `silent` asks with `prompt=none`: the provider answers at once, without showing a page.
+    pub async fn authorize(&self, silent: bool) -> Result<(String, Pending), SignInError> {
         let client = self.client().await?;
         let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
         let mut req =
@@ -124,12 +128,16 @@ impl Oidc {
         for s in self.cfg.scopes.iter().filter(|s| *s != "openid") {
             req = req.add_scope(Scope::new(s.clone()));
         }
+        if silent {
+            req = req.add_prompt(CoreAuthPrompt::None);
+        }
         let (url, state, nonce) = req.set_pkce_challenge(challenge).url();
         let pending = Pending {
             state: state.secret().clone(),
             nonce: nonce.secret().clone(),
             verifier: verifier.secret().clone(),
             next: String::new(),
+            silent,
         };
         Ok((url.to_string(), pending))
     }
