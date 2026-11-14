@@ -6,6 +6,7 @@ import { LIMITS } from '../limits.js';
 import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
 import { levelClass, optionClass } from '../ui/colors.js';
+import { completing } from '../ui/complete.js';
 import { h, present } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
@@ -31,6 +32,7 @@ export function createGuidedView() {
   let model = null;
   let root = null;
   let ctx = null;
+  let suggest = null;
   let off = null;
   let quiet = false;
   let spinner = false;
@@ -75,7 +77,8 @@ export function createGuidedView() {
       'data-fid': 'context',
       oninput: typing((e) => model.setContext(e.target.value)),
     }, state.context);
-    return h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL), area);
+    return h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL),
+      completing(area, { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }));
   }
 
   // One button per kind, two by two: choosing one goes on to the question; "something else"
@@ -116,7 +119,7 @@ export function createGuidedView() {
     return [
       stepLine(2),
       heading(LEADS[2]),
-      h('input', {
+      completing(h('input', {
         type: 'text',
         class: 'oc-input',
         value: state.question,
@@ -130,7 +133,7 @@ export function createGuidedView() {
           e.preventDefault();
           model.next();
         },
-      }),
+      }), { suggest, pool: 'question', limit: LIMITS.questionText, row: { label: 'Recent:', items: (s) => s.recent('question') } }),
       contextField(state),
     ];
   }
@@ -170,7 +173,19 @@ export function createGuidedView() {
       ),
       full ? null : h('div', { class: 'oc-field' },
         h('label', { for: 'guide-option-new' }, 'New option'),
-        h('div', { class: 'oc-row ms-guide__add' }, input, h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'option-add', onclick: add }, icon('plus'), 'Add'))),
+        h('div', { class: 'oc-row ms-guide__add' }, completing(input, {
+          suggest,
+          pool: 'option',
+          limit: LIMITS.optionName,
+          row: {
+            label: 'Often used:',
+            items: (s) => s.frequent('option', 5, model.state.options.map((o) => o.name)),
+            onPick: (t) => {
+              model.addOption(t);
+              root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
+            },
+          },
+        }), h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'option-add', onclick: add }, icon('plus'), 'Add'))),
     ];
   }
 
@@ -195,7 +210,9 @@ export function createGuidedView() {
         levels.map((l, i) =>
           h('li', { class: 'oc-row' },
             h('span', { class: `ms-dot ${levelClass(i, levels.length)}`, 'aria-hidden': 'true' }),
-            h('input', { type: 'text', class: 'oc-input', value: l.text, 'aria-label': `Level ${i + 1}`, 'data-fid': `level:${l.id}`, autocomplete: 'off', maxlength: String(LIMITS.level), oninput: typing((e) => setText(l.id, e.target.value)) }),
+            completing(
+              h('input', { type: 'text', class: 'oc-input', value: l.text, 'aria-label': `Level ${i + 1}`, 'data-fid': `level:${l.id}`, autocomplete: 'off', maxlength: String(LIMITS.level), oninput: typing((e) => setText(l.id, e.target.value)) }),
+              { suggest, pool: 'level', limit: LIMITS.level }),
             h('button', {
               type: 'button',
               class: 'oc-btn oc-btn--icon oc-btn--row',
@@ -355,6 +372,8 @@ export function createGuidedView() {
     mount(el, context) {
       root = el;
       ctx = context;
+      suggest = ctx.store?.suggest;
+      suggest?.load();
       spinner = false;
       lastBusy = false;
       lastStep = null;

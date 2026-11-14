@@ -305,7 +305,9 @@
 }
 .ms-guide__body textarea, .ms-guide__body > input.oc-input { width: 100%; }
 .ms-guide__chips { margin: 0; padding: 0; list-style: none; }
-.ms-guide__add .oc-input { flex: 1 1 auto; min-width: 0; }
+.ms-guide__add .oc-input, .ms-guide__add > .ms-complete { flex: 1 1 auto; min-width: 0; }
+/* A completed field can grow a row or a strip under it; the button stays level with the field. */
+.ms-guide__add { align-items: flex-start; }
 .ms-chip__remove {
   position: relative;
   display: inline-flex;
@@ -331,7 +333,11 @@
   .ms-chip__remove::after { content: none; }
 }
 .ms-guide__levels { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.ms-guide__levels .oc-input { flex: 1 1 auto; min-width: 0; }
+.ms-guide__levels .oc-input, .ms-guide__levels > li > .ms-complete { flex: 1 1 auto; min-width: 0; }
+/* Top-aligned, so a strip under a level's field does not move the dot and the remove button. */
+.ms-guide__levels > li { align-items: flex-start; }
+.ms-guide__levels > li > .ms-dot { margin-top: calc((var(--target-tool) - 0.5rem) / 2); }
+@media (pointer: coarse) { .ms-guide__levels > li > .ms-dot { margin-top: calc((var(--target-touch) - 0.5rem) / 2); } }
 .ms-guide__asked { margin: 0; color: var(--color-fg-secondary); font-family: var(--font-mono); font-size: var(--text-mono); font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }
 .ms-guide .ms-verdict { margin-top: var(--space-1); }
 .ms-bar > .ms-meter { margin: 0; }
