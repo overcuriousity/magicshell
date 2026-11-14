@@ -32,6 +32,16 @@ pub async fn open_pool(cfg: &OcConfig, app: &AppConfig) -> Result<Option<SqliteP
     Ok(Some(pool))
 }
 
+/// What `build` refuses without opening the database or the network: the deployment
+/// (`public_url`, `bind`) and the OIDC section.
+pub fn check(cfg: &OcConfig, app: &AppConfig) -> Result<(), AppError> {
+    let dep = cfg.deployment()?;
+    if let Some(o) = &app.oidc {
+        Oidc::new(o, &dep)?;
+    }
+    Ok(())
+}
+
 /// Accounts mode when `pool` is given; the session layer exists only then.
 pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> Result<Router, AppError> {
     let dep = cfg.deployment()?;

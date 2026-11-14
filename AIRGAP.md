@@ -31,19 +31,19 @@ For your user only, into `~/.local/bin`:
 sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.tar.gz
 ```
 
-As a system service (the standard install), run as root. This installs to `/usr/local/bin`, sets up a hardened systemd unit and creates `/etc/magicshell/config.toml` with `data_dir = "/var/lib/magicshell"`, where the service keeps its database:
+As a system service (the standard install), run as root. This installs to `/usr/local/bin`, sets up a hardened systemd unit, asks for the settings and writes `/etc/magicshell/config.toml` with `data_dir = "/var/lib/magicshell"`, where the service keeps its database, then starts the service. The `MAGICSHELL_*` variables in the README preset the answers:
 
 ```sh
 sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.tar.gz --system
 ```
 
-The installer checks every file against the bundle's `SHA256SUMS`. If any file has changed, it stops with "Checksum mismatch".
+The installer checks every file against the bundle's `SHA256SUMS`. If any file has changed, it stops with "Checksum mismatch". The same command with a newer bundle updates, as described under "Updating" in the README: config check first, backups, restart, and the old version back if the new one does not come up.
 
 Accounts are then managed as root, with the service's configuration: `sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user add NAME` (see "Users" in the README).
 
 ## The model key
 
-Keep the key out of `config.toml`; it is world-readable so the service's dynamic user can read it. Put it in a root-only file and hand it to the service as a credential:
+The first install asks for the key and does the following itself. By hand: keep the key out of `config.toml`; it is world-readable so the service's dynamic user can read it. Put it in a root-only file and hand it to the service as a credential:
 
 ```sh
 printf '%s' 'the-key' | install -m 0600 /dev/stdin /etc/magicshell/api-key

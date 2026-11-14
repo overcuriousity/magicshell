@@ -68,6 +68,37 @@ fn default_display_name() -> String {
 #[derive(Clone, Default)]
 pub struct Secret(String);
 
+/// Where systemd puts the files of `LoadCredential=`; they exist only while the service runs.
+const CREDENTIALS: &str = "/run/credentials/";
+
+/// `Some` while a config check runs: the credential files it could not read.
+static UNREAD_CREDENTIALS: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
+
+/// For checking a config outside the service: from now on a missing secret file under
+/// `/run/credentials/` reads as empty and is listed by [`unread_credentials`].
+pub fn defer_credentials() {
+    *UNREAD_CREDENTIALS.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
+}
+
+/// The credential files that were missing since [`defer_credentials`].
+pub fn unread_credentials() -> Vec<String> {
+    UNREAD_CREDENTIALS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone().unwrap_or_default()
+}
+
+fn deferred(path: &str, e: &std::io::Error) -> bool {
+    if !path.starts_with(CREDENTIALS) || e.kind() != std::io::ErrorKind::NotFound {
+        return false;
+    }
+    let mut unread = UNREAD_CREDENTIALS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    match unread.as_mut() {
+        Some(list) => {
+            list.push(path.to_owned());
+            true
+        }
+        None => false,
+    }
+}
+
 impl Secret {
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
@@ -88,9 +119,11 @@ impl<'de> Deserialize<'de> for Secret {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(d)?;
         match raw.strip_prefix("file://") {
-            Some(path) => std::fs::read_to_string(path)
-                .map(|s| Secret(s.trim_end_matches(['\n', '\r']).to_owned()))
-                .map_err(|e| serde::de::Error::custom(format!("Cannot read secret file {path}: {e}."))),
+            Some(path) => match std::fs::read_to_string(path) {
+                Ok(s) => Ok(Secret(s.trim_end_matches(['\n', '\r']).to_owned())),
+                Err(e) if deferred(path, &e) => Ok(Secret(String::new())),
+                Err(e) => Err(serde::de::Error::custom(format!("Cannot read secret file {path}: {e}."))),
+            },
             None => Ok(Secret(raw)),
         }
     }

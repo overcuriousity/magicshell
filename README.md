@@ -40,16 +40,37 @@ The standard install is a system service under systemd. It needs root, so `sudo`
 curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sudo sh -s -- --system
 ```
 
-The script downloads the latest release bundle for x86_64 or aarch64, checks it against `SHA256SUMS` and runs the bundled `install.sh`. It never calls `sudo`. A system install puts these in place:
+The script downloads the latest release bundle for x86_64 or aarch64, checks it against `SHA256SUMS` (and its build provenance when the `gh` CLI is installed) and runs the bundled `install.sh`. It never calls `sudo`.
+
+A first install asks for the endpoint, the model, the API key, the public address, the listen address and the mode, and in accounts mode for a first account. It writes `/etc/magicshell/config.toml`, keeps the API key in a root-only file handed to the service as a credential, then enables and starts the service and waits until it answers. To install without questions, preset the answers after `sudo`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sudo MAGICSHELL_ENDPOINT=https://models.example.org/v1 MAGICSHELL_MODEL=decision-model MAGICSHELL_PUBLIC_URL=https://magicshell.example.org sh -s -- --system
+```
+
+| Variable | Meaning |
+|---|---|
+| `MAGICSHELL_ENDPOINT`, `MAGICSHELL_MODEL` | model endpoint base URL ending in `/v1`, and the model (required) |
+| `MAGICSHELL_API_KEY` | bearer key for the endpoint; kept in `/etc/magicshell/api-key` |
+| `MAGICSHELL_PUBLIC_URL` | https address users see; empty when it is reached via localhost only |
+| `MAGICSHELL_BIND` | listen address, default `127.0.0.1:8080` |
+| `MAGICSHELL_MODE` | `accounts` (default) or `open` |
+| `MAGICSHELL_USER`, `MAGICSHELL_PASSWORD` | first account in accounts mode (a password typed at the question stays out of the process list) |
+| `MAGICSHELL_VERSION` | release tag to install, default the latest |
+| `MAGICSHELL_VERIFY` | `1` requires a verified build provenance attestation, `0` skips the check |
+| `MAGICSHELL_FORCE` | `1` installs again although this version already runs |
+
+A system install puts these in place:
 
 | Path | What |
 |---|---|
 | `/usr/local/bin/magicshell` | the program |
-| `/etc/systemd/system/magicshell.service` | the hardened unit; the service runs as its own dynamic user |
+| `/etc/systemd/system/magicshell.service` | the hardened unit (`Type=notify`, watchdog); the service runs as its own dynamic user |
+| `/etc/systemd/system/magicshell.service.d/credentials.conf` | hands `/etc/magicshell/api-key` to the service, when a key was given |
 | `/etc/magicshell/config.toml` | the configuration, with `data_dir = "/var/lib/magicshell"` |
-| `/var/lib/magicshell/` | the database; created at the first start and private to the service |
+| `/var/lib/magicshell/` | the database and the newest two backups of it; private to the service |
 
-To update, run the same command again. It replaces the program and the unit, keeps `/etc/magicshell/config.toml` and the database, and restarts the service if it was running. Put your own changes to the unit in a drop-in (`systemctl edit magicshell`), since an update replaces the unit file.
+**Updating** is the same command. It does nothing when this version already runs. Otherwise the new version first checks `/etc/magicshell/config.toml`. If it refuses the file, nothing changes and the running version keeps running. Then the installer stops the service, backs up the program, the unit and the database, puts the new version in place, and restarts the service (or enables and starts it). If the service does not answer `/healthz` within 30 seconds, the installer puts the old program, unit and database back and starts the old version again. The configuration and drop-ins are never changed. A unit file you edited is kept and the new one is placed beside it as `magicshell.service.new`; put local changes in a drop-in instead (`systemctl edit magicshell`). `magicshell --config FILE check-config` runs the same check by hand.
 
 To try magicshell without a service, leave out `--system`: it installs to `~/.local/bin` (or `--prefix DIR`) and needs no root.
 
@@ -57,10 +78,10 @@ Without network: `AIRGAP.md`.
 
 ## Run
 
-As a service, after setting `endpoint`, `model` and `public_url` in `/etc/magicshell/config.toml`:
+The system install starts the service. After a change to `/etc/magicshell/config.toml`:
 
 ```sh
-systemctl daemon-reload && systemctl enable --now magicshell
+magicshell --config /etc/magicshell/config.toml check-config && systemctl restart magicshell
 journalctl -u magicshell -f
 ```
 

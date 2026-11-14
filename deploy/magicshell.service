@@ -3,15 +3,25 @@ Description=@APP@
 After=network-online.target
 Wants=network-online.target
 
+# Local changes belong in a drop-in: systemctl edit @APP@. The installer never touches
+# drop-ins; an edited copy of this file is kept on update and the new one is placed beside it
+# as @APP@.service.new.
+
 [Service]
-Type=simple
+# @APP@ tells systemd once it listens (sd_notify READY=1), so "systemctl start" fails if it
+# cannot start; the watchdog restarts it if it stops answering.
+Type=notify
+NotifyAccess=main
+WatchdogSec=30s
+# A start may migrate the database.
+TimeoutStartSec=2min
 ExecStart=/usr/local/bin/@APP@ --config /etc/@APP@/config.toml
-# Updates replace this file; put changes in a drop-in with: systemctl edit @APP@
 # Keep the API key out of config.toml: LoadCredential=api-key:/etc/@APP@/api-key
 # and set api_key = "file:///run/credentials/@APP@.service/api-key" under [app].
 # The same for an OIDC client secret: LoadCredential=oidc-secret:/etc/@APP@/oidc-secret
 # and client_secret = "file:///run/credentials/@APP@.service/oidc-secret" under [auth.oidc].
 Restart=on-failure
+RestartSec=2
 DynamicUser=yes
 StateDirectory=@APP@
 ConfigurationDirectory=@APP@

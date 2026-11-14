@@ -4,6 +4,19 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.8] - 2026-11-14
+
+### Added
+
+- `magicshell check-config`: checks the configuration as a start would, without serving, and prints the listen address, the mode and the database path. A secret file under `/run/credentials/` is noted, not read, since it exists only while the service runs.
+- The first system install asks for the settings (or takes them from `MAGICSHELL_*` variables), writes `/etc/magicshell/config.toml`, keeps the API key in a root-only credential file, creates the first account, and enables and starts the service.
+- `install-online.sh` takes `MAGICSHELL_VERSION` to pin a release, and verifies the build provenance when `gh` is installed (`MAGICSHELL_VERIFY=1` requires it, `0` skips it).
+
+### Changed
+
+- Running the installer again updates safely. It does nothing when this version already runs. The new version checks the existing configuration first, and nothing changes if it refuses it. The program, the unit and the database are backed up (the newest two database backups stay). The service is restarted, or enabled and started, and must answer `/healthz`; otherwise the old program, unit and database are put back and the old version runs again. An edited unit file is kept, with the new one beside it as `magicshell.service.new`.
+- The unit is `Type=notify` with a 30 s watchdog: `systemctl start` returns once magicshell listens, and fails if it cannot start.
+
 ### Fixed
 
 - The README's install line puts `sudo` on `sh`, after the pipe. `install-online.sh --system` run without root says how, before downloading anything.

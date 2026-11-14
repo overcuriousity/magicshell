@@ -320,3 +320,65 @@ async fn passwd_refuses_a_provider_account() {
     assert!(passwd.out.is_empty());
     assert!(users::verify_password(&pool, "grace", PASSWORD).await.unwrap().is_none());
 }
+
+// `check-config`: what the installer runs with a new binary before it changes anything.
+
+#[test]
+fn check_config_prints_where_the_server_listens_and_its_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().display();
+    let file = config_in(
+        &dir,
+        &format!(
+            "data_dir = \"{data}\"\nbind = \"127.0.0.1:8099\"\n[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\ndatabase = \"magicshell.db\"\n"
+        ),
+    );
+    let run = magicshell(&file, &["check-config"], "");
+    assert!(run.ok, "{}", run.err);
+    assert_eq!(run.out, format!("bind=127.0.0.1:8099\nmode=accounts\ndatabase={data}/magicshell.db\n"));
+    // It never creates the database.
+    assert!(!dir.path().join("magicshell.db").exists());
+
+    let open = config_in(&dir, "[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\n");
+    let run = magicshell(&open, &["check-config"], "");
+    assert!(run.ok, "{}", run.err);
+    assert_eq!(run.out, "bind=127.0.0.1:8080\nmode=open\n");
+}
+
+#[test]
+fn check_config_refuses_what_a_start_refuses() {
+    let dir = tempfile::tempdir().unwrap();
+    // data_dir under [app], where it does not belong.
+    let misplaced = config_in(
+        &dir,
+        "[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\ndata_dir = \"/var/lib/magicshell\"\n",
+    );
+    let run = magicshell(&misplaced, &["check-config"], "");
+    assert_eq!(run.code, Some(1));
+    assert!(run.err.contains("data_dir"), "{}", run.err);
+    assert_eq!(run.out, "");
+    let public =
+        config_in(&dir, "bind = \"0.0.0.0:8080\"\n[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\n");
+    let run = magicshell(&public, &["check-config"], "");
+    assert_eq!(run.code, Some(1));
+    assert!(run.err.contains("public_url"), "{}", run.err);
+}
+
+#[test]
+fn check_config_notes_a_credential_that_exists_only_while_the_service_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let key = "file:///run/credentials/magicshell-test-absent.service/api-key";
+    let file =
+        config_in(&dir, &format!("[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\napi_key = \"{key}\"\n"));
+    let run = magicshell(&file, &["check-config"], "");
+    assert!(run.ok, "{}", run.err);
+    assert!(run.err.contains("Not checked: /run/credentials/magicshell-test-absent.service/api-key"), "{}", run.err);
+    // Anywhere else a missing secret file is an error, as at a start.
+    let elsewhere = config_in(
+        &dir,
+        "[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\napi_key = \"file:///nonexistent/api-key\"\n",
+    );
+    let run = magicshell(&elsewhere, &["check-config"], "");
+    assert_eq!(run.code, Some(1));
+    assert!(run.err.contains("Cannot read secret file /nonexistent/api-key"), "{}", run.err);
+}
