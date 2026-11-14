@@ -16,6 +16,7 @@ use sqlx::SqlitePool;
 use crate::kit::oidc::Oidc;
 use crate::kit::security::rate_limit;
 use crate::limit::Limiter;
+use crate::preheat::Preheat;
 use crate::upstream::Upstream;
 
 pub struct ApiState {
@@ -28,6 +29,8 @@ pub struct ApiState {
     pub why: Option<Why>,
     /// Sign-in through `[auth.oidc]`: accounts mode only; password sign-in stays routed beside it.
     pub oidc: Option<Arc<Oidc>>,
+    /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off.
+    pub preheat: Option<Preheat>,
 }
 
 pub struct Why {
@@ -37,6 +40,9 @@ pub struct Why {
 
 pub fn router(state: Arc<ApiState>) -> Router {
     let mut router = Router::new().route("/api/config", get(config::get)).route("/api/run", post(run::post));
+    if state.preheat.is_some() {
+        router = router.route("/api/preheat", post(run::preheat));
+    }
     if state.pool.is_some() {
         router = router
             .route("/api/auth/sign-in", post(auth::sign_in).layer(rate_limit(10, 5)))

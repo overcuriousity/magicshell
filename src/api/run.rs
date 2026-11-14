@@ -1,5 +1,6 @@
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
@@ -13,6 +14,7 @@ use crate::error::AppError;
 use crate::kit::OcError;
 use crate::kit::security::{ClientIp, client_key};
 use crate::limit::Limiter;
+use crate::preheat::warm_up_run;
 use crate::systemone::{Run, word_count};
 use crate::upstream::Reply;
 
@@ -43,6 +45,7 @@ pub async fn post(
     body: Result<Json<Run>, JsonRejection>,
 ) -> Result<Json<Reply>, AppError> {
     let run = read_run(&st.limiter, &caller, body)?;
+    touch(&st);
     Ok(Json(st.upstream.run(&run).await?))
 }
 
@@ -64,7 +67,29 @@ pub async fn post_why(
             why.max_words
         )));
     }
+    touch(&st);
     Ok(Json(st.upstream.run(&run).await?))
+}
+
+/// A run that reached validation keeps the model warm, so it starts the preheat cooldown.
+fn touch(st: &ApiState) {
+    if let Some(preheat) = &st.preheat {
+        preheat.touch(Instant::now());
+    }
+}
+
+/// Answers at once; at most once a minute for the whole server it sends one minimal request in the
+/// background. It never takes from the run allowance, and the model's reply does not matter.
+pub async fn preheat(State(st): State<Arc<ApiState>>, _caller: Caller) -> StatusCode {
+    if st.preheat.as_ref().is_some_and(|p| p.take(Instant::now())) {
+        let upstream = st.upstream.clone();
+        tokio::spawn(async move {
+            if let Err(e) = upstream.run(&warm_up_run()).await {
+                tracing::debug!(error = %e, "preheat request failed");
+            }
+        });
+    }
+    StatusCode::NO_CONTENT
 }
 
 /// Takes from `limiter`, then reads and validates the body.

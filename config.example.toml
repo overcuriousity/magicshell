@@ -26,6 +26,8 @@ runs_per_minute = 60
 why_max_words = 300
 # "Why?" questions one user may ask per minute, counted apart from runs (burst is the same number). Environment: MAGICSHELL__APP__WHY_PER_MINUTE
 why_per_minute = 600
+# Let the page warm the model up with one small request, at most once a minute, so a local model is loaded before the first question. Environment: MAGICSHELL__APP__PREHEAT
+preheat = true
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
 upstream_timeout_secs = 60
 

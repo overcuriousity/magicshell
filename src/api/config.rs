@@ -21,6 +21,6 @@ pub async fn get(State(st): State<Arc<ApiState>>, mut parts: Parts) -> Result<Js
     let why = st.why.as_ref().map(|w| json!({ "maxWords": w.max_words }));
     let sso = st.oidc.as_ref().map(|o| json!({ "label": o.label() }));
     Ok(Json(json!({
-        "mode": mode, "model": st.model, "user": user, "why": why, "sso": sso, "version": env!("CARGO_PKG_VERSION")
+        "mode": mode, "model": st.model, "user": user, "why": why, "sso": sso, "preheat": st.preheat.is_some(), "version": env!("CARGO_PKG_VERSION")
     })))
 }

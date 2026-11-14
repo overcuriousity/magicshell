@@ -16,6 +16,10 @@ fn why_per_minute() -> u32 {
     600
 }
 
+fn preheat() -> bool {
+    true
+}
+
 fn upstream_timeout_secs() -> u64 {
     60
 }
@@ -38,6 +42,9 @@ pub struct AppConfig {
     /// "Why?" questions one user may ask per minute, counted apart from runs.
     #[serde(default = "why_per_minute")]
     pub why_per_minute: u32,
+    /// `POST /api/preheat` loads the model before the first question; false leaves the route out.
+    #[serde(default = "preheat")]
+    pub preheat: bool,
     #[serde(default = "upstream_timeout_secs")]
     pub upstream_timeout_secs: u64,
     /// From `[auth.oidc]`, filled by [`AppConfig::from_config`].

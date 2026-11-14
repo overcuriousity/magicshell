@@ -19,6 +19,7 @@ use crate::kit::oidc::Oidc;
 use crate::kit::security::{Limits, secure};
 use crate::kit::{db, session};
 use crate::limit::Limiter;
+use crate::preheat::Preheat;
 use crate::upstream::Upstream;
 
 /// Opens the accounts database and applies the migrations; `None` when `[app] database` is not set.
@@ -49,6 +50,7 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         pool,
         why,
         oidc,
+        preheat: app.preheat.then(Preheat::new),
     });
     let mut api = api::router(state);
     if let Some(sessions) = sessions {
