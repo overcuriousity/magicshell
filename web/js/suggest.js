@@ -11,7 +11,7 @@ function add(pool, raw, at, fromHistory, name = '') {
   const lower = t.toLowerCase();
   let e = pool.get(lower);
   if (!e) {
-    e = { text: t, lower, count: 0, last: '', fromHistory: false, names: new Set() };
+    e = { text: t, lower, count: 0, historyCount: 0, last: '', fromHistory: false, names: new Set() };
     pool.set(lower, e);
   }
   e.count += 1;
@@ -20,7 +20,10 @@ function add(pool, raw, at, fromHistory, name = '') {
     e.last = at;
     e.text = t;
   }
-  if (fromHistory) e.fromHistory = true;
+  if (fromHistory) {
+    e.fromHistory = true;
+    e.historyCount += 1;
+  }
   if (name) e.names.add(name.toLowerCase());
 }
 
@@ -109,7 +112,7 @@ export function createSuggestions({ history = [], setups = [], scales = [] } = {
       const skip = new Set(exclude.map((x) => String(x).toLowerCase()));
       return history_(pool)
         .filter((e) => !skip.has(e.lower))
-        .sort((a, b) => b.count - a.count || (a.last === b.last ? 0 : a.last > b.last ? -1 : 1))
+        .sort((a, b) => b.historyCount - a.historyCount || (a.last === b.last ? 0 : a.last > b.last ? -1 : 1))
         .slice(0, n)
         .map((e) => e.text);
     },

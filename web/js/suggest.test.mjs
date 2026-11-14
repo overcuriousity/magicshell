@@ -75,3 +75,10 @@ test('500 long situations answer a keystroke quickly', () => {
   for (let i = 0; i < 20; i++) big.rest('situation', 'case 49');
   assert.ok(performance.now() - t < 50 * 20);
 });
+test('setups and scales do not change the order of the history rows', () => {
+  const opt = (name) => ({ key: 'k', text: 'q', options: [{ name, description: '' }] });
+  const setup = { name: 's', sampleState: '', questions: [opt('alpha')] };
+  const h = [entry('2026-11-01T00:00:00Z', '', [opt('alpha')]), entry('2026-11-02T00:00:00Z', '', [opt('beta')]), entry('2026-11-03T00:00:00Z', '', [opt('beta')])];
+  const o = createSuggestions({ history: h, setups: [setup, setup, setup] });
+  assert.deepEqual(o.frequent('option'), ['beta', 'alpha']);
+});
