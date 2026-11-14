@@ -39,7 +39,7 @@ sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.t
 
 The installer checks every file against the bundle's `SHA256SUMS`. If any file has changed, it stops with "Checksum mismatch".
 
-Accounts are then managed as root, with the service's configuration: `sudo magicshell --config /etc/magicshell/config.toml user add NAME` (see "Users" in the README).
+Accounts are then managed as root, with the service's configuration: `sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user add NAME` (see "Users" in the README).
 
 ## The model key
 

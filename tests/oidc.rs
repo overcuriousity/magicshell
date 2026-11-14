@@ -250,6 +250,7 @@ async fn a_refusal_at_the_provider_is_refused_here() {
     assert_eq!(users(&app).await, 0);
 }
 
+/// The second call carries the cookie from before the sign-in, whose session the sign-in replaced.
 #[tokio::test]
 async fn a_callback_cannot_be_replayed() {
     let (idp, app) = sso_app(true).await;
@@ -280,17 +281,36 @@ async fn a_failing_userinfo_does_not_stop_the_sign_in() {
     assert_eq!(signed_in_name(&app, &idp).await, "sub-ada");
 }
 
+/// `GET /auth/oidc/start` inside an existing session: the provider URL and the cookie to go on with.
+async fn start_again(app: &TestApp, cookie: &str) -> (url::Url, String) {
+    let res =
+        no_redirects().get(format!("{}/auth/oidc/start", app.base)).header("cookie", cookie).send().await.unwrap();
+    assert_eq!(res.status(), 303);
+    let authorize = res.headers()["location"].to_str().unwrap().parse().unwrap();
+    let cookie = res.headers().get("set-cookie").map_or_else(|| cookie.to_owned(), |_| cookie_of(&res));
+    (authorize, cookie)
+}
+
 #[tokio::test]
 async fn a_second_start_replaces_the_first() {
     let (idp, app) = sso_app(true).await;
     let (first, cookie) = sso_start(&app, "").await;
-    let res =
-        no_redirects().get(format!("{}/auth/oidc/start", app.base)).header("cookie", &cookie).send().await.unwrap();
-    assert_eq!(res.status(), 303);
-    let cookie = res.headers().get("set-cookie").map_or(cookie, |_| cookie_of(&res));
+    let (_second, cookie) = start_again(&app, &cookie).await;
     assert_eq!(callback(&app, &granted(&idp, &first), Some(&cookie)).await.location, FAILED);
-    // The failed attempt used up the pending entry; one more click starts over and works.
-    assert_eq!(sso_sign_in(&app, &idp, "").await.location, "/");
+    // The failed attempt used up the pending entry; one more click in the same session works.
+    let (third, cookie) = start_again(&app, &cookie).await;
+    assert_eq!(callback(&app, &granted(&idp, &third), Some(&cookie)).await.location, "/");
+}
+
+#[tokio::test]
+async fn a_name_with_a_control_character_falls_back() {
+    let (idp, app) = sso_app(true).await;
+    {
+        let mut s = idp.script.lock().unwrap();
+        s.preferred_username = Some("a\nb".into());
+        s.userinfo_username = Some(String::new());
+    }
+    assert_eq!(signed_in_name(&app, &idp).await, "sub-ada");
 }
 
 #[tokio::test]

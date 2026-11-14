@@ -178,7 +178,7 @@ fn a_user_command_never_creates_a_database() {
         assert_eq!(run.code, Some(1), "{args:?}");
         assert_eq!(
             run.err.trim(),
-            format!("There is no database at {}. Start magicshell once to create it.", database.display()),
+            format!("There is no database at {}. Start or restart magicshell once to create it.", database.display()),
             "{args:?}"
         );
         assert!(run.out.is_empty());
@@ -208,7 +208,7 @@ async fn without_data_dir_the_state_directory_decides() {
     let stray = home.path().join(".local/share/magicshell/magicshell.db");
     assert_eq!(
         run.err.trim(),
-        format!("There is no database at {}. Start magicshell once to create it.", stray.display())
+        format!("There is no database at {}. Start or restart magicshell once to create it.", stray.display())
     );
     assert!(std::fs::read_dir(home.path()).unwrap().next().is_none(), "nothing may be created in the home directory");
 }
@@ -260,7 +260,9 @@ async fn password_commands_refuse_in_sso_mode() {
         );
         assert!(run.out.is_empty());
     }
-    assert!(magicshell(&file, &["user", "list"], "").out.is_empty(), "no user may have been created");
+    let list = magicshell(&file, &["user", "list"], "");
+    assert!(list.ok, "{}", list.err);
+    assert!(list.out.is_empty(), "no user may have been created");
 }
 
 #[tokio::test]

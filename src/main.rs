@@ -132,9 +132,8 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
     if app.oidc.is_some() && matches!(cmd, UserCommand::Add { .. } | UserCommand::Passwd { .. }) {
         return Err(invalid("Accounts come from the sign-in provider. Remove [auth.oidc] to manage passwords."));
     }
-    let Some(pool) = magicshell::app::open_pool(&cfg, &app).await? else {
-        return Err(OcError::Config("Accounts are off. Set database under [app] first.".into()).into());
-    };
+    // `database` is set, so there is a pool.
+    let pool = magicshell::app::open_pool(&cfg, &app).await?.ok_or_else(|| OcError::internal("no database pool"))?;
     match cmd {
         UserCommand::Add { name, password } => {
             check_name(&name)?;
@@ -166,18 +165,20 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
 /// The user commands work on the server's database and never create one: a new file here would
 /// be a second database the server does not read (a system install keeps its own under systemd).
 fn existing_database(path: &Path) -> Result<(), AppError> {
-    let no_access = || invalid(&format!("Cannot open the database at {}. Run this command as root.", path.display()));
-    match path.try_exists() {
-        Ok(true) => {}
-        Ok(false) => {
-            return Err(invalid(&format!(
-                "There is no database at {}. Start magicshell once to create it.",
-                path.display()
-            )));
+    let refused = |e: std::io::Error| {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            invalid(&format!("Cannot open the database at {}. Run this command as root.", path.display()))
+        } else {
+            invalid(&format!("Cannot open the database at {}: {e}.", path.display()))
         }
-        Err(_) => return Err(no_access()),
+    };
+    if !path.try_exists().map_err(refused)? {
+        return Err(invalid(&format!(
+            "There is no database at {}. Start or restart magicshell once to create it.",
+            path.display()
+        )));
     }
-    std::fs::OpenOptions::new().read(true).write(true).open(path).map(drop).map_err(|_| no_access())
+    std::fs::OpenOptions::new().read(true).write(true).open(path).map(drop).map_err(refused)
 }
 
 fn no_user(name: &str) -> AppError {

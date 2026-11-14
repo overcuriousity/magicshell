@@ -30,7 +30,7 @@ why_per_minute = 600
 upstream_timeout_secs = 60
 
 # Single sign-on through an OpenID Connect provider. When present, it replaces the password sign-in; it needs database under [app].
-# Redirect URI to register: <public_url>/auth/oidc/callback
+# Redirect URI to register: scheme, host and port of public_url, then /auth/oidc/callback
 # [auth.oidc]
 # Issuer URL exactly as the provider publishes it, trailing slash included (required). Environment: MAGICSHELL__AUTH__OIDC__ISSUER
 # issuer = "https://id.example.org"

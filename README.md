@@ -96,16 +96,19 @@ Without `database` the server is open: everyone who can reach it can run questio
 
 Accounts mode has no sign-up. With passwords, accounts are created from the shell; with single sign-on they come from the provider (next section).
 
-On a system install, as root and while the service is running:
+On a system install, first set `database = "magicshell.db"` under `[app]` in `/etc/magicshell/config.toml` and restart the service; the restart creates the database. Then, as root and while the service is running:
 
 ```sh
-sudo magicshell --config /etc/magicshell/config.toml user add NAME
-sudo magicshell --config /etc/magicshell/config.toml user list
-sudo magicshell --config /etc/magicshell/config.toml user passwd NAME
-sudo magicshell --config /etc/magicshell/config.toml user remove NAME
+sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user add NAME
+sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user list
+sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user passwd NAME
+sudo /usr/local/bin/magicshell --config /etc/magicshell/config.toml user remove NAME
 ```
 
-Root is needed because `/var/lib/magicshell` belongs to the service alone. The commands must see the same `data_dir` as the service: a config written by an installer before 2026.11.6 has none, so add `data_dir = "/var/lib/magicshell"` to it first.
+- Root, because `/var/lib/magicshell` belongs to the service alone.
+- The full path, because `sudo` on some systems does not search `/usr/local/bin`.
+- While the service is running, because secrets handed over with `LoadCredential=` exist only then, and the commands read the same configuration.
+- The commands must see the same `data_dir` as the service: a config written by an installer before 2026.11.6 has none, so add `data_dir = "/var/lib/magicshell"` to it first.
 
 When you run magicshell by hand, use the same user and the same configuration as the server:
 
@@ -127,7 +130,15 @@ client_secret = "file:///run/credentials/magicshell.service/oidc-secret"
 auto_provision = true
 ```
 
-- Register a client at the provider with the redirect URI `<public_url>/auth/oidc/callback` and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
+On a system install, keep the client secret out of `config.toml` (it is world-readable) and hand it to the service as a credential, as `AIRGAP.md` describes for the model key:
+
+```sh
+printf '%s' 'the-client-secret' | install -m 0600 /dev/stdin /etc/magicshell/oidc-secret
+systemctl edit magicshell   # add: [Service] LoadCredential=oidc-secret:/etc/magicshell/oidc-secret
+systemctl restart magicshell
+```
+
+- Register a client at the provider with the redirect URI `https://<host of public_url>/auth/oidc/callback` (scheme, host and port of `public_url`, no further path) and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
 - `auto_provision = true` gives everyone the provider admits an account at their first sign-in. With `false`, only people who already have one get in.
 - An account belongs to the provider's issuer and subject, never to an e-mail address or a name. The name shown is the provider's user name at the first sign-in.
 - Password accounts stay in the database but cannot sign in, and nobody's setups or history move over. `user list` and `user remove` still work; `user add` and `user passwd` refuse.

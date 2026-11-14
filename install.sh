@@ -67,7 +67,7 @@ if [ "$system" -eq 1 ]; then
     echo "Add data_dir = \"/var/lib/$app\" to /etc/$app/config.toml so the user commands find the service's database."
   fi
   echo "Installed /etc/systemd/system/$app.service. Start it with: systemctl daemon-reload && systemctl enable --now $app"
-  echo "Add users with: sudo $app --config /etc/$app/config.toml user add NAME"
+  echo "Add users with: sudo $prefix/bin/$app --config /etc/$app/config.toml user add NAME"
 fi
 
 doc="$prefix/share/$app"
