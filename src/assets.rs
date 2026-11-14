@@ -27,10 +27,12 @@ pub async fn serve(method: Method, uri: Uri) -> Response {
         return OcError::NotFound.into_response();
     };
     let mime = HeaderValue::from_static(mime_of(path));
-    (
-        [(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
-        file.data.into_owned(),
-    )
+    let mut body = file.data.into_owned();
+    if path == "sw.js" {
+        // The cache name carries the version, so a new release replaces the cached offline page.
+        body = String::from_utf8_lossy(&body).replace("__VERSION__", env!("CARGO_PKG_VERSION")).into_bytes();
+    }
+    ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))], body)
         .into_response()
 }
 
@@ -39,7 +41,8 @@ fn mime_of(path: &str) -> &'static str {
         "html" => "text/html; charset=utf-8",
         "js" | "mjs" => "text/javascript; charset=utf-8",
         "css" => "text/css; charset=utf-8",
-        "json" | "webmanifest" => "application/json",
+        "json" => "application/json",
+        "webmanifest" => "application/manifest+json",
         "svg" => "image/svg+xml",
         "png" => "image/png",
         "ico" => "image/x-icon",

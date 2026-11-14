@@ -191,3 +191,25 @@ async fn the_icons_are_served() {
         assert!(page.contains(href), "{href}");
     }
 }
+
+#[tokio::test]
+async fn the_pwa_files_are_served() {
+    let app = support::spawn(support::OPEN).await;
+    let get = |path: &str| app.client.get(format!("{}/{path}", app.base)).send();
+    let manifest = get("manifest.webmanifest").await.unwrap();
+    assert_eq!(manifest.headers()["content-type"], "application/manifest+json");
+    let manifest: Value = manifest.json().await.unwrap();
+    assert_eq!(manifest["name"], "magicshell");
+    let sw = get("sw.js").await.unwrap();
+    assert!(sw.headers()["content-type"].to_str().unwrap().starts_with("text/javascript"));
+    let sw = sw.text().await.unwrap();
+    assert!(sw.contains(env!("CARGO_PKG_VERSION")) && !sw.contains("__VERSION__"));
+    let offline = get("offline.html").await.unwrap();
+    assert!(offline.headers()["content-type"].to_str().unwrap().starts_with("text/html"));
+    for png in ["icon-192.png", "icon-512.png", "icon-maskable-512.png"] {
+        let res = get(png).await.unwrap();
+        assert_eq!(res.headers()["content-type"], "image/png", "{png}");
+    }
+    let page = get("").await.unwrap().text().await.unwrap();
+    assert!(page.contains("rel=\"manifest\"") && page.contains("js/pwa.js"));
+}
