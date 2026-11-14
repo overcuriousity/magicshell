@@ -204,3 +204,11 @@ test('services carry the why limit in accounts mode only', async () => {
   assert.deepEqual(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why }).why, why);
   assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why }).why, null);
 });
+
+test('services carry single sign-on in accounts mode only', async () => {
+  const { servicesFor } = await import('./app.js');
+  const sso = { label: 'Sign in with SSO' };
+  assert.deepEqual(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why: null, sso }).sso, sso);
+  assert.equal(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why: null }).sso, null);
+  assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why: null, sso }).sso, null);
+});

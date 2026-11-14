@@ -1,8 +1,9 @@
-// Settings: theme and text size in every mode; in accounts mode the signed-in name, a new password
+// Settings: theme and text size in every mode; in accounts mode the signed-in name, a new password (not under single sign-on)
 // and signing out.
 import { messageOf } from '../run-error.js';
 import { HREF } from '../routes.js';
 import { h } from '../ui/dom.js';
+import { canChangePassword } from '../sso.js';
 import { inlineError } from '../ui/notice.js';
 import { applyTextSize, applyTheme, storedTextSize, storedTheme } from '../ui/theme.js';
 
@@ -103,8 +104,7 @@ export function createSettingsView() {
     return h('section', { class: 'ms-settings__part', 'aria-labelledby': 'settings-account' },
       h('h2', { class: 'oc-text-section', id: 'settings-account' }, 'Account'),
       h('div', { class: 'ms-signed-in' }, h('span', { class: 'oc-field__label' }, 'Signed in as'), h('span', { class: 'ms-mono' }, name), out),
-      h('h3', { class: 'ms-settings__sub', id: 'settings-password' }, 'Change password'),
-      form,
+      ...(canChangePassword(ctx) ? [h('h3', { class: 'ms-settings__sub', id: 'settings-password' }, 'Change password'), form] : []),
     );
   }
 

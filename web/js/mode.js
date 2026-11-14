@@ -1,5 +1,5 @@
 // Which way the server runs: open or accounts. Without its server the app has no mode (null).
-const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null };
+const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null };
 
 export async function detectMode(fetchFn) {
   try {
@@ -12,7 +12,9 @@ export async function detectMode(fetchFn) {
     const text = (v) => (typeof v === 'string' ? v : null);
     const words = body.why?.maxWords;
     const why = Number.isInteger(words) && words > 0 ? { maxWords: words } : null;
-    return { mode: body.mode, model: text(body.model), user, version: text(body.version), why };
+    const label = body.sso?.label;
+    const sso = typeof label === 'string' && label !== '' ? { label } : null;
+    return { mode: body.mode, model: text(body.model), user, version: text(body.version), why, sso };
   } catch {
     return NO_SERVER;
   }
