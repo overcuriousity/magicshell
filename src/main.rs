@@ -25,6 +25,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Check the configuration as a start would, without serving; prints what it found.
+    /// A secret file under /run/credentials/ is noted, not read: it exists only while the
+    /// service runs.
+    CheckConfig,
     /// Manage accounts; needs `database` under [app].
     #[command(subcommand)]
     User(UserCommand),
@@ -65,6 +69,7 @@ async fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         None => serve(cli.config).await,
+        Some(Command::CheckConfig) => check_config(cli.config),
         Some(Command::User(cmd)) => user(cli.config, cmd).await,
     };
     match result {
@@ -90,9 +95,30 @@ async fn serve(file: Option<PathBuf>) -> Result<(), AppError> {
         .await
         .map_err(|e| OcError::Config(format!("Cannot listen on {}: {e}.", cfg.bind)))?;
     tracing::info!(bind = %cfg.bind, "listening");
+    magicshell::sd_notify::ready();
+    magicshell::sd_notify::watchdog();
     axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .map_err(OcError::internal)?;
+    Ok(())
+}
+
+/// `key=value` lines for the installer: where the server listens and where its database is.
+fn check_config(file: Option<PathBuf>) -> Result<(), AppError> {
+    magicshell::kit::config::defer_credentials();
+    let (cfg, app) = read_config(file)?;
+    magicshell::app::check(&cfg, &app)?;
+    println!("bind={}", cfg.bind);
+    match &app.database {
+        Some(db) => {
+            println!("mode=accounts");
+            println!("database={}", cfg.data_dir("magicshell").join(db).display());
+        }
+        None => println!("mode=open"),
+    }
+    for path in magicshell::kit::config::unread_credentials() {
+        eprintln!("Not checked: {path} exists only while the service runs.");
+    }
     Ok(())
 }
 

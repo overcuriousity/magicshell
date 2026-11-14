@@ -6,5 +6,6 @@ pub mod error;
 pub mod kit;
 pub mod limit;
 pub mod preheat;
+pub mod sd_notify;
 pub mod systemone;
 pub mod upstream;
