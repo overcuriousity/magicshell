@@ -1,5 +1,6 @@
-// The guided view's state and actions, without any DOM: three steps (kind, question, details),
-// then the result. What was entered is kept in sessionStorage so it survives sign-in and reload;
+// The guided view's state and actions, without any DOM: the kind, the question with its context,
+// then the options or the scale (a yes-or-no question has neither and is asked from step 2), then
+// the result. What was entered is kept in sessionStorage so it survives sign-in and reload;
 // the result is not.
 import { LIMITS } from '../limits.js';
 import { SCALES } from '../setups-builtin.js';
@@ -30,6 +31,8 @@ export function loadable(run) {
 
 const isScale = (id) => id === 'own' || SCALES.some((s) => s.id === id);
 const fresh = () => ({ step: 1, kind: 'noul', question: '', options: [], scaleId: FIRST_SCALE, levels: [], context: '' });
+// The step that asks: a yes-or-no question has no details to set.
+const lastStepOf = (kind) => (kind === 'noul' ? 2 : 3);
 const sameTexts = (a, b) => a.length === b.length && a.every((t, i) => t === b[i]);
 
 // A saved entry is used only if every field has the shape the guide writes.
@@ -48,7 +51,7 @@ function restored(saved) {
     levels.every((l) => isObject(l) && typeof l.id === 'string' && typeof l.text === 'string');
   if (!ok) return null;
   return {
-    step,
+    step: Math.min(step, lastStepOf(kind)),
     kind,
     question,
     options: options.map((o) => ({ id: o.id, name: o.name, description: o.description ?? '' })),
@@ -83,7 +86,7 @@ export function createGuidedModel({
   const persist = () => {
     const { step, kind, question, options, scaleId, levels, context } = state;
     try {
-      session?.setItem(SESSION_KEY, JSON.stringify({ step: step === 'result' ? 3 : step, kind, question, options, scaleId, levels, context }));
+      session?.setItem(SESSION_KEY, JSON.stringify({ step: step === 'result' ? lastStepOf(kind) : step, kind, question, options, scaleId, levels, context }));
     } catch {
       // Without session storage the guide still works; it just does not survive a reload.
     }
@@ -134,18 +137,26 @@ export function createGuidedModel({
     setLevels: (levels) => edit(() => { state.levels = levels.map((l) => ({ id: l.id, text: l.text })); }),
     setContext: (text) => edit(() => { state.context = text; }),
 
+    // The step with the Ask button: 2 for a yes-or-no question, 3 otherwise.
+    lastStep: () => lastStepOf(state.kind),
+
+    // On the last step this asks.
     next() {
-      if (state.busy) return;
+      if (state.busy) return undefined;
       if (state.step === 1) {
         edit(() => { state.step = 2; });
       } else if (state.step === 2) {
         if (state.question.trim() === '') {
           state.error = 'Type a question first.';
           changed();
-          return;
+          return undefined;
         }
+        if (model.lastStep() === 2) return model.ask();
         edit(() => { state.step = 3; });
+      } else if (state.step === 3) {
+        return model.ask();
       }
+      return undefined;
     },
     back() {
       if (state.busy) return;

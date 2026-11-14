@@ -303,7 +303,7 @@
 @container app (max-width: 20rem) {
   .ms-kinds { grid-template-columns: minmax(0, 1fr); }
 }
-.ms-guide__body textarea { width: 100%; }
+.ms-guide__body textarea, .ms-guide__body > input.oc-input { width: 100%; }
 .ms-guide__chips { margin: 0; padding: 0; list-style: none; }
 .ms-guide__add .oc-input { flex: 1 1 auto; min-width: 0; }
 .ms-chip__remove {

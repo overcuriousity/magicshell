@@ -146,6 +146,8 @@ test('over the limit the button is disabled with the reason', () => {
   assert.match(el.textContent, /Why\? works up to 5 words; this situation has 11\.$/);
   const empty = whyButton({ entry: entryOf('  '), why: { maxWords: 5 }, onOpen() {} });
   assert.match(empty.textContent, /Why\? needs a situation\.$/);
+  const guided = whyButton({ entry: { ...entryOf('  '), guided: true }, why: { maxWords: 5 }, onOpen() {} });
+  assert.match(guided.textContent, /Why\? works on the additional context; this question had none\.$/);
 });
 
 test('with a kept part the panel shows it and asks nothing', async () => {

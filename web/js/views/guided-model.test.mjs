@@ -89,9 +89,9 @@ test('a yes-or-no question becomes a noul run with the context as the situation'
   const { model } = make();
   model.next();
   model.setQuestion('Is it raining?');
-  model.next();
   model.setContext('I look out of the window and see wet streets.');
-  assert.equal(model.state.step, 3);
+  assert.equal(model.state.step, 2);
+  assert.equal(model.lastStep(), 2);
   assert.deepEqual(model.toRun(), {
     state: 'I look out of the window and see wet streets.',
     questions: [{ key: 'q1', type: 'noul', text: 'Is it raining?' }],
@@ -151,6 +151,7 @@ test('a rating on my own scale uses the levels typed', async () => {
 
 test('an empty question cannot be passed', () => {
   const { model } = make();
+  model.setKind('choice');
   model.next();
   model.setQuestion('   ');
   model.next();
@@ -207,10 +208,9 @@ test('a failed ask shows the sentence, stays on the step and stores nothing', as
   const { model, store } = make({ client: fakeClient({ fail: new RunError('The model endpoint did not answer in time.', 'timeout') }) });
   model.next();
   model.setQuestion('Is it raining?');
-  model.next();
-  await model.ask();
+  await model.next();
   assert.equal(model.state.error, 'The model endpoint did not answer in time.');
-  assert.equal(model.state.step, 3);
+  assert.equal(model.state.step, 2);
   assert.equal(store.entries.length, 0);
 });
 
@@ -475,4 +475,32 @@ test('a slow save does not tag a newer result with its entry', async () => {
   release();
   await first;
   assert.equal(model.state.result.entry, second);
+});
+
+test('a yes-or-no question is asked from step 2; the other kinds have a third step', async () => {
+  const { model, client } = make();
+  model.next();
+  model.setQuestion('Is it raining?');
+  await model.next();
+  assert.equal(client.calls.length, 1);
+  assert.equal(model.state.step, 'result');
+
+  const other = make();
+  other.model.setKind('score');
+  assert.equal(other.model.lastStep(), 3);
+  other.model.next();
+  other.model.setQuestion('How urgent is this?');
+  await other.model.next();
+  assert.equal(other.model.state.step, 3);
+  assert.equal(other.client.calls.length, 0);
+  await other.model.next();
+  assert.equal(other.model.state.step, 'result');
+});
+
+test('a draft kept at step 3 of a yes-or-no question comes back at step 2', () => {
+  const session = memory();
+  session.setItem(SESSION_KEY, JSON.stringify({ step: 3, kind: 'noul', question: 'Is it late?', options: [], scaleId: '1-5', levels: [], context: '' }));
+  const { state } = make({ session }).model;
+  assert.equal(state.question, 'Is it late?');
+  assert.equal(state.step, 2);
 });

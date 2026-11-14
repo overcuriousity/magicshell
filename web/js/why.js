@@ -185,12 +185,16 @@ export function legend(question, answer) {
   return { towards: 'towards yes', away: 'towards no' };
 }
 
-export function canAsk(run, maxWords) {
+// guided: the run was made in the guide, where the situation is called the additional context.
+export function canAsk(run, maxWords, guided = false) {
   const count = splitWords(run.state).length;
   if (!maxWords) return { ok: false, count };
-  if (count === 0) return { ok: false, count, reason: 'Why? needs a situation.' };
+  if (count === 0) {
+    return { ok: false, count, reason: guided ? 'Why? works on the additional context; this question had none.' : 'Why? needs a situation.' };
+  }
   if (count > maxWords) {
-    return { ok: false, count, reason: `Why? works up to ${maxWords} words; this situation has ${count}.` };
+    const what = guided ? 'the additional context' : 'this situation';
+    return { ok: false, count, reason: `Why? works up to ${maxWords} words; ${what} has ${count}.` };
   }
   return { ok: true, count };
 }

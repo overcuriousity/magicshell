@@ -1,4 +1,4 @@
-// The guided view: three small steps in plain words, then the answer as a tinted verdict and bars
+// The guided view: two or three small steps in plain words, then the answer as a tinted verdict and bars
 // with percentages. No sentence about the answer, no types, tokens, model names or latency.
 // Typing edits the model quietly; other changes rebuild the step, and focus finds its way back by
 // data-fid (or to the heading when the step changed).
@@ -22,8 +22,8 @@ const ASK_KINDS = [
   { id: 'score', label: 'for a rating', hint: 'A rating on a scale' },
   { id: 'other', label: 'something else', hint: 'Opens the bench' },
 ];
-const CONTEXT_LABEL = 'Anything it should know? (optional)';
-const LEADS = { 1: 'I want to ask', 2: 'What is your question?', choice: 'Which options can it pick from?', score: 'On which scale?', noul: CONTEXT_LABEL };
+const CONTEXT_LABEL = 'Additional context (optional)';
+const LEADS = { 1: 'I want to ask', 2: 'What is your question?', choice: 'Which options can it pick from?', score: 'On which scale?' };
 
 const uid = () => crypto.randomUUID();
 
@@ -53,7 +53,8 @@ export function createGuidedView() {
   };
 
   const heading = (text) => h('h1', { class: 'oc-text-page ms-guide__lead', id: 'guide-lead', tabindex: '-1' }, text);
-  const stepLine = (n) => h('p', { class: 'ms-guide__step' }, `Step ${n} of 3`);
+  // Step 1 names no total: how many steps follow depends on the kind chosen there.
+  const stepLine = (n) => h('p', { class: 'ms-guide__step' }, n === 1 ? 'Step 1' : `Step ${n} of ${model.lastStep()}`);
   // busy: aria-disabled with the spinner after a moment; disabled: aria-disabled only (the model ignores it).
   const button = (label, onclick, { primary = false, fid, busy = false, disabled = false } = {}) =>
     h('button', {
@@ -65,17 +66,16 @@ export function createGuidedView() {
       onclick,
     }, label);
 
-  function contextField(state, labelled) {
+  function contextField(state) {
     const area = h('textarea', {
       class: 'oc-input',
       id: 'guide-context',
       rows: '3',
       maxlength: String(LIMITS.state),
       'data-fid': 'context',
-      'aria-labelledby': labelled ? 'guide-lead' : null,
       oninput: typing((e) => model.setContext(e.target.value)),
     }, state.context);
-    return labelled ? area : h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL), area);
+    return h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL), area);
   }
 
   // One button per kind, two by two: choosing one goes on to the question; "something else"
@@ -109,18 +109,29 @@ export function createGuidedView() {
     ];
   }
 
+  // The question is one line, to say that it is short; what the model should know goes in the
+  // context below it, which step 3 shows again with what was typed here. A yes-or-no question
+  // has no step 3 and is asked from here.
   function questionStep(state) {
     return [
       stepLine(2),
       heading(LEADS[2]),
-      h('textarea', {
+      h('input', {
+        type: 'text',
         class: 'oc-input',
-        rows: '3',
+        value: state.question,
+        autocomplete: 'off',
         maxlength: String(LIMITS.questionText),
         'data-fid': 'question',
         'aria-labelledby': 'guide-lead',
         oninput: typing((e) => model.setQuestion(e.target.value)),
-      }, state.question),
+        onkeydown: (e) => {
+          if (e.key !== 'Enter' || e.isComposing) return;
+          e.preventDefault();
+          model.next();
+        },
+      }),
+      contextField(state),
     ];
   }
 
@@ -212,9 +223,8 @@ export function createGuidedView() {
 
   function detailsStep(state) {
     const body = [stepLine(3), heading(LEADS[state.kind])];
-    if (state.kind === 'choice') body.push(...optionsPart(state));
-    if (state.kind === 'score') body.push(...scalePart(state));
-    body.push(contextField(state, state.kind === 'noul'));
+    body.push(...(state.kind === 'choice' ? optionsPart(state) : scalePart(state)));
+    body.push(contextField(state));
     return body;
   }
 
@@ -253,7 +263,7 @@ export function createGuidedView() {
     // Step 1 has no Next: each kind button goes on by itself.
     if (state.step === 1) return [];
     const back = button('Back', () => model.back(), { fid: 'back', disabled: state.busy });
-    if (state.step === 3) return [back, button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy })];
+    if (state.step === model.lastStep()) return [back, button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy })];
     return [back, button('Next', () => model.next(), { primary: true, fid: 'next' })];
   }
 
@@ -337,9 +347,8 @@ export function createGuidedView() {
   const onKey = (e) => {
     if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || !model) return;
     e.preventDefault();
-    if (model.state.step === 3) model.ask();
-    else if (model.state.step === 1) choose(model.state.kind);
-    else if (model.state.step === 2) root.querySelector('[data-fid="next"]')?.click();
+    if (model.state.step === 1) choose(model.state.kind);
+    else if (model.state.step !== 'result') model.next();
   };
 
   return {

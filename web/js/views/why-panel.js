@@ -14,7 +14,7 @@ let uid = 0;
 export function whyButton({ entry, why, onOpen }) {
   if (!why || !entry) return null;
   const kept = fits(entry.why, entry.run);
-  const check = canAsk(entry.run, why.maxWords);
+  const check = canAsk(entry.run, why.maxWords, entry.guided === true);
   const ok = kept || check.ok;
   const noteId = `ms-why-note-${++uid}`;
   const note = kept ? null : h('span', { class: 'ms-why__note', id: noteId }, ok ? costNote(check.count) : check.reason);

@@ -284,6 +284,9 @@ test('canAsk at the limits', () => {
     count: 301,
     reason: 'Why? works up to 300 words; this situation has 301.',
   });
+  assert.equal(canAsk(of(''), 300, true).reason, 'Why? works on the additional context; this question had none.');
+  assert.equal(canAsk(of(words(301)), 300, true).reason, 'Why? works up to 300 words; the additional context has 301.');
+  assert.deepEqual(canAsk(of('a b'), 300, true), { ok: true, count: 2 });
   assert.equal(canAsk(of('a b'), null).ok, false);
   assert.equal(canAsk(of('a b'), 0).ok, false);
 });
