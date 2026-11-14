@@ -20,6 +20,7 @@ A decision model does not write text. It takes a situation and typed questions, 
 - **Bench**: one situation, up to 8 typed questions, distributions per question, the exact request and response, and a variant run beside a baseline (without descriptions, neutral option names, reversed order).
 - **Why?** (accounts mode): after a result, ask the model again once per word of the situation with that word left out. Words are marked by how far their absence moved the answer: shade for strength, two colours for direction, ⇄ where the answer flips; the numbers show on hover, tap or focus. It costs one extra call per word, can be stopped, and is kept with the run in History. Offered in the guided view, the bench (baseline only) and a History entry.
 - **Setups**: ready-made and your own, exported and imported as JSON. **History**: every run, reopened, run again or loaded as baseline.
+- **Suggestions**: fields suggest what was typed before, from History, setups and ready scales, in grey; Tab takes the next word (a button under the field on touch devices). Empty question, situation and option fields offer recent or often-used values. Nothing leaves the app and the browser's autofill is not used.
 
 ## Two modes
 
