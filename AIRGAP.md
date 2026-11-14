@@ -31,13 +31,15 @@ For your user only, into `~/.local/bin`:
 sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.tar.gz
 ```
 
-As a system service, run as root. This installs to `/usr/local/bin`, sets up a hardened systemd unit and creates `/etc/magicshell/config.toml`:
+As a system service (the standard install), run as root. This installs to `/usr/local/bin`, sets up a hardened systemd unit and creates `/etc/magicshell/config.toml` with `data_dir = "/var/lib/magicshell"`, where the service keeps its database:
 
 ```sh
 sh install.sh --archive magicshell-<version>-x86_64-unknown-linux-musl-offline.tar.gz --system
 ```
 
 The installer checks every file against the bundle's `SHA256SUMS`. If any file has changed, it stops with "Checksum mismatch".
+
+Accounts are then managed as root, with the service's configuration: `sudo magicshell --config /etc/magicshell/config.toml user add NAME` (see "Users" in the README).
 
 ## The model key
 

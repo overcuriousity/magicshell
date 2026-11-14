@@ -25,7 +25,7 @@ A decision model does not write text. It takes a situation and typed questions, 
 
 | | Open | Accounts |
 |---|---|---|
-| Sign-in | none | username and password |
+| Sign-in | none | username and password, or single sign-on (OIDC) |
 | History and setups | browser storage | server database, per user |
 | Why? | no | yes |
 
@@ -33,17 +33,35 @@ In both, the endpoint, key and model are server configuration, and the browser t
 
 ## Install
 
-Online, to `~/.local/bin`, no sudo:
+The standard install is a system service under systemd. As root:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sh
+curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sh -s -- --system
 ```
 
-The script downloads the latest release bundle for x86_64 or aarch64, checks it against `SHA256SUMS` and runs the bundled `install.sh`. Pass `--system` (as root) for `/usr/local/bin` with a systemd unit and `/etc/magicshell/config.toml`, or `--prefix DIR`: `curl ... | sh -s -- --system`.
+The script downloads the latest release bundle for x86_64 or aarch64, checks it against `SHA256SUMS` and runs the bundled `install.sh`. It never calls `sudo`. A system install puts these in place:
+
+| Path | What |
+|---|---|
+| `/usr/local/bin/magicshell` | the program |
+| `/etc/systemd/system/magicshell.service` | the hardened unit; the service runs as its own dynamic user |
+| `/etc/magicshell/config.toml` | the configuration, with `data_dir = "/var/lib/magicshell"` |
+| `/var/lib/magicshell/` | the database; created at the first start and private to the service |
+
+To try magicshell without a service, leave out `--system`: it installs to `~/.local/bin` (or `--prefix DIR`) and needs no root.
 
 Without network: `AIRGAP.md`.
 
 ## Run
+
+As a service, after setting `endpoint`, `model` and `public_url` in `/etc/magicshell/config.toml`:
+
+```sh
+systemctl daemon-reload && systemctl enable --now magicshell
+journalctl -u magicshell -f
+```
+
+By hand:
 
 ```sh
 magicshell --config config.toml
@@ -56,7 +74,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `public_url` | https address users see; required unless reached via localhost |
 | `bind` | listen address, default `127.0.0.1:8080` |
 | `trusted_proxies` | addresses whose `X-Forwarded-*` headers are believed |
-| `data_dir` | where the database lives |
+| `data_dir` | where the database lives. The system install sets `/var/lib/magicshell`. Unset: the service's state directory under systemd, otherwise `~/.local/share/magicshell` |
 | `[app] endpoint` | model endpoint base URL ending in `/v1` (required) |
 | `[app] model` | the model to ask (required) |
 | `[app] api_key` | bearer key; `file://` reads it from a file |
@@ -65,21 +83,56 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
 | `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
+| `[auth.oidc] issuer` | the provider's issuer URL, exactly as its discovery document states it; setting this section turns single sign-on on |
+| `[auth.oidc] client_id` | the client registered at the provider |
+| `[auth.oidc] client_secret` | its secret; `file://` reads it from a file |
+| `[auth.oidc] scopes` | default `["openid", "profile"]` |
+| `[auth.oidc] auto_provision` | create an account at a person's first sign-in, default `false` |
+| `[auth.oidc] display_name` | the label of the sign-in button, default `Sign in with SSO` |
 
 Without `database` the server is open: everyone who can reach it can run questions. Use that only on a trusted network.
 
 ## Users
 
-Accounts mode has no sign-up. Create accounts from the shell, with the same configuration:
+Accounts mode has no sign-up. With passwords, accounts are created from the shell; with single sign-on they come from the provider (next section).
+
+On a system install, as root and while the service is running:
+
+```sh
+sudo magicshell --config /etc/magicshell/config.toml user add NAME
+sudo magicshell --config /etc/magicshell/config.toml user list
+sudo magicshell --config /etc/magicshell/config.toml user passwd NAME
+sudo magicshell --config /etc/magicshell/config.toml user remove NAME
+```
+
+Root is needed because `/var/lib/magicshell` belongs to the service alone. The commands must see the same `data_dir` as the service: a config written by an installer before 2026.11.6 has none, so add `data_dir = "/var/lib/magicshell"` to it first.
+
+When you run magicshell by hand, use the same user and the same configuration as the server:
 
 ```sh
 magicshell --config config.toml user add NAME
-magicshell --config config.toml user list
-magicshell --config config.toml user passwd NAME
-magicshell --config config.toml user remove NAME
 ```
 
-`add` and `passwd` ask for the password twice (at least 12 characters). `remove` deletes the user's setups and history.
+`add` and `passwd` ask for the password twice (at least 12 characters). `remove` deletes the user's setups and history. The commands work on the server's database and never create one: if there is none where they look, they say where they looked and stop.
+
+## Sign-in through OIDC
+
+Setting `[auth.oidc]` makes your identity provider the only way in: the sign-in page shows one button, and the password form is gone. It needs `[app] database` and `public_url`.
+
+```toml
+[auth.oidc]
+issuer = "https://cloud.example"
+client_id = "magicshell"
+client_secret = "file:///run/credentials/magicshell.service/oidc-secret"
+auto_provision = true
+```
+
+- Register a client at the provider with the redirect URI `<public_url>/auth/oidc/callback` and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
+- `auto_provision = true` gives everyone the provider admits an account at their first sign-in. With `false`, only people who already have one get in.
+- An account belongs to the provider's issuer and subject, never to an e-mail address or a name. The name shown is the provider's user name at the first sign-in.
+- Password accounts stay in the database but cannot sign in, and nobody's setups or history move over. `user list` and `user remove` still work; `user add` and `user passwd` refuse.
+- Signing out ends the magicshell session only, not the one at the provider.
+- The provider's signing keys are read once. After replacing them at the provider, restart magicshell.
 
 ## Development
 

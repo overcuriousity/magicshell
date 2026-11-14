@@ -132,3 +132,14 @@ fn the_oidc_secret_can_come_from_the_environment() {
         assert_eq!(c.auth.oidc.unwrap().client_secret.expose(), "from-env");
     });
 }
+
+/// `install.sh --system` switches this line on; the two files must agree on it.
+#[test]
+fn the_installer_can_switch_on_the_example_data_dir() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let line = "# data_dir = \"/var/lib/magicshell\"";
+    let example = std::fs::read_to_string(root.join("config.example.toml")).unwrap();
+    assert!(example.lines().any(|l| l == line));
+    let installer = std::fs::read_to_string(root.join("install.sh")).unwrap();
+    assert!(installer.contains("s|^# data_dir = \\\"/var/lib/magicshell\\\"\\$|"));
+}

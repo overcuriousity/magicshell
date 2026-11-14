@@ -67,6 +67,13 @@ async fn start(cfg_toml: &str, endpoint: &str, dir: tempfile::TempDir) -> TestAp
     TestApp { base: format!("http://{addr}"), client: reqwest::Client::new(), dir, pool }
 }
 
+/// The server's database as a first start leaves it: `magicshell.db` in `dir`, migrated.
+pub async fn create_database(dir: &std::path::Path) {
+    let pool = magicshell::kit::db::connect(dir, "magicshell.db").await.unwrap();
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    pool.close().await;
+}
+
 /// Creates a user straight in the database, with a password.
 pub async fn add_user(app: &TestApp, name: &str, password: &str) {
     let pool = app.pool.as_ref().unwrap();

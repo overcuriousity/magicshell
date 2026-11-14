@@ -55,10 +55,19 @@ if [ "$system" -eq 1 ]; then
   mkdir -p "/etc/$app"
   if [ ! -f "/etc/$app/config.toml" ]; then
     # World-readable because the service runs as a dynamic user; secrets go through LoadCredential=.
-    install -m 0644 config.example.toml "/etc/$app/config.toml"
+    # data_dir is switched on so that shell commands use the service's database, not one of their own.
+    sed "s|^# data_dir = \"/var/lib/magicshell\"\$|data_dir = \"/var/lib/$app\"|" config.example.toml > "$work/config.toml"
+    if ! grep -q "^data_dir = \"/var/lib/$app\"\$" "$work/config.toml"; then
+      echo "The bundled config.example.toml has no data_dir line to switch on." >&2
+      exit 1
+    fi
+    install -m 0644 "$work/config.toml" "/etc/$app/config.toml"
     echo "Wrote /etc/$app/config.toml; set public_url before starting. Keep secrets out of it (see AIRGAP.md)."
+  elif ! grep -q '^data_dir[[:space:]]*=' "/etc/$app/config.toml"; then
+    echo "Add data_dir = \"/var/lib/$app\" to /etc/$app/config.toml so the user commands find the service's database."
   fi
   echo "Installed /etc/systemd/system/$app.service. Start it with: systemctl daemon-reload && systemctl enable --now $app"
+  echo "Add users with: sudo $app --config /etc/$app/config.toml user add NAME"
 fi
 
 doc="$prefix/share/$app"
