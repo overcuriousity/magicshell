@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.9] - 2026-11-14
+
 ### Added
 
 - Pictures in the situation: up to four per question, in the guided view and the bench, in both modes. Add them with the phone's camera or gallery, the file picker, by dropping them on the situation or by pasting. They are shrunk in the browser (JPEG, 768 px on the longer edge, at most 300 KB each and 600 KB together), which also removes their metadata. A question with pictures says that the model is reading them and can be stopped. History keeps previews only. New keys `[app] max_pictures` (0 turns pictures off) and `picture_max_edge`.
