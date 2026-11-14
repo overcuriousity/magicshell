@@ -26,7 +26,7 @@ A decision model does not write text. It takes a situation and typed questions, 
 
 | | Open | Accounts |
 |---|---|---|
-| Sign-in | none | username and password, or single sign-on (OIDC) |
+| Sign-in | none | username and password, and single sign-on (OIDC) when configured |
 | History and setups | browser storage | server database, per user |
 | Why? | no | yes |
 
@@ -83,6 +83,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
 | `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
+| `[app] preheat` | load the model when the guide reaches its Ask step, at most once a minute for the whole server, default `true` |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 | `[auth.oidc] issuer` | the provider's issuer URL, exactly as its discovery document states it; setting this section turns single sign-on on |
 | `[auth.oidc] client_id` | the client registered at the provider |
@@ -95,7 +96,7 @@ Without `database` the server is open: everyone who can reach it can run questio
 
 ## Users
 
-Accounts mode has no sign-up. With passwords, accounts are created from the shell; with single sign-on they come from the provider (next section).
+Accounts mode has no sign-up. Password accounts are created from the shell; with single sign-on, accounts also come from the provider (next section).
 
 On a system install, first set `database = "magicshell.db"` under `[app]` in `/etc/magicshell/config.toml` and restart the service; the restart creates the database. Then, as root and while the service is running:
 
@@ -121,7 +122,7 @@ magicshell --config config.toml user add NAME
 
 ## Sign-in through OIDC
 
-Setting `[auth.oidc]` makes your identity provider the only way in: the sign-in page shows one button, and the password form is gone. It needs `[app] database` and `public_url`.
+Setting `[auth.oidc]` adds your identity provider beside the passwords. Once per browser tab session the page first makes one silent trip to the provider. If the person is signed in there, they go straight into the app. Otherwise they see the sign-in page with the username and password form and, under it, a button with the configured label. After "Sign out" in a tab there is no silent trip, and a new tab makes its own one check. A provider that does not answer a silent request (`prompt=none`) shows its own login page on the first visit. It needs `[app] database` and `public_url`.
 
 ```toml
 [auth.oidc]
@@ -142,7 +143,9 @@ systemctl restart magicshell
 - Register a client at the provider with the redirect URI `https://<host of public_url>/auth/oidc/callback` (scheme, host and port of `public_url`, no further path) and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
 - `auto_provision = true` gives everyone the provider admits an account at their first sign-in. With `false`, only people who already have one get in.
 - An account belongs to the provider's issuer and subject, never to an e-mail address or a name. The name shown is the provider's user name at the first sign-in.
-- Password accounts stay in the database but cannot sign in, and nobody's setups or history move over. `user list` and `user remove` still work; `user add` and `user passwd` refuse.
+- Password sign-in always stands beside the provider; there is no switch to turn it off. `user add` and `user passwd` work as without `[auth.oidc]`. Password accounts that could not sign in while an earlier version had the section set can sign in again; remove the ones you do not want with `user remove`.
+- A password account and a provider account are never linked, even with the same name. The provider account then gets a suffixed name such as `ada-2`, and nobody's setups or history move over.
+- "Change password" in Settings shows only for accounts that have a password.
 - Signing out ends the magicshell session only, not the one at the provider.
 - The provider's signing keys are read once. After replacing them at the provider, restart magicshell.
 

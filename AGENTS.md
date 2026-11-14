@@ -17,7 +17,7 @@ https://github.com/overcuriousity/overcuriousity-dev-manifest/tree/v2026.11.1/ma
 - No MCP endpoint, OpenAPI document or PWA install (spec non-goals).
 - The manifest's categorical chart colours colour choice options and its ordered ramp colours score levels; always paired with a name, a number or a symbol.
 - Kit code is copied into `src/kit/` from oc-kit v2026.11.1 instead of depending on oc-kit, so the build has no git dependency (see `src/kit/mod.rs`); the OIDC module is the kit's without bearer tokens and resource metadata.
-- `[auth.oidc]` replaces password sign-in instead of standing beside it; there is no `auth.local` switch.
+- Password sign-in always stands beside `[auth.oidc]`; there is no `auth.local` switch to turn it off.
 - Below 48rem the top bar carries the title and one action (the Bench/Guided switch); the theme and text-size toggles live in Settings there and in the top bar from 48rem.
 - Tab takes the next suggested word while a field shows a grey suggestion, and moves focus otherwise; Esc hides the suggestion. The manifest says shortcuts never fire while typing.
 - `deny.toml` ignores RUSTSEC-2026-0459 (SQLite, `libsqlite3-sys`) with a written reachability argument, until sqlx allows `libsqlite3-sys >= 0.39`.

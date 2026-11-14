@@ -6,8 +6,13 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ### Added
 
+- Preheat: when the guide reaches the step with the "Ask" button, the page asks the server to load the model with one small request, at most once a minute for the whole server. It does not count against `runs_per_minute` and is not in History. `[app] preheat = false` turns it off.
 - Text fields in the guided view, the bench and the setup editor show the rest of a matching earlier entry in grey, taken from History, setups and the ready scales. Tab takes the next word, and a button under the field does the same on touch screens and wherever the text has filled the field; Esc hides the suggestion.
 - "Recent:" rows under an empty guided question, guided context and bench situation, and an "Often used:" row under the guided new-option field, offer earlier values from History. Nothing leaves the app, and the browser's autofill is not used.
+
+### Changed
+
+- Password sign-in now stands beside `[auth.oidc]`. With the section set, the page first checks silently once per tab session whether the person is signed in at the provider; otherwise the sign-in page shows the password form and a provider button. `user add` and `user passwd` work again, and "Change password" shows only for accounts with a password. Password accounts that could not sign in while the section was set can sign in again; remove unwanted ones with `user remove`.
 
 ## [2026.11.6] - 2026-11-14
 
