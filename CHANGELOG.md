@@ -6,7 +6,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ### Added
 
-- Text fields in the guided view, the bench and the setup editor show the rest of a matching earlier entry in grey, taken from History, setups and the ready scales. Tab takes the next word, and on touch screens a button under the field does the same; Esc hides the suggestion.
+- Text fields in the guided view, the bench and the setup editor show the rest of a matching earlier entry in grey, taken from History, setups and the ready scales. Tab takes the next word, and a button under the field does the same on touch screens and wherever the text has filled the field; Esc hides the suggestion.
 - "Recent:" rows under an empty guided question, guided context and bench situation, and an "Often used:" row under the guided new-option field, offer earlier values from History. Nothing leaves the app, and the browser's autofill is not used.
 
 ## [2026.11.6] - 2026-11-14
