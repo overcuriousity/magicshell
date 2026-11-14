@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-14
+
 ### Added
 
 - Preheat: when the guide reaches the step with the "Ask" button, the page asks the server to load the model with one small request, at most once a minute for the whole server. Accounts mode only, for signed-in users; open mode has no preheat. It does not count against `runs_per_minute` and is not in History. `[app] preheat = false` turns it off.
