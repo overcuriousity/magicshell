@@ -122,7 +122,7 @@ magicshell --config config.toml user add NAME
 
 ## Sign-in through OIDC
 
-Setting `[auth.oidc]` adds your identity provider beside the passwords. Once per browser tab session the page first makes one silent trip to the provider. If the person is signed in there, they go straight into the app. Otherwise they see the sign-in page with the username and password form and, under it, a button with the configured label. After "Sign out" in a tab there is no silent trip, and a new tab makes its own one check. A provider that does not answer a silent request (`prompt=none`) shows its own login page on the first visit. It needs `[app] database` and `public_url`.
+Setting `[auth.oidc]` adds your identity provider beside the passwords; `[auth.oidc]` needs `[app] database` and `public_url`. Once per browser tab session the page first makes one silent trip to the provider. If the person is signed in there, they go straight into the app. Otherwise they see the sign-in page with the username and password form and, under it, a button with the configured label. After "Sign out" in a tab there is no silent trip; each new tab makes one check of its own, and a tab that was already open does the same when it is reloaded. Someone signed in at the provider who wants to use a password account signs out in magicshell first and then uses the form in that tab. With a provider that does not answer `prompt=none`, the first visit shows the provider's login page; opening the app's address again shows the form.
 
 ```toml
 [auth.oidc]
@@ -143,7 +143,7 @@ systemctl restart magicshell
 - Register a client at the provider with the redirect URI `https://<host of public_url>/auth/oidc/callback` (scheme, host and port of `public_url`, no further path) and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
 - `auto_provision = true` gives everyone the provider admits an account at their first sign-in. With `false`, only people who already have one get in.
 - An account belongs to the provider's issuer and subject, never to an e-mail address or a name. The name shown is the provider's user name at the first sign-in.
-- Password sign-in always stands beside the provider; there is no switch to turn it off. `user add` and `user passwd` work as without `[auth.oidc]`. Password accounts that could not sign in while an earlier version had the section set can sign in again; remove the ones you do not want with `user remove`.
+- Password sign-in always stands beside the provider; there is no switch to turn it off. `user add` and `user passwd` work as without `[auth.oidc]`; `user passwd` refuses provider accounts. Password accounts that could not sign in while an earlier version had the section set can sign in again: `user list` shows which accounts have a password, and `user remove` removes the ones you do not want.
 - A password account and a provider account are never linked, even with the same name. The provider account then gets a suffixed name such as `ada-2`, and nobody's setups or history move over.
 - "Change password" in Settings shows only for accounts that have a password.
 - Signing out ends the magicshell session only, not the one at the provider.
