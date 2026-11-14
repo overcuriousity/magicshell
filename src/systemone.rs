@@ -3,6 +3,9 @@
 
 use std::collections::HashSet;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
@@ -19,6 +22,12 @@ const MIN_LEVELS: usize = 2;
 const MAX_LEVELS: usize = 10;
 const MAX_LEVEL: usize = 200;
 const MAX_STATE: usize = 8000;
+/// Pictures per run; a server may allow fewer (`[app] max_pictures`).
+pub const MAX_PICTURES: usize = 4;
+/// Decoded bytes of one picture, and of all pictures of a run together.
+const MAX_PICTURE_BYTES: usize = 300 * 1024;
+const MAX_PICTURES_BYTES: usize = 600 * 1024;
+const PICTURE_PREFIX: &str = "data:image/jpeg;base64,";
 
 const BAD_ANSWER: &str = "The model endpoint sent an answer this app does not understand.";
 
@@ -65,6 +74,9 @@ pub struct Question {
 #[serde(deny_unknown_fields)]
 pub struct Run {
     pub state: String,
+    /// Pictures of the situation, each a JPEG data URL as the page makes them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<String>,
     pub questions: Vec<Question>,
 }
 
@@ -109,6 +121,17 @@ fn len(s: &str) -> usize {
     s.chars().count()
 }
 
+/// The decoded size of a picture the page may send: a JPEG data URL of at most
+/// `MAX_PICTURE_BYTES`. The pixels are not looked at.
+fn picture_bytes(url: &str) -> Option<usize> {
+    let data = url.strip_prefix(PICTURE_PREFIX)?;
+    if data.len() > MAX_PICTURE_BYTES.div_ceil(3) * 4 {
+        return None;
+    }
+    let bytes = STANDARD.decode(data).ok()?;
+    (bytes.len() <= MAX_PICTURE_BYTES && bytes.starts_with(&[0xFF, 0xD8, 0xFF])).then_some(bytes.len())
+}
+
 fn invalid(sentence: impl Into<String>) -> Result<(), AppError> {
     Err(AppError::Invalid(sentence.into()))
 }
@@ -131,6 +154,19 @@ impl Run {
         }
         if len(&self.state) > MAX_STATE {
             return invalid("Shorten the situation to 8,000 characters or fewer.");
+        }
+        if self.images.len() > MAX_PICTURES {
+            return invalid(format!("Use at most {MAX_PICTURES} pictures."));
+        }
+        let mut together = 0;
+        for image in &self.images {
+            let Some(bytes) = picture_bytes(image) else {
+                return invalid("A picture in this request cannot be read. Add it again.");
+            };
+            together += bytes;
+        }
+        if together > MAX_PICTURES_BYTES {
+            return invalid("These pictures are too large together. Remove one first.");
         }
         let mut seen = HashSet::new();
         if !self.questions.iter().all(|q| seen.insert(q.key.as_str())) {
@@ -256,10 +292,16 @@ pub fn request_json(run: &Run, model: &str) -> String {
             out
         })
         .collect();
+    let images = if run.images.is_empty() {
+        String::new()
+    } else {
+        format!(",\"images\":[{}]", run.images.iter().map(|i| json_str(i)).collect::<Vec<_>>().join(","))
+    };
     format!(
-        "{{\"model\":{},\"state\":{},\"questions\":{{{}}}}}",
+        "{{\"model\":{},\"state\":{}{},\"questions\":{{{}}}}}",
         json_str(model),
         json_str(&run.state),
+        images,
         questions.join(",")
     )
 }

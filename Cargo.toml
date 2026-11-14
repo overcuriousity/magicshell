@@ -23,6 +23,7 @@ name = "magicshell"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.23"
 argon2 = { version = "0.5", features = ["std"] }
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }

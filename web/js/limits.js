@@ -12,4 +12,8 @@ export const LIMITS = {
   level: 200,
   state: 8000,
   setupName: 60,
+  pictures: 4,
+  pictureBytes: 300 * 1024,
+  picturesBytes: 600 * 1024,
+  previewChars: 4000,
 };
