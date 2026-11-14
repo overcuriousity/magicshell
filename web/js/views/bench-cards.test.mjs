@@ -11,12 +11,17 @@ class FakeNode {
     this.listeners = {};
     this.text = text ?? '';
     this.value = '';
-    this.classList = { add: (c) => this.setAttribute('class', `${this.getAttribute('class') ?? ''} ${c}`.trim()) };
+    const names = () => (this.getAttribute('class') ?? '').split(' ').filter(Boolean);
+    this.classList = {
+      add: (c) => this.setAttribute('class', [...names(), c].join(' ')),
+      toggle: (c, on) => this.setAttribute('class', [...names().filter((n) => n !== c), ...(on ? [c] : [])].join(' ')),
+    };
   }
   setAttribute(k, v) {
     this.attributes.set(k, String(v));
     if (k === 'value') this.value = String(v);
   }
+  hasAttribute(k) { return this.attributes.has(k); }
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   append(...nodes) {
     for (const n of nodes) {
@@ -31,8 +36,13 @@ class FakeNode {
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   dispatch(type, extra = {}) { for (const fn of this.listeners[type] ?? []) fn({ type, target: this, ...extra }); }
   get textContent() { return this.tagName === '#text' ? this.text : this.childNodes.map((c) => c.textContent).join(''); }
+  set textContent(t) { this.childNodes = []; this.text = ''; this.append(String(t)); }
+  replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
 }
 globalThis.document = {
+  activeElement: null,
+  body: new FakeNode('body'),
+  getElementById: () => null,
   createElement: (tag) => new FakeNode(tag),
   createElementNS: (_ns, tag) => new FakeNode(tag),
   createTextNode: (text) => new FakeNode('#text', text),
@@ -87,6 +97,19 @@ test('Ctrl+Enter in the key field commits the new key before the run sees it', (
   assert.deepEqual(calls[1], ['updateText', 'where', 'Where now?']);
 });
 
+test('a key is committed once, on change, not again on blur', () => {
+  const { ops, calls } = recordingOps();
+  const [card] = questionCards(run(), ops);
+  const key = byFid(card, 'q0:key');
+  key.value = 'where';
+  key.dispatch('input');
+  assert.equal(calls.length, 0);
+  key.dispatch('change');
+  assert.deepEqual(calls, [['renameQuestion', 'dinner', 'where']]);
+  key.dispatch('blur');
+  assert.equal(calls.length, 1);
+});
+
 test('plain Enter in the key field does not commit early', () => {
   const { ops, calls } = recordingOps();
   const [card] = questionCards(run(), ops);
@@ -101,4 +124,42 @@ test('option dots take the colour slots given (B keeps A\'s colours)', () => {
   const [card] = questionCards(run(), ops, { locked: true, slotsFor: () => [2, 0, 3] });
   const dots = all(card, (n) => (n.getAttribute('class') ?? '').startsWith('ms-dot'));
   assert.deepEqual(dots.map((d) => d.getAttribute('class')), ['ms-dot opt-3', 'ms-dot opt-1', 'ms-dot opt-4']);
+});
+
+// A suggestion source that offers nothing; `asked` records every pairedName it was given.
+function stubSuggest(asked = []) {
+  const current = { rest: (_pool, _text, o) => { asked.push(o?.pairedName); return ''; }, recent: () => [], frequent: () => [] };
+  return { load: () => Promise.resolve(), current: () => current };
+}
+const wrappers = (card) => all(card, (n) => n.getAttribute('class') === 'ms-complete');
+
+test('without a suggestion source the cards are as before', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops);
+  assert.equal(wrappers(card).length, 0);
+});
+
+test('with a source every editable text field is wrapped, a locked key is not', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops, { suggest: stubSuggest() });
+  // key + question + 3 names + 3 descriptions
+  assert.equal(wrappers(card).length, 8);
+  const [locked] = questionCards(run(), ops, { suggest: stubSuggest(), locked: true });
+  assert.equal(wrappers(locked).length, 7);
+  assert.notEqual(byFid(locked, 'q0:key').parentNode.getAttribute('class'), 'ms-complete__box');
+});
+
+test('a description prefers the one used with the name in its row', () => {
+  const asked = [];
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops, { suggest: stubSuggest(asked) });
+  const name = byFid(card, 'q0:option:o1:name');
+  const desc = byFid(card, 'q0:option:o1:desc');
+  name.value = 'tech';
+  name.dispatch('input', { target: name });
+  asked.length = 0;
+  document.activeElement = desc;
+  desc.selectionStart = desc.selectionEnd = desc.value.length;
+  desc.dispatch('focus');
+  assert.ok(asked.includes('tech'), `asked ${JSON.stringify(asked)}`);
 });

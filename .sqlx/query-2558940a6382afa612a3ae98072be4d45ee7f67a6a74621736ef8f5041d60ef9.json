@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = ?) AS \"has!: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "has!: bool",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2558940a6382afa612a3ae98072be4d45ee7f67a6a74621736ef8f5041d60ef9"
+}

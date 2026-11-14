@@ -129,9 +129,6 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
         return Err(OcError::Config("Accounts are off. Set database under [app] first.".into()).into());
     };
     existing_database(&cfg.data_dir("magicshell").join(database))?;
-    if app.oidc.is_some() && matches!(cmd, UserCommand::Add { .. } | UserCommand::Passwd { .. }) {
-        return Err(invalid("Accounts come from the sign-in provider. Remove [auth.oidc] to manage passwords."));
-    }
     // `database` is set, so there is a pool.
     let pool = magicshell::app::open_pool(&cfg, &app).await?.ok_or_else(|| OcError::internal("no database pool"))?;
     match cmd {
@@ -143,13 +140,24 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
         }
         UserCommand::Passwd { name, password } => {
             let found = find(&pool, &name).await?;
+            // A password would give a provider account a second way in that nobody asked for.
+            if !users::has_password(&pool, found.id).await? && users::has_identity(&pool, found.id).await? {
+                return Err(invalid(&format!("{} signs in through the provider and has no password.", found.username)));
+            }
             let secret = read_password(&password)?;
             users::set_password(&pool, found.id, &secret).await?;
             println!("Changed the password of {}.", found.username);
         }
         UserCommand::List => {
-            for (user, created) in users::list(&pool).await? {
-                println!("{}\t{}", user.username, created.get(..10).unwrap_or(&created));
+            for u in users::list(&pool).await? {
+                let way = match (u.password, u.provider) {
+                    (true, true) => "password and provider",
+                    (true, false) => "password",
+                    (false, true) => "provider",
+                    (false, false) => "none",
+                };
+                let created = u.created_at.get(..10).unwrap_or(&u.created_at);
+                println!("{}\t{created}\t{way}", u.user.username);
             }
         }
         UserCommand::Remove { name } => {

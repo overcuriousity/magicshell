@@ -116,3 +116,17 @@ test('why maps 429 to kind limit and 401 to auth', async () => {
   await fails(createServerClient(stub(429, 'Slow down.')).why(run), 'limit', 'Slow down.');
   await fails(createServerClient(stub(401, 'Sign in first.')).why(run), 'auth', 'Sign in first.');
 });
+
+test('preheat posts without a body and never rejects', async () => {
+  const seen = [];
+  assert.equal(await createServerClient(stub(204, '', seen)).preheat(), undefined);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, 'api/preheat');
+  assert.equal(seen[0].init.method, 'POST');
+  assert.equal(seen[0].init.body, undefined);
+  for (const status of [401, 404, 500]) assert.equal(await createServerClient(stub(status, 'No.')).preheat(), undefined);
+  const down = async () => {
+    throw new TypeError('fetch failed');
+  };
+  assert.equal(await createServerClient(down).preheat(), undefined);
+});

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!: i64\", username AS \"username!\", created_at FROM users ORDER BY id",
+  "query": "SELECT id AS \"id!: i64\", username AS \"username!\" FROM users\n           WHERE id = ? AND session_epoch = ?\n             AND (password_hash <> ''\n                  OR (? AND EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)))",
   "describe": {
     "columns": [
       {
@@ -24,27 +24,15 @@
             "name": "username"
           }
         }
-      },
-      {
-        "name": "created_at",
-        "ordinal": 2,
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "created_at"
-          }
-        }
       }
     ],
     "parameters": {
-      "Right": 0
+      "Right": 3
     },
     "nullable": [
-      false,
       false,
       false
     ]
   },
-  "hash": "14656fa23617b3465ed5240c8fb8705f05760a7fa15f8156ab55f3c685b4c256"
+  "hash": "c6eb7ee8aebd952766393b795f0024190ed11ee77966d9eb8f7fdcd76f22e286"
 }

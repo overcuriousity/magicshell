@@ -1,4 +1,5 @@
-//! A token bucket per key: `per_minute` tokens refill evenly over a minute; the burst equals `per_minute`.
+//! A token bucket per key: `per_minute` tokens refill evenly over a minute; the burst equals `per_minute`
+//! unless given.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -13,8 +14,11 @@ pub struct Limiter {
 
 impl Limiter {
     pub fn new(per_minute: u32) -> Self {
-        let burst = f64::from(per_minute);
-        Self { per_second: burst / 60.0, burst, state: Arc::default() }
+        Self::with_burst(per_minute, per_minute)
+    }
+
+    pub fn with_burst(per_minute: u32, burst: u32) -> Self {
+        Self { per_second: f64::from(per_minute) / 60.0, burst: f64::from(burst), state: Arc::default() }
     }
 
     /// Takes one token for `key`; false when the bucket is empty.

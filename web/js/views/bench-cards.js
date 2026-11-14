@@ -3,6 +3,7 @@
 // set of questions fixed, as B must keep them to be compared with A.
 import { LIMITS } from '../limits.js';
 import { optionClass } from '../ui/colors.js';
+import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
@@ -28,9 +29,10 @@ const iconButton = (name, label, onclick, { disabled = false, fid } = {}) =>
   }, icon(name, 'row'));
 
 // A text input bound to one field; typing edits quietly (no rebuild), so focus and caret stay.
-// With `id` a <label for> names it and `label` is left out.
-function textInput(value, label, fid, onText, { mono = false, readonly = false, id = null } = {}) {
-  return h('input', {
+// With `id` a <label for> names it and `label` is left out. With `complete` ({ suggest, pool, limit,
+// pairedName }) it completes from history and comes back inside the helper's wrapper.
+function textInput(value, label, fid, onText, { mono = false, readonly = false, id = null, complete = null } = {}) {
+  const input = h('input', {
     type: 'text',
     class: mono ? 'oc-input ms-mono' : 'oc-input',
     id,
@@ -42,6 +44,7 @@ function textInput(value, label, fid, onText, { mono = false, readonly = false, 
     readonly,
     oninput: (e) => onText(e.target.value),
   });
+  return complete ? completing(input, complete) : input;
 }
 
 function typePicker(q, ref, ops, fid) {
@@ -58,22 +61,28 @@ const KINDS = {
 };
 
 // One row of a choice or score list: its leading mark, inputs, and move and remove buttons.
-function listRow(kind, ref, item, i, count, ops, fq, slot) {
+function listRow(kind, ref, item, i, count, ops, fq, slot, suggest) {
   const { many, min, remove } = KINDS[kind];
   const f = `${fq}:${kind}:${item.id}`;
   const edit = (patch) => ops.updateItem(many, ref.key, item.id, patch);
   const lead = kind === 'option'
     ? h('span', { class: `ms-dot ${optionClass(slot)}`, 'aria-hidden': 'true' })
     : h('span', { class: 'ms-row__index', 'aria-hidden': 'true' }, String(i));
+  // The row's name as typed, for the description to ask which one went with it.
+  let name = item.name;
   const fields = kind === 'option'
     ? [
-        h('div', { class: 'ms-row__name' }, textInput(item.name, `Option ${i + 1}`, `${f}:name`, (v) => edit({ name: v }))),
+        h('div', { class: 'ms-row__name' }, textInput(item.name, `Option ${i + 1}`, `${f}:name`, (v) => { name = v; edit({ name: v }); },
+          { complete: { suggest, pool: 'option', limit: LIMITS.optionName } })),
         // The lead shows only where the rows stack and the head above the columns is gone.
         h('div', { class: 'ms-row__desc' },
           h('span', { class: 'ms-row__desc-lead', 'aria-hidden': 'true' }, DESCRIPTION),
-          textInput(item.description, `Description ${i + 1} (optional)`, `${f}:desc`, (v) => edit({ description: v }))),
+          textInput(item.description, `Description ${i + 1} (optional)`, `${f}:desc`, (v) => edit({ description: v }),
+            // Read when the grey text is worked out, so a name typed a moment ago counts.
+            { complete: { suggest, pool: 'description', limit: LIMITS.description, pairedName: () => name } })),
       ]
-    : [h('div', { class: 'ms-row__name ms-row__name--wide' }, textInput(item.text, `Level ${i}`, `${f}:text`, (v) => edit({ text: v })))];
+    : [h('div', { class: 'ms-row__name ms-row__name--wide' }, textInput(item.text, `Level ${i}`, `${f}:text`, (v) => edit({ text: v }),
+        { complete: { suggest, pool: 'level', limit: LIMITS.level } }))];
   return h('div', { class: kind === 'option' ? 'ms-row' : 'ms-row ms-row--level' },
     h('div', { class: 'ms-row__lead' }, lead),
     fields,
@@ -85,7 +94,7 @@ function listRow(kind, ref, item, i, count, ops, fq, slot) {
   );
 }
 
-function list(kind, q, ref, ops, fq, slots) {
+function list(kind, q, ref, ops, fq, slots, suggest) {
   const { many, max, add } = KINDS[kind];
   const items = q[many];
   const head = kind === 'option'
@@ -93,7 +102,7 @@ function list(kind, q, ref, ops, fq, slots) {
     : [h('span', { class: 'ms-row__name' }, 'Levels, lowest first')];
   return h('div', { class: 'ms-rows' },
     h('div', { class: kind === 'option' ? 'ms-rows__head' : 'ms-rows__head ms-rows__head--level', 'aria-hidden': 'true' }, head),
-    items.map((item, i) => listRow(kind, ref, item, i, items.length, ops, fq, slots?.[i] ?? i)),
+    items.map((item, i) => listRow(kind, ref, item, i, items.length, ops, fq, slots?.[i] ?? i, suggest)),
     h('div', { class: 'ms-rows__foot' },
       h('button', {
         type: 'button',
@@ -108,7 +117,7 @@ function list(kind, q, ref, ops, fq, slots) {
 
 // fq: the card's focus prefix by position, so focus finds its way back after a rebuild; ids take
 // the editor's prefix as well, so A's and B's cards never share one.
-function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
+function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix, suggest }) {
   // The key is renamed on change, not per keystroke; every handler reads the key the card holds now.
   const ref = { key: q.key };
   const fq = `${fidPrefix}q${index}`;
@@ -129,6 +138,8 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
     autocomplete: 'off',
     spellcheck: 'false',
     readonly: locked,
+    // A word taken from the grey suggestion ends in a `change` too: the helper sends one when the
+    // browser does not.
     onchange: (e) => commitKey(e.target),
     // Ctrl+Enter runs from the view's listener above this one: commit the pending key first, so the
     // run does not go out with the old one (change fires only on blur).
@@ -142,21 +153,25 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix }) {
       h('div', { class: 'oc-field ms-card__type' },
         h('span', { class: 'oc-field__label', 'aria-hidden': 'true' }, 'Type'),
         locked ? h('span', { class: 'ms-type' }, q.type) : typePicker(q, ref, ops, `${fq}:type`)),
-      h('div', { class: 'oc-field ms-card__keyfield' }, h('label', { for: keyId }, 'Key'), keyInput),
+      // A locked key is read-only and the helper leaves it alone. A taken word is an `input` event;
+      // the key is still committed on change or Ctrl+Enter.
+      h('div', { class: 'oc-field ms-card__keyfield' }, h('label', { for: keyId }, 'Key'),
+        completing(keyInput, { suggest, pool: 'key', limit: LIMITS.key })),
       locked ? null : iconButton('trash', 'Remove question', () => ops.removeQuestion(ref.key), { disabled: count <= 1, fid: `${fq}:drop` }),
     ),
     h('div', { class: 'oc-field' },
       h('label', { for: textId }, 'Question'),
-      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId }),
+      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId, complete: { suggest, pool: 'question', limit: LIMITS.questionText } }),
     ),
-    q.type === 'choice' ? list('option', q, ref, ops, fq, slots) : null,
-    q.type === 'score' ? list('level', q, ref, ops, fq, slots) : null,
+    q.type === 'choice' ? list('option', q, ref, ops, fq, slots, suggest) : null,
+    q.type === 'score' ? list('level', q, ref, ops, fq, slots, suggest) : null,
   );
 }
 
 // slotsFor(q): colour positions for q's rows (B's editor takes them from A), or null for position.
 // idPrefix and fidPrefix: unique per editor on the page, so A's and B's cards share no id and focus
 // returns to the editor it was in.
-export function questionCards(run, ops, { locked = false, slotsFor = () => null, idPrefix = 'bench', fidPrefix = '' } = {}) {
-  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q), { idPrefix, fidPrefix }));
+// suggest: the store's suggestion source; without it the fields are plain inputs.
+export function questionCards(run, ops, { locked = false, slotsFor = () => null, idPrefix = 'bench', fidPrefix = '', suggest = null } = {}) {
+  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q), { idPrefix, fidPrefix, suggest }));
 }

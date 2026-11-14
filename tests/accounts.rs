@@ -43,7 +43,7 @@ async fn a_run_needs_a_signed_in_user() {
 async fn a_user_signs_in_and_runs() {
     let (app, fake) = app_with_ada(vec![fixture_reply("response-triage")], "").await;
     let cookie = sign_in(&app, "Ada", PASSWORD).await;
-    assert_eq!(user_of(&app, Some(&cookie)).await, json!({"username": "ada"}));
+    assert_eq!(user_of(&app, Some(&cookie)).await, json!({"username": "ada", "password": true}));
     let res = post_json(&app, "/api/run", &triage_run(), Some(&cookie)).await;
     assert_eq!(res.status(), 200);
     assert_eq!(fake.requests.lock().unwrap().len(), 1);
@@ -81,7 +81,7 @@ async fn the_session_id_changes_on_sign_in() {
     let second = cookie_of(&res);
     assert_ne!(first, second);
     assert_eq!(user_of(&app, Some(&first)).await, Value::Null);
-    assert_eq!(user_of(&app, Some(&second)).await, json!({"username": "ada"}));
+    assert_eq!(user_of(&app, Some(&second)).await, json!({"username": "ada", "password": true}));
 }
 
 #[tokio::test]
@@ -141,7 +141,7 @@ async fn a_password_change_ends_the_other_sessions_and_keeps_this_one() {
     // The session that changed it gets a fresh id and stays signed in.
     let renewed = cookie_of(&ok);
     assert_ne!(renewed, here);
-    assert_eq!(user_of(&app, Some(&renewed)).await, json!({"username": "ada"}));
+    assert_eq!(user_of(&app, Some(&renewed)).await, json!({"username": "ada", "password": true}));
     assert_eq!(user_of(&app, Some(&here)).await, Value::Null);
     assert_eq!(user_of(&app, Some(&elsewhere)).await, Value::Null);
     let run = post_json(&app, "/api/run", &triage_run(), Some(&elsewhere)).await;

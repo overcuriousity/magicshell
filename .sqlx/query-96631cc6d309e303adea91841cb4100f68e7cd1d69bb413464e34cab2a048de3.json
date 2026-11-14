@@ -1,0 +1,64 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!: i64\", username AS \"username!\", created_at, password_hash <> '' AS \"password!: bool\",\n                  EXISTS (SELECT 1 FROM oidc_identities i WHERE i.user_id = users.id) AS \"provider!: bool\"\n           FROM users ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "username!",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "name": "password!: bool",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "provider!: bool",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "96631cc6d309e303adea91841cb4100f68e7cd1d69bb413464e34cab2a048de3"
+}

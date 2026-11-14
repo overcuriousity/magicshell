@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { route } from './app.js';
 
+test('servicesFor passes preheat through, true only for true', async () => {
+  const { servicesFor } = await import('./app.js');
+  for (const mode of ['open', 'accounts']) {
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null, preheat: true }).preheat, true);
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null, preheat: false }).preheat, false);
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null }).preheat, false);
+  }
+});
+
 test('an empty hash opens Ask', () => {
   assert.deepEqual(route(''), { view: 'ask' });
   assert.deepEqual(route('#'), { view: 'ask' });
@@ -211,4 +220,77 @@ test('services carry single sign-on in accounts mode only', async () => {
   assert.deepEqual(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why: null, sso }).sso, sso);
   assert.equal(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why: null }).sso, null);
   assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why: null, sso }).sso, null);
+});
+
+test('the accounts-mode store offers suggestions, stays persistent and leads to Sign in when the session ran out', async () => {
+  const { serverStore } = await import('./app.js');
+  const { RunError } = await import('./run-error.js');
+  const fetchFn = async () => ({ ok: false, status: 401, text: async () => 'Sign in first.' });
+  let lost = 0;
+  const store = serverStore(fetchFn, () => { lost += 1; });
+  assert.equal(typeof store.suggest?.load, 'function');
+  assert.equal(typeof store.suggest?.current, 'function');
+  assert.equal(store.persistent, true);
+  await assert.rejects(store.listSetups(), (e) => e instanceof RunError && e.kind === 'auth');
+  assert.equal(lost, 1);
+  // A write goes through both wraps and still reaches the handler.
+  await assert.rejects(store.saveEntry({ id: 'x' }), (e) => e instanceof RunError && e.kind === 'auth');
+  assert.equal(lost, 2);
+});
+
+test('accounts mode can sign in with a password with or without single sign-on', async () => {
+  const { accountsActions } = await import('./app.js');
+  for (const sso of [null, { label: 'x' }]) {
+    const services = { mode: 'accounts', sso, user: null, client: { signIn: async () => {} } };
+    const went = [];
+    const deps = {
+      userChanged: async () => { services.user = { username: 'ada', password: true }; },
+      navigate: (hash) => went.push(hash),
+      asked: () => '#/history',
+      session: null,
+    };
+    const { signIn, signOut } = accountsActions(services, deps);
+    assert.equal(typeof signIn, 'function');
+    assert.equal(typeof signOut, 'function');
+    await signIn('ada', 'pw');
+    assert.deepEqual(went, ['#/history']);
+  }
+});
+
+test('signing out marks the tab as checked so no silent trip follows', async () => {
+  const { accountsActions } = await import('./app.js');
+  const { SSO_CHECKED } = await import('./sso.js');
+  const stored = new Map();
+  const session = { setItem: (k, v) => stored.set(k, v) };
+  const services = { mode: 'accounts', sso: { label: 'x' }, user: null, client: { signOut: async () => {} } };
+  const went = [];
+  const { signOut } = accountsActions(services, { userChanged: async () => {}, navigate: (h) => went.push(h), asked: () => '#/ask', session });
+  await signOut();
+  assert.equal(stored.get(SSO_CHECKED), '#/ask');
+  assert.deepEqual(went, ['#/ask']);
+});
+
+test('history the browser store trims leaves the suggestions', async () => {
+  const { browserStoreWithSuggestions } = await import('./app.js');
+  const data = {};
+  // Room for twelve entries; the store keeps at least ten.
+  const storage = {
+    getItem: (k) => data[k] ?? null,
+    setItem: (k, v) => {
+      if (k === 'magicshell.history' && JSON.parse(v).length > 12) throw new Error('QuotaExceededError');
+      data[k] = v;
+    },
+    removeItem: (k) => delete data[k],
+  };
+  const trimmed = [];
+  const store = browserStoreWithSuggestions(storage, { onTrimmed: (n) => trimmed.push(n) });
+  await store.suggest.load();
+  const states = ['Alpha printer jams', ...Array.from({ length: 11 }, (_, i) => `Filler ${i}`), 'Delta door sticks'];
+  for (const [i, state] of states.entries()) {
+    await store.saveEntry({ id: `e${i}`, at: new Date(2026, 0, 1, 0, 0, i).toISOString(), run: { state, questions: [] }, reply: {} });
+  }
+  await store.suggest.refresh();
+  assert.deepEqual(trimmed, [1]);
+  assert.equal(store.suggest.current().rest('situation', 'Alp'), '');
+  assert.equal(store.suggest.current().rest('situation', 'Del'), 'ta door sticks');
 });

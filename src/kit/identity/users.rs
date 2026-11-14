@@ -30,20 +30,38 @@ pub async fn create(pool: &SqlitePool, username: &str, secret: &str, now: Offset
 }
 
 /// The user of a session signed in under `epoch`; `None` once the password changed since.
-/// `sso`: the user must have an identity row; otherwise a non-empty password hash.
+/// The user needs a non-empty password hash, or, when `sso` is on, an identity row.
+/// A password session therefore outlives switching `[auth.oidc]` on; a provider one does not outlive switching it off.
 pub async fn by_session(pool: &SqlitePool, id: i64, epoch: i64, sso: bool) -> Result<Option<User>, OcError> {
     Ok(sqlx::query_as!(
         User,
         r#"SELECT id AS "id!: i64", username AS "username!" FROM users
            WHERE id = ? AND session_epoch = ?
-             AND CASE WHEN ? THEN EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)
-                      ELSE password_hash <> '' END"#,
+             AND (password_hash <> ''
+                  OR (? AND EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)))"#,
         id,
         epoch,
         sso
     )
     .fetch_optional(pool)
     .await?)
+}
+
+/// Whether the user has a password; provider accounts are created with an empty hash and have none.
+pub async fn has_password(pool: &SqlitePool, id: i64) -> Result<bool, OcError> {
+    let has = sqlx::query_scalar!(r#"SELECT password_hash <> '' AS "has!: bool" FROM users WHERE id = ?"#, id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(has.unwrap_or(false))
+}
+
+/// Whether the user signs in through a provider.
+pub async fn has_identity(pool: &SqlitePool, id: i64) -> Result<bool, OcError> {
+    let has =
+        sqlx::query_scalar!(r#"SELECT EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = ?) AS "has!: bool""#, id)
+            .fetch_one(pool)
+            .await?;
+    Ok(has)
 }
 
 /// False for an empty name, one over 255 bytes, or one with a control character.
@@ -184,12 +202,32 @@ pub async fn count(pool: &SqlitePool) -> Result<i64, OcError> {
     Ok(sqlx::query_scalar!(r#"SELECT COUNT(*) AS "n!: i64" FROM users"#).fetch_one(pool).await?)
 }
 
-/// Every user with the day they were created, oldest first.
-pub async fn list(pool: &SqlitePool) -> Result<Vec<(User, String)>, OcError> {
-    let rows = sqlx::query!(r#"SELECT id AS "id!: i64", username AS "username!", created_at FROM users ORDER BY id"#)
-        .fetch_all(pool)
-        .await?;
-    Ok(rows.into_iter().map(|r| (User { id: r.id, username: r.username }, r.created_at)).collect())
+/// A user as the shell lists them.
+pub struct Listed {
+    pub user: User,
+    pub created_at: String,
+    pub password: bool,
+    pub provider: bool,
+}
+
+/// Every user with when they were created and their ways in, oldest first.
+pub async fn list(pool: &SqlitePool) -> Result<Vec<Listed>, OcError> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!: i64", username AS "username!", created_at, password_hash <> '' AS "password!: bool",
+                  EXISTS (SELECT 1 FROM oidc_identities i WHERE i.user_id = users.id) AS "provider!: bool"
+           FROM users ORDER BY id"#
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| Listed {
+            user: User { id: r.id, username: r.username },
+            created_at: r.created_at,
+            password: r.password,
+            provider: r.provider,
+        })
+        .collect())
 }
 
 /// Deletes the user and, through foreign keys, their data; false when there is no such user.

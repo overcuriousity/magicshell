@@ -26,10 +26,12 @@ runs_per_minute = 60
 why_max_words = 300
 # "Why?" questions one user may ask per minute, counted apart from runs (burst is the same number). Environment: MAGICSHELL__APP__WHY_PER_MINUTE
 why_per_minute = 600
+# Let the page warm the model up with one small request, at most once a minute, so a local model is loaded before the first question. Accounts mode only, for signed-in users. Environment: MAGICSHELL__APP__PREHEAT
+preheat = true
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
 upstream_timeout_secs = 60
 
-# Single sign-on through an OpenID Connect provider. When present, it replaces the password sign-in; it needs database under [app].
+# Single sign-on through an OpenID Connect provider. When present, the page first checks silently whether the person is signed in at the provider, and the sign-in page offers a button beside the password form; it needs database under [app].
 # Redirect URI to register: scheme, host and port of public_url, then /auth/oidc/callback
 # [auth.oidc]
 # Issuer URL exactly as the provider publishes it, trailing slash included (required). Environment: MAGICSHELL__AUTH__OIDC__ISSUER

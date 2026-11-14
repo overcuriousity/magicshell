@@ -150,15 +150,79 @@ async fn an_encoded_next_arrives_unchanged() {
 }
 
 #[tokio::test]
-async fn password_routes_are_gone_in_sso_mode() {
+async fn passwords_work_beside_sso() {
+    let (_idp, app) = sso_app(true).await;
+    add_user(&app, "grace", "a long enough password").await;
+    let res =
+        post_json(&app, "/api/auth/sign-in", &json!({"username": "grace", "password": "a long enough password"}), None)
+            .await;
+    assert_eq!(res.status(), 204);
+    let cookie = cookie_of(&res);
+    let cfg = config(&app, Some(&cookie)).await;
+    assert_eq!(cfg["user"]["username"], "grace");
+    assert_eq!(cfg["user"]["password"], true);
+    let change = post_json(
+        &app,
+        "/api/auth/password",
+        &json!({"current": "a long enough password", "new": "another long password"}),
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(change.status(), 204);
+}
+
+#[tokio::test]
+async fn a_provider_account_reports_no_password() {
     let (idp, app) = sso_app(true).await;
-    let sign_in = post_json(&app, "/api/auth/sign-in", &json!({"username": "ada", "password": "x"}), None).await;
-    assert_eq!(sign_in.status(), 404);
-    let password = post_json(&app, "/api/auth/password", &json!({"current": "x", "new": "y"}), None).await;
-    assert_eq!(password.status(), 404);
     let cookie = sso_sign_in(&app, &idp, "").await.cookie.unwrap();
-    assert_eq!(post_json(&app, "/api/auth/sign-out", &json!({}), Some(&cookie)).await.status(), 204);
-    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["password"], false);
+    for password in ["", "anything-at-all"] {
+        let res = post_json(&app, "/api/auth/sign-in", &json!({"username": "ada", "password": password}), None).await;
+        assert_eq!(res.status(), 401, "{password:?}");
+    }
+    let change =
+        post_json(&app, "/api/auth/password", &json!({"current": "", "new": "another long password"}), Some(&cookie))
+            .await;
+    assert_eq!(change.status(), 422);
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["password"], false);
+}
+
+async fn put_setup(app: &TestApp, cookie: &str, id: &str) {
+    let setup = json!({
+        "id": id, "name": id, "sampleState": "The server crashed twice today.",
+        "questions": [{"key": "team", "type": "choice", "text": "Which team?",
+                       "options": [{"id": "o1", "name": "ops"}, {"id": "o2", "name": "support"}]}]
+    });
+    let res = app
+        .client
+        .put(format!("{}/api/setups/{id}", app.base))
+        .header("origin", &app.base)
+        .header("cookie", cookie)
+        .json(&setup)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 204);
+}
+
+async fn setup_ids(app: &TestApp, cookie: &str) -> Vec<String> {
+    let list: Value = get_with(app, "/api/setups", Some(cookie)).await.json().await.unwrap();
+    list.as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect()
+}
+
+#[tokio::test]
+async fn the_same_name_twice_is_two_accounts() {
+    let (idp, app) = sso_app(true).await;
+    add_user(&app, "ada", "a long enough password").await;
+    let password = sign_in(&app, "ada", "a long enough password").await;
+    // The provider names its person "ada" too; the account gets the next free name.
+    let sso = sso_sign_in(&app, &idp, "").await.cookie.unwrap();
+    assert_eq!(config(&app, Some(&password)).await["user"]["username"], "ada");
+    assert_eq!(config(&app, Some(&sso)).await["user"]["username"], "ada-2");
+    put_setup(&app, &password, "mine").await;
+    put_setup(&app, &sso, "theirs").await;
+    assert_eq!(setup_ids(&app, &password).await, ["mine"]);
+    assert_eq!(setup_ids(&app, &sso).await, ["theirs"]);
 }
 
 #[tokio::test]
@@ -353,15 +417,15 @@ async fn an_issuer_that_differs_from_the_providers_is_unreachable() {
 }
 
 #[tokio::test]
-async fn a_password_session_ends_when_sso_is_switched_on() {
+async fn a_password_session_survives_switching_sso_on() {
     let app = spawn(ACCOUNTS).await;
     add_user(&app, "ada", "a long enough password").await;
     let cookie = sign_in(&app, "ada", "a long enough password").await;
     assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
     let idp = fake_idp::spawn().await;
     let app = spawn_in(&sso_toml(&idp.issuer, true), app.dir).await;
-    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
-    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 401);
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
+    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 200);
 }
 
 #[tokio::test]
@@ -378,13 +442,214 @@ async fn an_sso_session_ends_when_sso_is_switched_off() {
     }
 }
 
-#[tokio::test]
-async fn the_start_route_is_rate_limited() {
-    let (_idp, app) = sso_app(true).await;
-    let mut limited = false;
-    for _ in 0..8 {
-        let res = sso_start_response(&app, "").await;
-        limited |= res.status() == 429;
+/// `GET /auth/oidc/start?<query>` without a cookie: the status, `Cache-Control` and `Location`.
+async fn start_raw(app: &TestApp, query: &str) -> (u16, String, String) {
+    let res = no_redirects().get(format!("{}/auth/oidc/start?{query}", app.base)).send().await.unwrap();
+    let header = |name: &str| res.headers().get(name).map(|v| v.to_str().unwrap().to_owned()).unwrap_or_default();
+    (res.status().as_u16(), header("cache-control"), header("location"))
+}
+
+/// Starts until the allowance runs out; returns the first limited answer.
+async fn use_up(app: &TestApp, query: &str, at_most: usize) -> (u16, String, String) {
+    for _ in 0..at_most {
+        let res = start_raw(app, query).await;
+        if !res.2.starts_with("http") {
+            return res;
+        }
     }
-    assert!(limited);
+    panic!("{query:?} was never limited");
+}
+
+#[tokio::test]
+async fn a_limited_interactive_start_returns_to_the_form_with_a_reason() {
+    let (_idp, app) = sso_app(true).await;
+    let limited = use_up(&app, "next=", 8).await;
+    assert_eq!(limited, (303, "no-store".to_owned(), "/#/sign-in/limited".to_owned()));
+}
+
+#[tokio::test]
+async fn a_limited_silent_start_returns_to_the_form_quietly() {
+    let (_idp, app) = sso_app(true).await;
+    let limited = use_up(&app, "silent=1", 70).await;
+    assert_eq!(limited, (303, "no-store".to_owned(), "/#/sign-in".to_owned()));
+}
+
+#[tokio::test]
+async fn a_used_up_interactive_allowance_leaves_the_silent_check() {
+    let (_idp, app) = sso_app(true).await;
+    use_up(&app, "next=", 8).await;
+    let (url, _) = start_with(&app, "silent=1").await;
+    assert_eq!(query(&url, "prompt").as_deref(), Some("none"));
+}
+
+#[tokio::test]
+async fn a_used_up_silent_allowance_leaves_the_button() {
+    let (_idp, app) = sso_app(true).await;
+    use_up(&app, "silent=1", 70).await;
+    let (url, _) = start_with(&app, "next=").await;
+    assert_eq!(query(&url, "prompt"), None);
+}
+
+#[tokio::test]
+async fn a_limited_callback_returns_to_the_form_with_a_reason() {
+    let (_idp, app) = sso_app(true).await;
+    let mut last = String::new();
+    for _ in 0..8 {
+        last = callback(&app, "error=login_required&state=x", None).await.location;
+        if last != FAILED {
+            break;
+        }
+    }
+    assert_eq!(last, "/#/sign-in/limited");
+}
+
+#[tokio::test]
+async fn silent_callbacks_leave_the_buttons_callbacks() {
+    let (idp, app) = sso_app(true).await;
+    // More silent checks than the button's burst of five, all from one address.
+    for _ in 0..8 {
+        let (authorize, cookie) = start_with(&app, "silent=1").await;
+        let q = format!("error=login_required&state={}", query(&authorize, "state").unwrap());
+        assert_eq!(callback(&app, &q, Some(&cookie)).await.location, "/#/sign-in");
+    }
+    assert_eq!(sso_sign_in(&app, &idp, "#/history").await.location, "/#/history");
+}
+
+#[tokio::test]
+async fn the_silent_allowance_is_twice_the_buttons() {
+    let (_idp, app) = sso_app(true).await;
+    let mut granted = 0;
+    while start_raw(&app, "silent=1").await.2.starts_with("http") {
+        granted += 1;
+        assert!(granted <= 12, "silent=1 was not limited near ten");
+    }
+    assert_eq!(granted, 10);
+}
+
+// The silent check: `start?silent=1` asks the provider with `prompt=none`.
+
+/// `GET /auth/oidc/start?<query>`: the provider URL and the session cookie.
+async fn start_with(app: &TestApp, query: &str) -> (url::Url, String) {
+    let res = no_redirects().get(format!("{}/auth/oidc/start?{query}", app.base)).send().await.unwrap();
+    assert_eq!(res.status(), 303);
+    (res.headers()["location"].to_str().unwrap().parse().unwrap(), cookie_of(&res))
+}
+
+#[tokio::test]
+async fn a_silent_start_asks_with_prompt_none() {
+    let (_idp, app) = sso_app(true).await;
+    let (url, _) = start_with(&app, "silent=1").await;
+    assert_eq!(query(&url, "prompt").as_deref(), Some("none"));
+    for q in ["", "silent=true", "silent=0"] {
+        let (url, _) = start_with(&app, q).await;
+        assert_eq!(query(&url, "prompt"), None, "{q:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_silent_start_that_the_provider_grants_signs_in() {
+    let (idp, app) = sso_app(true).await;
+    let (authorize, cookie) = start_with(&app, "silent=1&next=%23%2Fhistory").await;
+    let res = callback(&app, &granted(&idp, &authorize), Some(&cookie)).await;
+    assert_eq!(res.location, "/#/history");
+    assert_eq!(config(&app, res.cookie.as_deref()).await["user"]["username"], "ada");
+}
+
+#[tokio::test]
+async fn a_silent_refusal_returns_to_the_form_quietly() {
+    let (_idp, app) = sso_app(true).await;
+    let mut last = None;
+    for error in ["login_required", "interaction_required", "consent_required", "account_selection_required"] {
+        let (authorize, cookie) = start_with(&app, "silent=1").await;
+        let q = format!("error={error}&state={}", query(&authorize, "state").unwrap());
+        let res = callback(&app, &q, Some(&cookie)).await;
+        assert_eq!(res.location, "/#/sign-in", "{error}");
+        assert_eq!(config(&app, res.cookie.as_deref()).await["user"], Value::Null, "{error}");
+        last = Some((q, cookie));
+    }
+    // The pending sign-in is gone, so the same answer again is a plain failure (and counts
+    // against the button's allowance, which the silent callbacks above left alone).
+    let (q, cookie) = last.unwrap();
+    assert_eq!(callback(&app, &q, Some(&cookie)).await.location, FAILED);
+    assert_eq!(users(&app).await, 0);
+}
+
+#[tokio::test]
+async fn a_login_required_without_a_silent_start_is_a_failure() {
+    let (_idp, app) = sso_app(true).await;
+    // No pending sign-in.
+    assert_eq!(callback(&app, "error=login_required&state=x", None).await.location, FAILED);
+    // A pending sign-in that was not silent.
+    let (authorize, cookie) = start_with(&app, "").await;
+    let q = format!("error=login_required&state={}", query(&authorize, "state").unwrap());
+    assert_eq!(callback(&app, &q, Some(&cookie)).await.location, FAILED);
+}
+
+#[tokio::test]
+async fn a_silent_check_with_a_wrong_or_missing_state_returns_quietly() {
+    let (_idp, app) = sso_app(true).await;
+    for q in ["error=login_required&state=not-the-state", "error=login_required"] {
+        let (_authorize, cookie) = start_with(&app, "silent=1").await;
+        assert_eq!(callback(&app, q, Some(&cookie)).await.location, "/#/sign-in", "{q}");
+    }
+}
+
+#[tokio::test]
+async fn a_silent_start_whose_token_is_refused_returns_quietly() {
+    let (idp, app) = sso_app(true).await;
+    idp.script.lock().unwrap().expired = true;
+    let (authorize, cookie) = start_with(&app, "silent=1").await;
+    assert_eq!(callback(&app, &granted(&idp, &authorize), Some(&cookie)).await.location, "/#/sign-in");
+    assert_eq!(users(&app).await, 0);
+}
+
+async fn session_rows(app: &TestApp) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM sessions").fetch_one(app.pool.as_ref().unwrap()).await.unwrap()
+}
+
+#[tokio::test]
+async fn a_quiet_return_leaves_no_session_behind() {
+    let (_idp, app) = sso_app(true).await;
+    for q in ["error=login_required&state=STATE", "error=login_required&state=not-the-state"] {
+        let (authorize, cookie) = start_with(&app, "silent=1").await;
+        assert_eq!(session_rows(&app).await, 1);
+        let q = q.replace("STATE", &query(&authorize, "state").unwrap());
+        assert_eq!(callback(&app, &q, Some(&cookie)).await.location, "/#/sign-in", "{q}");
+        assert_eq!(session_rows(&app).await, 0, "{q}");
+    }
+}
+
+#[tokio::test]
+async fn a_quiet_return_keeps_a_signed_in_session() {
+    let (_idp, app) = sso_app(true).await;
+    add_user(&app, "grace", "a long enough password").await;
+    let cookie = sign_in(&app, "grace", "a long enough password").await;
+    let res = no_redirects()
+        .get(format!("{}/auth/oidc/start?silent=1", app.base))
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap();
+    let authorize: url::Url = res.headers()["location"].to_str().unwrap().parse().unwrap();
+    let q = format!("error=login_required&state={}", query(&authorize, "state").unwrap());
+    assert_eq!(callback(&app, &q, Some(&cookie)).await.location, "/#/sign-in");
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "grace");
+}
+
+#[tokio::test]
+async fn a_silent_start_while_the_provider_is_down() {
+    let idp = fake_idp::spawn().await;
+    idp.script.lock().unwrap().down = true;
+    let app = spawn(&sso_toml(&idp.issuer, true)).await;
+    let res = no_redirects().get(format!("{}/auth/oidc/start?silent=1", app.base)).send().await.unwrap();
+    assert_eq!(res.status(), 303);
+    assert_eq!(res.headers()["location"], "/#/sign-in/unreachable");
+}
+
+#[tokio::test]
+async fn a_silent_sign_in_without_an_account() {
+    let (idp, app) = sso_app(false).await;
+    let (authorize, cookie) = start_with(&app, "silent=1").await;
+    assert_eq!(callback(&app, &granted(&idp, &authorize), Some(&cookie)).await.location, "/#/sign-in/no-account");
+    assert_eq!(users(&app).await, 0);
 }

@@ -20,12 +20,13 @@ A decision model does not write text. It takes a situation and typed questions, 
 - **Bench**: one situation, up to 8 typed questions, distributions per question, the exact request and response, and a variant run beside a baseline (without descriptions, neutral option names, reversed order).
 - **Why?** (accounts mode): after a result, ask the model again once per word of the situation with that word left out. Words are marked by how far their absence moved the answer: shade for strength, two colours for direction, ⇄ where the answer flips; the numbers show on hover, tap or focus. It costs one extra call per word, can be stopped, and is kept with the run in History. Offered in the guided view, the bench (baseline only) and a History entry.
 - **Setups**: ready-made and your own, exported and imported as JSON. **History**: every run, reopened, run again or loaded as baseline.
+- **Suggestions**: fields suggest what was typed before, from History, setups and ready scales, in grey; Tab takes the next word (a button under the field does the same on touch devices, and wherever the text has filled the field). Empty question, context and situation fields offer recent values; the guide's new-option field offers often-used ones. Nothing leaves the app and the browser's autofill is not used.
 
 ## Two modes
 
 | | Open | Accounts |
 |---|---|---|
-| Sign-in | none | username and password, or single sign-on (OIDC) |
+| Sign-in | none | username and password, and single sign-on (OIDC) when configured |
 | History and setups | browser storage | server database, per user |
 | Why? | no | yes |
 
@@ -47,6 +48,8 @@ The script downloads the latest release bundle for x86_64 or aarch64, checks it 
 | `/etc/systemd/system/magicshell.service` | the hardened unit; the service runs as its own dynamic user |
 | `/etc/magicshell/config.toml` | the configuration, with `data_dir = "/var/lib/magicshell"` |
 | `/var/lib/magicshell/` | the database; created at the first start and private to the service |
+
+To update, run the same command again. It replaces the program and the unit, keeps `/etc/magicshell/config.toml` and the database, and restarts the service if it was running. Put your own changes to the unit in a drop-in (`systemctl edit magicshell`), since an update replaces the unit file.
 
 To try magicshell without a service, leave out `--system`: it installs to `~/.local/bin` (or `--prefix DIR`) and needs no root.
 
@@ -82,6 +85,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions can become too large to keep |
 | `[app] why_per_minute` | "Why?" questions per user, counted apart from runs, default 600 |
+| `[app] preheat` | load the model when the guide reaches its Ask step, at most once a minute for the whole server, for signed-in users of accounts mode only; default `true`, ignored in open mode |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 | `[auth.oidc] issuer` | the provider's issuer URL, exactly as its discovery document states it; setting this section turns single sign-on on |
 | `[auth.oidc] client_id` | the client registered at the provider |
@@ -94,7 +98,7 @@ Without `database` the server is open: everyone who can reach it can run questio
 
 ## Users
 
-Accounts mode has no sign-up. With passwords, accounts are created from the shell; with single sign-on they come from the provider (next section).
+Accounts mode has no sign-up. Password accounts are created from the shell; with single sign-on, accounts also come from the provider (next section).
 
 On a system install, first set `database = "magicshell.db"` under `[app]` in `/etc/magicshell/config.toml` and restart the service; the restart creates the database. Then, as root and while the service is running:
 
@@ -120,7 +124,7 @@ magicshell --config config.toml user add NAME
 
 ## Sign-in through OIDC
 
-Setting `[auth.oidc]` makes your identity provider the only way in: the sign-in page shows one button, and the password form is gone. It needs `[app] database` and `public_url`.
+Setting `[auth.oidc]` adds your identity provider beside the passwords; `[auth.oidc]` needs `[app] database` and `public_url`. Once per browser tab session the page first makes one silent trip to the provider. If the person is signed in there, they go straight into the app. Otherwise they see the sign-in page with the username and password form and, under it, a button with the configured label. After "Sign out" in a tab there is no silent trip; each new tab makes one check of its own, and so does an open tab that has not made one yet, the next time it loads signed out. Someone signed in at the provider who wants to use a password account signs out in magicshell first and then uses the form in that tab. With a provider that does not answer `prompt=none`, the first visit shows the provider's login page; opening the app's address again shows the form.
 
 ```toml
 [auth.oidc]
@@ -141,7 +145,9 @@ systemctl restart magicshell
 - Register a client at the provider with the redirect URI `https://<host of public_url>/auth/oidc/callback` (scheme, host and port of `public_url`, no further path) and the scopes `openid profile`. With Nextcloud this is its OIDC identity provider app, and the issuer is the Nextcloud address as its `/.well-known/openid-configuration` states it.
 - `auto_provision = true` gives everyone the provider admits an account at their first sign-in. With `false`, only people who already have one get in.
 - An account belongs to the provider's issuer and subject, never to an e-mail address or a name. The name shown is the provider's user name at the first sign-in.
-- Password accounts stay in the database but cannot sign in, and nobody's setups or history move over. `user list` and `user remove` still work; `user add` and `user passwd` refuse.
+- Password sign-in always stands beside the provider; there is no switch to turn it off. `user add` and `user passwd` work as without `[auth.oidc]`; `user passwd` refuses provider accounts. Password accounts that could not sign in while an earlier version had the section set can sign in again: `user list` shows which accounts have a password, and `user remove` removes the ones you do not want.
+- A password account and a provider account are never linked, even with the same name. The provider account then gets a suffixed name such as `ada-2`, and nobody's setups or history move over.
+- "Change password" in Settings shows only for accounts that have a password.
 - Signing out ends the magicshell session only, not the one at the provider.
 - The provider's signing keys are read once. After replacing them at the provider, restart magicshell.
 

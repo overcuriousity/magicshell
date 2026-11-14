@@ -5,5 +5,6 @@ pub mod config;
 pub mod error;
 pub mod kit;
 pub mod limit;
+pub mod preheat;
 pub mod systemone;
 pub mod upstream;

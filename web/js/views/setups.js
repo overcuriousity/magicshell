@@ -6,6 +6,7 @@ import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
 import { exportSetups, importSetups, validateSetup } from '../transfer.js';
+import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { inlineError } from '../ui/notice.js';
@@ -34,6 +35,7 @@ function download(text) {
 export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
   let root = null;
   let ctx = null;
+  let suggest = null;
   let own = [];
   let loaded = false;
   let draft = null;
@@ -259,13 +261,17 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
         h('div', { class: 'oc-stack' },
           h('div', { class: 'oc-field' },
             h('label', { for: 'setup-name' }, 'Name'),
-            h('input', { type: 'text', class: 'oc-input', id: 'setup-name', 'data-fid': 'name', value: draft.name, autocomplete: 'off', oninput: (e) => { draft.name = e.target.value; } }),
+            completing(
+              h('input', { type: 'text', class: 'oc-input', id: 'setup-name', 'data-fid': 'name', value: draft.name, autocomplete: 'off', oninput: (e) => { draft.name = e.target.value; } }),
+              { suggest, pool: 'name', limit: LIMITS.setupName }),
           ),
           h('div', { class: 'oc-field' },
             h('label', { for: 'setup-situation' }, 'Sample situation'),
-            h('textarea', { class: 'oc-input ms-situation', id: 'setup-situation', rows: '4', 'data-fid': 'situation', oninput: (e) => { draft.sampleState = e.target.value; } }, draft.sampleState),
+            completing(
+              h('textarea', { class: 'oc-input ms-situation', id: 'setup-situation', rows: '4', 'data-fid': 'situation', oninput: (e) => { draft.sampleState = e.target.value; } }, draft.sampleState),
+              { suggest, pool: 'situation', limit: LIMITS.state }),
           ),
-          h('div', { class: 'ms-cards' }, questionCards(draft, ops())),
+          h('div', { class: 'ms-cards' }, questionCards(draft, ops(), { suggest })),
           h('div', { class: 'oc-row' },
             h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: draft.questions.length >= LIMITS.questions, onclick: () => rebuild(() => draft.questions.push(edits.newQuestion(draft, 'noul'))) },
               icon('plus'), 'Add question'),
@@ -284,6 +290,8 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
     mount(el, c) {
       root = el;
       ctx = c;
+      suggest = ctx.store?.suggest;
+      suggest?.load();
       own = [];
       loaded = false;
       draft = null;
