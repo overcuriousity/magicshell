@@ -60,6 +60,14 @@ export function createServerClient(fetchFn, now = () => performance.now()) {
     async signIn(username, password) {
       await expectNoContent(await send(fetchFn, 'api/auth/sign-in', JSON.stringify({ username, password })));
     },
+    // Best effort: the server decides whether it really sends, and a failure here costs nothing.
+    async preheat() {
+      try {
+        await send(fetchFn, 'api/preheat');
+      } catch {
+        // The first question simply meets a cold model.
+      }
+    },
     async signOut() {
       await expectNoContent(await send(fetchFn, 'api/auth/sign-out'));
     },

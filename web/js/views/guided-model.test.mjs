@@ -504,3 +504,101 @@ test('a draft kept at step 3 of a yes-or-no question comes back at step 2', () =
   assert.equal(state.question, 'Is it late?');
   assert.equal(state.step, 2);
 });
+
+const counting = () => {
+  const client = fakeClient();
+  client.preheats = 0;
+  client.preheat = async () => { client.preheats += 1; };
+  return client;
+};
+const draftOn = (step, kind = 'noul') => {
+  const session = memory();
+  session.setItem(SESSION_KEY, JSON.stringify({ step, kind, question: 'q', options: [], scaleId: 'own', levels: [], context: '' }));
+  return session;
+};
+
+test('preheat: a yes-or-no question calls once on step 2, not on edits, again after back and forward', () => {
+  const client = counting();
+  const { model } = make({ client, preheat: true });
+  assert.equal(client.preheats, 0);
+  model.next();
+  assert.equal(client.preheats, 1);
+  model.setQuestion('Is it ok?');
+  model.setContext('more');
+  assert.equal(client.preheats, 1);
+  model.back();
+  assert.equal(client.preheats, 1);
+  model.next();
+  assert.equal(client.preheats, 2);
+});
+
+test('preheat: a choice question calls on step 3 only', () => {
+  const client = counting();
+  const { model } = make({ client, preheat: true });
+  model.setKind('choice');
+  model.next();
+  assert.equal(client.preheats, 0);
+  model.setQuestion('Which?');
+  model.next();
+  assert.equal(model.state.step, 3);
+  assert.equal(client.preheats, 1);
+  model.addOption('a');
+  assert.equal(client.preheats, 1);
+});
+
+test('preheat: a draft restored on its asking step calls once at creation', () => {
+  const client = counting();
+  make({ client, preheat: true, session: draftOn(2) });
+  assert.equal(client.preheats, 1);
+  const other = counting();
+  make({ client: other, preheat: true, session: draftOn(2, 'choice') });
+  assert.equal(other.preheats, 0);
+  make({ client: other, preheat: true, session: draftOn(3, 'choice') });
+  assert.equal(other.preheats, 1);
+});
+
+test('preheat: the result page calls nothing, askAnother follows the rule for where it lands', async () => {
+  const client = counting();
+  const { model } = make({ client, preheat: true });
+  model.next();
+  model.setQuestion('Is it ok?');
+  await model.ask();
+  assert.equal(model.state.step, 'result');
+  assert.equal(client.preheats, 1);
+  model.askAnother();
+  assert.equal(model.state.step, 2);
+  assert.equal(client.preheats, 2);
+
+  const choice = counting();
+  const c = make({ client: choice, preheat: true, session: draftOn(3, 'choice') }).model;
+  c.setQuestion('Which?');
+  c.addOption('a');
+  c.addOption('b');
+  await c.ask();
+  assert.equal(choice.preheats, 1);
+  c.askAnother();
+  assert.equal(choice.preheats, 1);
+});
+
+test('preheat: a handed-over run lands on step 2 and follows the rule', () => {
+  const client = counting();
+  const { model } = make({ client, preheat: true });
+  assert.equal(model.load({ state: '', questions: [{ key: 'q1', type: 'noul', text: 'Is it ok?' }] }), true);
+  assert.equal(client.preheats, 1);
+  const other = counting();
+  const m = make({ client: other, preheat: true }).model;
+  m.load({ state: '', questions: [{ key: 'q1', type: 'choice', text: 'Which?', options: [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }] }] });
+  assert.equal(other.preheats, 0);
+});
+
+test('preheat: off by default and a client without preheat does not throw', () => {
+  const client = counting();
+  const { model } = make({ client, session: draftOn(2) });
+  model.back();
+  model.next();
+  assert.equal(client.preheats, 0);
+  const bare = make({ client: fakeClient(), preheat: true, session: draftOn(2) }).model;
+  bare.back();
+  bare.next();
+  assert.equal(bare.state.step, 2);
+});

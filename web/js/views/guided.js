@@ -380,7 +380,7 @@ export function createGuidedView() {
       lastWhyOpen = false;
       shownError = null;
       root.classList.add('ms-guide');
-      model = createGuidedModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate });
+      model = createGuidedModel({ client: ctx.client, store: ctx.store, mode: ctx.mode, navigate: ctx.navigate, preheat: ctx.preheat });
       // A run handed over (by the bench or History): one question lands at step 2; any other
       // run cannot be asked here, and the guide keeps its own draft.
       // `refused` until the next edit: switching straight back then hands nothing to the bench,

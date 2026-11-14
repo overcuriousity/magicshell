@@ -284,7 +284,7 @@ const NO_SERVER = 'This app needs its magicshell server. Start it and reload the
 export function servicesFor(config) {
   const { mode } = config;
   const accounts = mode === 'accounts';
-  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null };
+  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true };
 }
 
 // Every store call that fails because the session ran out calls onAuthLost, and still fails.

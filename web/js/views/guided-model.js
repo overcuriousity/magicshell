@@ -68,6 +68,7 @@ export function createGuidedModel({
   uuid = () => crypto.randomUUID(),
   mode = 'open',
   navigate = () => {},
+  preheat = false,
   session = sessionStore(),
 }) {
   const listeners = new Set();
@@ -91,7 +92,17 @@ export function createGuidedModel({
       // Without session storage the guide still works; it just does not survive a reload.
     }
   };
+  // Every step change ends in changed(), so this is the one place that sees arriving on the
+  // asking step (also from the result page); edits within the step do not count again.
+  const asking = () => state.step === lastStepOf(state.kind);
+  let wasAsking = false;
+  const preheated = () => {
+    const now = asking();
+    if (now && !wasAsking && preheat) client.preheat?.();
+    wasAsking = now;
+  };
   const changed = () => {
+    preheated();
     persist();
     for (const fn of listeners) fn(state);
   };
@@ -101,6 +112,8 @@ export function createGuidedModel({
     state.error = null;
     changed();
   };
+
+  preheated();
 
   const levelsOf = () => {
     if (state.scaleId === 'own') return state.levels.map((l) => ({ id: l.id, text: l.text }));

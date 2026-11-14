@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { route } from './app.js';
 
+test('servicesFor passes preheat through, true only for true', async () => {
+  const { servicesFor } = await import('./app.js');
+  for (const mode of ['open', 'accounts']) {
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null, preheat: true }).preheat, true);
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null, preheat: false }).preheat, false);
+    assert.equal(servicesFor({ mode, model: 'm', user: null, version: null, why: null }).preheat, false);
+  }
+});
+
 test('an empty hash opens Ask', () => {
   assert.deepEqual(route(''), { view: 'ask' });
   assert.deepEqual(route('#'), { view: 'ask' });
