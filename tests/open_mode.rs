@@ -31,7 +31,7 @@ async fn the_configuration_names_the_mode_and_the_model() {
     let body: Value = res.json().await.unwrap();
     assert_eq!(
         body,
-        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "version": env!("CARGO_PKG_VERSION")})
+        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "sso": null, "version": env!("CARGO_PKG_VERSION")})
     );
 }
 

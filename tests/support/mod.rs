@@ -1,5 +1,7 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
+pub mod fake_idp;
+
 use std::net::SocketAddr;
 
 use figment::Figment;
@@ -101,6 +103,60 @@ pub async fn sign_in(app: &TestApp, name: &str, password: &str) -> String {
         post_json(app, "/api/auth/sign-in", &serde_json::json!({"username": name, "password": password}), None).await;
     assert_eq!(res.status(), 204);
     cookie_of(&res)
+}
+
+/// `ACCOUNTS` with sign-in through the fake provider at `issuer`.
+pub fn sso_toml(issuer: &str, auto_provision: bool) -> String {
+    format!(
+        "{ACCOUNTS}[auth.oidc]\nissuer = \"{issuer}\"\nclient_id = \"{}\"\nclient_secret = \"test-secret\"\n\
+         auto_provision = {auto_provision}\n",
+        fake_idp::CLIENT_ID
+    )
+}
+
+/// A client that shows redirects instead of following them.
+pub fn no_redirects() -> reqwest::Client {
+    reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap()
+}
+
+/// The response to `GET /auth/oidc/start?next=<next>`.
+pub async fn sso_start_response(app: &TestApp, next: &str) -> reqwest::Response {
+    let next: String = url::form_urlencoded::byte_serialize(next.as_bytes()).collect();
+    no_redirects().get(format!("{}/auth/oidc/start?next={next}", app.base)).send().await.unwrap()
+}
+
+/// Start only: the provider URL from `Location` and the session cookie.
+pub async fn sso_start(app: &TestApp, next: &str) -> (url::Url, String) {
+    let res = sso_start_response(app, next).await;
+    assert_eq!(res.status(), 303);
+    let location = res.headers()["location"].to_str().unwrap().parse().unwrap();
+    (location, cookie_of(&res))
+}
+
+pub struct SsoResult {
+    pub location: String,
+    pub cookie: Option<String>,
+}
+
+/// Runs start, then the callback with the code and state the fake provider would send back.
+pub async fn sso_sign_in(app: &TestApp, idp: &fake_idp::Idp, next: &str) -> SsoResult {
+    let (authorize, cookie) = sso_start(app, next).await;
+    let code = idp.grant(&authorize);
+    let state = fake_idp::query(&authorize, "state").unwrap();
+    let query: String = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("code", &code)
+        .append_pair("state", &state)
+        .finish();
+    let res = no_redirects()
+        .get(format!("{}/auth/oidc/callback?{query}", app.base))
+        .header("cookie", cookie)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 303);
+    let location = res.headers()["location"].to_str().unwrap().to_owned();
+    let cookie = res.headers().get("set-cookie").map(|_| cookie_of(&res));
+    SsoResult { location, cookie }
 }
 
 /// One canned answer of the fake model endpoint.
