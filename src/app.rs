@@ -15,6 +15,7 @@ use crate::assets;
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::kit::config::OcConfig;
+use crate::kit::oidc::Oidc;
 use crate::kit::security::{Limits, secure};
 use crate::kit::{db, session};
 use crate::limit::Limiter;
@@ -40,12 +41,14 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
     };
     let why = (pool.is_some() && app.why_max_words > 0)
         .then(|| Why { limiter: Limiter::new(app.why_per_minute), max_words: app.why_max_words });
+    let oidc = app.oidc.as_ref().map(|o| Oidc::new(o, &dep)).transpose()?;
     let state = Arc::new(ApiState {
         upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?,
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
         pool,
         why,
+        oidc,
     });
     let mut api = api::router(state);
     if let Some(sessions) = sessions {

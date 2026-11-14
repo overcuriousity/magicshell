@@ -206,7 +206,7 @@ function mountShell(shell, services = {}) {
     const el = h('div', { class: 'oc-columns', 'data-view': r.view });
     main.replaceChildren(...[el, footer].filter(Boolean));
     current = viewFor(r.view);
-    current.mount(el, { ...services, route: r, navigate, notify, modeSwitch });
+    current.mount(el, { ...services, route: r, navigate, notify, modeSwitch, asked });
     if (!first) {
       window.scrollTo(0, 0);
       el.querySelector('h1')?.focus({ preventScroll: true });
@@ -281,7 +281,8 @@ const NO_SERVER = 'This app needs its magicshell server. Start it and reload the
 // What every view gets from the server's config; Why? exists in accounts mode only.
 export function servicesFor(config) {
   const { mode } = config;
-  return { mode, model: config.model, user: config.user, version: config.version, why: mode === 'accounts' ? config.why : null };
+  const accounts = mode === 'accounts';
+  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null };
 }
 
 // Learns the mode and wires the client and store for it; Sign in changes them in place. Without
@@ -338,12 +339,15 @@ async function boot(shell) {
   services.client = createServerClient(fetchFn);
   services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : browserStore();
   if (mode === 'accounts') {
-    services.signIn = async (username, password) => {
-      await services.client.signIn(username, password);
-      await userChanged();
-      if (!services.user) throw new RunError(NO_COOKIE, 'auth');
-      navigate(shellApi.asked());
-    };
+    // Under single sign-on the server signs in; the page only links there.
+    if (!services.sso) {
+      services.signIn = async (username, password) => {
+        await services.client.signIn(username, password);
+        await userChanged();
+        if (!services.user) throw new RunError(NO_COOKIE, 'auth');
+        navigate(shellApi.asked());
+      };
+    }
     services.signOut = async () => {
       await services.client.signOut();
       // Nothing one user entered or handed over stays for the next.

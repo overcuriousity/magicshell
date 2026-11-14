@@ -31,7 +31,7 @@ async fn the_configuration_names_the_mode_and_the_model() {
     let body: Value = res.json().await.unwrap();
     assert_eq!(
         body,
-        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "version": env!("CARGO_PKG_VERSION")})
+        json!({"mode": "open", "model": "test-model", "user": null, "why": null, "sso": null, "version": env!("CARGO_PKG_VERSION")})
     );
 }
 
@@ -173,4 +173,21 @@ async fn a_wrong_method_on_an_api_route_is_405_and_an_unknown_api_path_is_404() 
     let res = app.client.get(format!("{}/", app.base)).send().await.unwrap();
     assert_eq!(res.status(), 200);
     assert!(res.headers()["content-type"].to_str().unwrap().starts_with("text/html"));
+}
+
+#[tokio::test]
+async fn the_icons_are_served() {
+    let app = support::spawn(support::OPEN).await;
+    let ico = app.client.get(format!("{}/favicon.ico", app.base)).send().await.unwrap();
+    assert_eq!(ico.status(), 200);
+    assert_eq!(ico.headers()["content-type"], "image/x-icon");
+    assert!(ico.bytes().await.unwrap().starts_with(&[0, 0, 1, 0]));
+    let png = app.client.get(format!("{}/apple-touch-icon.png", app.base)).send().await.unwrap();
+    assert_eq!(png.status(), 200);
+    assert_eq!(png.headers()["content-type"], "image/png");
+    assert!(png.bytes().await.unwrap().starts_with(b"\x89PNG\r\n\x1a\n"));
+    let page = app.client.get(format!("{}/", app.base)).send().await.unwrap().text().await.unwrap();
+    for href in ["href=\"favicon.ico\"", "href=\"icon.svg\"", "href=\"apple-touch-icon.png\""] {
+        assert!(page.contains(href), "{href}");
+    }
 }

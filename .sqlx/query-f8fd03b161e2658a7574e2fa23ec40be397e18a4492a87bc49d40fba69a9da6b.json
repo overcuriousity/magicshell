@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!: i64\", username AS \"username!\" FROM users\n           WHERE id = ? AND session_epoch = ?\n             AND CASE WHEN ? THEN EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)\n                      ELSE password_hash <> '' END",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "username!",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f8fd03b161e2658a7574e2fa23ec40be397e18a4492a87bc49d40fba69a9da6b"
+}

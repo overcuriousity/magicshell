@@ -4,6 +4,23 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-14
+
+### Added
+
+- Sign-in through OIDC: with `[auth.oidc]` set, the identity provider is the only way in, and with `auto_provision = true` a person's first sign-in creates their account. Accounts are matched on the provider's issuer and subject. Password accounts stay in the database but cannot sign in while the section is set.
+- `favicon.ico` and a touch icon beside the SVG icon, for browsers and tools that take no SVG.
+
+### Changed
+
+- `user add` and `user passwd` refuse while `[auth.oidc]` is set; `user list` and `user remove` work for every account.
+- A session from the other sign-in mode ends at its next request.
+- The system install writes `data_dir = "/var/lib/magicshell"` into a new `/etc/magicshell/config.toml` and prints the command for adding users. The README leads with the system install.
+
+### Fixed
+
+- The `user` commands no longer create a database of their own when they do not find the server's. On a system install without `data_dir` they wrote to the caller's home directory, so a new account could not sign in. They now say where they looked and stop. An existing system install needs `data_dir = "/var/lib/magicshell"` added to its config, and the commands run as root.
+
 ## [2026.11.5] - 2026-11-13
 
 ### Added

@@ -13,7 +13,8 @@ pub async fn get(State(st): State<Arc<ApiState>>, mut parts: Parts) -> Result<Js
     let mode = if st.pool.is_some() { "accounts" } else { "open" };
     let user = auth::current(&st, &mut parts).await?.map(|u| json!({ "username": u.username }));
     let why = st.why.as_ref().map(|w| json!({ "maxWords": w.max_words }));
+    let sso = st.oidc.as_ref().map(|o| json!({ "label": o.label() }));
     Ok(Json(json!({
-        "mode": mode, "model": st.model, "user": user, "why": why, "version": env!("CARGO_PKG_VERSION")
+        "mode": mode, "model": st.model, "user": user, "why": why, "sso": sso, "version": env!("CARGO_PKG_VERSION")
     })))
 }

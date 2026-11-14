@@ -7,6 +7,8 @@ yanked = "deny"
 # Every ignore needs a written reachability argument next to it.
 # Drop the RUSTSEC-2026-0459 ignore once sqlx allows libsqlite3-sys >= 0.39 (sqlx-sqlite 0.9.0 pins <0.38).
 ignore = [
+  { id = "RUSTSEC-2023-0071", reason = "rsa via openidconnect: the Marvin attack needs private-key decryption or signing; magicshell only verifies the provider's ID-token signatures with public keys and authenticates with client_secret. Private keys exist only in the tests' fake provider." },
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 via p256 0.13/p384 0.13 via jsonwebtoken, a dev-dependency of the tests' fake provider only; it is not in the server build (openidconnect uses p256 0.14 with crypto-bigint 0.7, which is fixed). Elliptic-curve code for ID-token signature verification handles only public keys and public data." },
   { id = "RUSTSEC-2026-0459", reason = "Exposure needs an attacker-written database file plus -wal file opened by the process; magicshell opens only its own database inside its private data directory (created 0700, UMask=0077 under DynamicUser)." },
 ]
 

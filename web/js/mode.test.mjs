@@ -3,7 +3,7 @@ import test from 'node:test';
 import { detectMode } from './mode.js';
 
 const reply = (status, text) => async () => ({ ok: status >= 200 && status < 300, status, text: async () => text });
-const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null };
+const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null };
 
 test('a missing server means no mode', async () => {
   const fetchFn = async () => {
@@ -20,9 +20,9 @@ test('an html 404 page means no mode', async () => {
 
 test('a server reports its mode', async () => {
   const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: { username: 'ada' } });
-  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada' }, version: null, why: null });
+  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada' }, version: null, why: null, sso: null });
   const open = JSON.stringify({ mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null });
-  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null });
+  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null });
 });
 
 test('reads the why limit', async () => {
@@ -34,5 +34,17 @@ test('why is null when absent, zero, negative or not a number', async () => {
   for (const why of [undefined, null, {}, { maxWords: 0 }, { maxWords: -3 }, { maxWords: 2.5 }, { maxWords: '300' }, 'x', 7]) {
     const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: null, why });
     assert.equal((await detectMode(reply(200, body))).why, null, JSON.stringify(why));
+  }
+});
+
+test('reads the single sign-on label', async () => {
+  const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: null, sso: { label: 'Sign in with SSO' } });
+  assert.deepEqual((await detectMode(reply(200, body))).sso, { label: 'Sign in with SSO' });
+});
+
+test('sso is null when absent or malformed', async () => {
+  for (const sso of [undefined, null, {}, { label: 7 }, { label: '' }, 'x', 7]) {
+    const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: null, sso });
+    assert.equal((await detectMode(reply(200, body))).sso, null, JSON.stringify(sso));
   }
 });

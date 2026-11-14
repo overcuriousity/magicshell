@@ -1,6 +1,6 @@
 [package]
 name = "magicshell"
-version = "2026.11.5"
+version = "2026.11.6"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"
@@ -28,6 +28,7 @@ axum = "0.8"
 clap = { version = "4", features = ["derive"] }
 figment = { version = "0.10", features = ["toml", "env"] }
 ipnet = { version = "2", features = ["serde"] }
+openidconnect = "4"
 rand = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 rpassword = "7"
@@ -46,6 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2", features = ["serde"] }
 
 [dev-dependencies]
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }
 tempfile = "3"
 temp-env = "0.3"
 tower = { version = "0.5", features = ["util"] }

@@ -198,3 +198,11 @@ async fn sign_in_attempts_are_limited_per_address() {
     assert_eq!(statuses[0], 401);
     assert!(statuses.contains(&429), "{statuses:?}");
 }
+
+#[tokio::test]
+async fn the_icons_need_no_sign_in() {
+    let app = support::spawn(ACCOUNTS).await;
+    for path in ["/favicon.ico", "/apple-touch-icon.png"] {
+        assert_eq!(get_with(&app, path, None).await.status(), 200, "{path}");
+    }
+}

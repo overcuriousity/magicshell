@@ -28,3 +28,20 @@ why_max_words = 300
 why_per_minute = 600
 # Seconds to wait for the model before answering 504. Environment: MAGICSHELL__APP__UPSTREAM_TIMEOUT_SECS
 upstream_timeout_secs = 60
+
+# Single sign-on through an OpenID Connect provider. When present, it replaces the password sign-in; it needs database under [app].
+# Redirect URI to register: scheme, host and port of public_url, then /auth/oidc/callback
+# [auth.oidc]
+# Issuer URL exactly as the provider publishes it, trailing slash included (required). Environment: MAGICSHELL__AUTH__OIDC__ISSUER
+# issuer = "https://id.example.org"
+# Client id registered with the provider (required). Environment: MAGICSHELL__AUTH__OIDC__CLIENT_ID
+# client_id = "magicshell"
+# Client secret (required). "file:///run/secrets/oidc" reads it from a file.
+# Environment: MAGICSHELL__AUTH__OIDC__CLIENT_SECRET or MAGICSHELL__AUTH__OIDC__CLIENT_SECRET_FILE
+# client_secret = "file:///run/secrets/magicshell-oidc"
+# Scopes to request. Environment: MAGICSHELL__AUTH__OIDC__SCOPES
+# scopes = ["openid", "profile"]
+# Create an account on first sign-in instead of refusing people who have none. Environment: MAGICSHELL__AUTH__OIDC__AUTO_PROVISION
+# auto_provision = false
+# Text of the sign-in button. Environment: MAGICSHELL__AUTH__OIDC__DISPLAY_NAME
+# display_name = "Sign in with SSO"

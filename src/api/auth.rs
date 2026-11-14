@@ -39,7 +39,7 @@ pub async fn current(st: &ApiState, parts: &mut Parts) -> Result<Option<User>, O
     };
     let epoch = session.get::<i64>(EPOCH_KEY).await.map_err(OcError::internal)?;
     let user = match epoch {
-        Some(epoch) => users::by_session(pool, id, epoch).await?,
+        Some(epoch) => users::by_session(pool, id, epoch, st.oidc.is_some()).await?,
         None => None,
     };
     if user.is_none() {
@@ -49,7 +49,7 @@ pub async fn current(st: &ApiState, parts: &mut Parts) -> Result<Option<User>, O
 }
 
 /// Gives the session a new id and records the user under their current epoch.
-async fn start(session: &Session, user_id: i64, epoch: i64) -> Result<(), OcError> {
+pub(super) async fn start(session: &Session, user_id: i64, epoch: i64) -> Result<(), OcError> {
     session.cycle_id().await.map_err(OcError::internal)?;
     session.insert(USER_KEY, user_id).await.map_err(OcError::internal)?;
     session.insert(EPOCH_KEY, epoch).await.map_err(OcError::internal)?;
