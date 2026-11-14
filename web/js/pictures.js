@@ -102,10 +102,12 @@ export function picturesLine(pictures, max) {
   return `${count} · ${kb(pictures.reduce((sum, p) => sum + p.bytes, 0))} together`;
 }
 
-// A picture's data URL as the request view shows it: its size instead of its content.
+// A picture as the request view shows it: its size instead of its content.
+export const shortPicture = (bytes) => `data:image/jpeg;base64,…(${kb(bytes)})`;
+
 export function shortUrl(url) {
   const bytes = dataUrlBytes(url);
-  return bytes === null ? url : `data:image/jpeg;base64,…(${kb(bytes)})`;
+  return bytes === null ? url : shortPicture(bytes);
 }
 
 export { kb as kilobytes };

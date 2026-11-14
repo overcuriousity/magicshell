@@ -25,7 +25,8 @@ export function validateRun(run, { allowEmptyText = false } = {}) {
   if (questions.length < 1) return 'Add at least one question.';
   if (questions.length > LIMITS.questions) return `Use at most ${LIMITS.questions} questions.`;
   if (len(run.state) > LIMITS.state) return 'Shorten the situation to 8,000 characters or fewer.';
-  const images = run.images ?? [];
+  // A run in the page holds `pictures`; on the wire they are `images`.
+  const images = run.images ?? (run.pictures ?? []).map((p) => p.url);
   if (images.length > LIMITS.pictures) return `Use at most ${LIMITS.pictures} pictures.`;
   let together = 0;
   for (const image of images) {

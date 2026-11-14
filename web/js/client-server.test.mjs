@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createServerClient, RunError } from './client-server.js';
+import { createServerClient, requestText, RunError } from './client-server.js';
 
 const run = {
   state: 'A cat.',
@@ -129,4 +129,47 @@ test('preheat posts without a body and never rejects', async () => {
     throw new TypeError('fetch failed');
   };
   assert.equal(await createServerClient(down).preheat(), undefined);
+});
+
+const jpeg = (bytes) => `data:image/jpeg;base64,/9j/${'A'.repeat((Math.ceil(bytes / 3) - 1) * 4)}`;
+const picture = (id, bytes) => ({ id, url: jpeg(bytes), width: 768, height: 576, bytes, preview: 'data:image/jpeg;base64,/9j/AA==' });
+const OK_BODY = JSON.stringify({ answers: GOOD_ANSWERS, model: 'm', inputTokens: 7, upstreamMs: 1 });
+
+test('a run with pictures sends images and no pictures field', async () => {
+  const seen = [];
+  const pictures = [picture('a', 3000), picture('b', 6000)];
+  await createServerClient(stub(200, OK_BODY, seen)).run({ ...run, pictures });
+  const sent = JSON.parse(seen[0].init.body);
+  assert.deepEqual(Object.keys(sent), ['state', 'images', 'questions']);
+  assert.deepEqual(sent.images, pictures.map((p) => p.url));
+});
+
+test('a run without pictures sends what it sent before', async () => {
+  const seen = [];
+  const plain = { state: 'Rain.', questions: [{ key: 'q1', type: 'noul', text: 'Wet?' }] };
+  const body = JSON.stringify({ answers: { q1: { type: 'noul', noul: 0.5 } } });
+  const client = createServerClient(stub(200, body, seen));
+  await client.run(plain);
+  await client.run({ ...plain, pictures: [] });
+  const expected = '{"state":"Rain.","questions":[{"key":"q1","type":"noul","text":"Wet?"}]}';
+  assert.deepEqual(seen.map((s) => s.init.body), [expected, expected]);
+});
+
+test('the request text shortens pictures', async () => {
+  const seen = [];
+  const result = await createServerClient(stub(200, OK_BODY, seen)).run({ ...run, pictures: [picture('a', 84 * 1024)] });
+  assert.deepEqual(JSON.parse(result.request).images, ['data:image/jpeg;base64,…(84 KB)']);
+  assert.ok(seen[0].init.body.length > 100 * 1024);
+  assert.equal(requestText({ ...run, pictures: [{ bytes: 2048 }] }).includes('"images":["data:image/jpeg;base64,…(2 KB)"]'), true);
+});
+
+test('stopping the call rejects as stopped, not as a network failure', async () => {
+  const controller = new AbortController();
+  const hanging = (url, init) =>
+    new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    });
+  const pending = createServerClient(hanging).run(run, { signal: controller.signal });
+  controller.abort();
+  await fails(pending, 'stopped');
 });
