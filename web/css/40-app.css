@@ -476,3 +476,54 @@ button.ms-why__w:hover { text-decoration: underline dotted; text-underline-offse
 .ms-why__num { font-family: var(--font-mono); font-size: var(--text-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .ms-why__table td.ms-why__num { padding-left: var(--space-3); }
 .ms-why__flip { color: var(--color-fg-secondary); white-space: nowrap; }
+
+/* Completion (ui/complete.js): the grey rest of a past value lies over the field's own text box.
+   The ghost copies .oc-input's border width, padding and line height and inherits the same font,
+   so its hidden copy of the typed text ends where the caret is. The field fills the box so the two
+   are the same size; layout rules for a completed field go on .ms-complete. */
+.ms-complete { min-width: 0; }
+.ms-complete__box { position: relative; display: flex; flex-direction: column; }
+.ms-complete__box > .oc-input { width: 100%; margin: 0; }
+.ms-complete__ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  color: var(--color-fg-muted);
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ms-complete__ghost > span { flex: none; }
+.ms-complete__box > textarea + .ms-complete__ghost {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.ms-complete__typed { visibility: hidden; }
+/* The strip is for touch screens only; both rows also stay away while `hidden`. */
+.ms-complete__strip { display: none; justify-content: flex-end; margin-top: var(--space-1); }
+.ms-complete__row:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
+.ms-complete__label { color: var(--color-fg-secondary); font-size: var(--text-dense); }
+/* Block, not the button's flex, so a long value ends in an ellipsis. */
+.ms-complete__pick {
+  display: block;
+  max-width: 18rem;
+  line-height: calc(var(--target-tool) - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  /* As .oc-input on touch screens. */
+  .ms-complete__ghost { font-size: 16px; }
+  .ms-complete__strip:not([hidden]) { display: flex; }
+  .ms-complete__take { min-height: var(--target-touch); }
+  .ms-complete__pick { line-height: calc(var(--target-touch) - 2px); }
+}
+/* After the touch size, as .ms-mono comes after .oc-input for the field. */
+.ms-complete__box > .ms-mono + .ms-complete__ghost { font-family: var(--font-mono); font-size: var(--text-mono); }
