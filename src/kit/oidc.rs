@@ -58,6 +58,8 @@ pub enum SignInError {
     Failed,
     Unreachable,
     NoAccount,
+    /// Too many attempts from one client address.
+    Limited,
 }
 
 impl SignInError {
@@ -67,6 +69,7 @@ impl SignInError {
             Self::Failed => "failed",
             Self::Unreachable => "unreachable",
             Self::NoAccount => "no-account",
+            Self::Limited => "limited",
         }
     }
 }

@@ -1,12 +1,14 @@
-//! `GET /auth/oidc/start` and `GET /auth/oidc/callback`. Neither renders text: both redirect,
-//! into the app or to the sign-in route with one of the codes of [`SignInError`].
+//! `GET /auth/oidc/start` and `GET /auth/oidc/callback`. Neither renders text, not even when
+//! limited: both redirect, into the app or to the sign-in route, with one of the codes of
+//! [`SignInError`] or, after a silent check, without one.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::rejection::QueryRejection;
-use axum::extract::{Query, State};
+use axum::extract::{Query, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use time::OffsetDateTime;
 use tower_sessions::Session;
@@ -15,7 +17,9 @@ use super::{ApiState, auth};
 use crate::kit::OcError;
 use crate::kit::identity::users;
 use crate::kit::oidc::{Oidc, Pending, SignInError};
-use crate::kit::session::PENDING_KEY;
+use crate::kit::security::{ClientIp, client_key};
+use crate::kit::session::{PENDING_KEY, USER_KEY};
+use crate::limit::Limiter;
 
 const MAX_NEXT: usize = 512;
 
@@ -28,7 +32,7 @@ pub fn safe_next(next: &str) -> &str {
     if ok { next } else { "" }
 }
 
-/// Every answer of both routes, including the rate limit's.
+/// Every answer of both routes, the limited ones included.
 pub async fn no_store(mut res: Response) -> Response {
     res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     res
@@ -55,18 +59,58 @@ fn oidc(st: &ApiState) -> Result<&Oidc, SignInError> {
     st.oidc.as_deref().ok_or(SignInError::Failed)
 }
 
-fn param(q: &Result<Query<HashMap<String, String>>, QueryRejection>, key: &str) -> Option<String> {
+type Params = Result<Query<HashMap<String, String>>, QueryRejection>;
+
+fn param(q: &Params, key: &str) -> Option<String> {
     q.as_ref().ok().and_then(|Query(m)| m.get(key).cloned())
 }
 
-pub async fn start(
-    State(st): State<Arc<ApiState>>,
-    session: Session,
-    q: Result<Query<HashMap<String, String>>, QueryRejection>,
-) -> Response {
+/// Only the exact value `1` is silent.
+fn is_silent(q: &Params) -> bool {
+    param(q, "silent").as_deref() == Some("1")
+}
+
+/// The allowances of the start route. The page goes to a silent start by itself, so a person
+/// who used up the button's allowance still gets the check, and the reverse.
+#[derive(Clone)]
+pub struct StartLimits {
+    silent: Limiter,
+    interactive: Limiter,
+}
+
+impl StartLimits {
+    pub fn new() -> Self {
+        Self { silent: Limiter::new(60), interactive: Limiter::with_burst(10, 5) }
+    }
+}
+
+/// The callback's allowance.
+pub fn callback_limit() -> Limiter {
+    Limiter::with_burst(10, 5)
+}
+
+/// False when the client has used up `limiter`. Without a client address nothing is counted,
+/// as in the kit's limiter.
+fn allowed(limiter: &Limiter, req: &Request) -> bool {
+    req.extensions().get::<ClientIp>().is_none_or(|ClientIp(ip)| limiter.take(&client_key(*ip).to_string()))
+}
+
+const LIMITED: &str = "/#/sign-in/limited";
+
+/// A limited silent start goes back to the form as a declined check would; the button says why.
+pub async fn limit_start(State(l): State<StartLimits>, req: Request, next: Next) -> Response {
+    let silent = is_silent(&Query::try_from_uri(req.uri()));
+    let (limiter, limited) = if silent { (&l.silent, "/#/sign-in") } else { (&l.interactive, LIMITED) };
+    if allowed(limiter, &req) { next.run(req).await } else { see_other(limited) }
+}
+
+pub async fn limit_callback(State(l): State<Limiter>, req: Request, next: Next) -> Response {
+    if allowed(&l, &req) { next.run(req).await } else { see_other(LIMITED) }
+}
+
+pub async fn start(State(st): State<Arc<ApiState>>, session: Session, q: Params) -> Response {
     let next = param(&q, "next").unwrap_or_default();
-    // Only the exact value `1` is silent.
-    let silent = param(&q, "silent").as_deref() == Some("1");
+    let silent = is_silent(&q);
     match begin(&st, &session, safe_next(&next), silent).await {
         Ok(url) => see_other(&url),
         Err(e) => failure(e),
@@ -80,16 +124,30 @@ async fn begin(st: &ApiState, session: &Session, next: &str, silent: bool) -> Re
     Ok(url)
 }
 
-pub async fn callback(
-    State(st): State<Arc<ApiState>>,
-    session: Session,
-    q: Result<Query<HashMap<String, String>>, QueryRejection>,
-) -> Response {
-    match finish(&st, &session, &q).await {
+pub async fn callback(State(st): State<Arc<ApiState>>, session: Session, q: Params) -> Response {
+    // Single use: removed before anything can fail.
+    let pending = match session.remove::<Pending>(PENDING_KEY).await {
+        Ok(p) => p,
+        Err(e) => return failure(internal(&OcError::internal(e))),
+    };
+    let silent = pending.as_ref().is_some_and(|p| p.silent);
+    match finish(&st, &session, &q, pending).await {
         Ok(Finished::SignedIn(next)) => see_other(&format!("/{next}")),
-        Ok(Finished::Declined) => see_other("/#/sign-in"),
+        Ok(Finished::Declined) => quiet(&session).await,
+        // A silent check shows a code only where it tells the person something (`unreachable`,
+        // `no-account`); `finish` has logged the failure.
+        Err(SignInError::Failed) if silent => quiet(&session).await,
         Err(e) => failure(e),
     }
+}
+
+/// Back to the form without a code. A visitor who never signs in leaves no session behind.
+async fn quiet(session: &Session) -> Response {
+    let signed_in = session.get::<i64>(USER_KEY).await.ok().flatten().is_some();
+    if !signed_in && let Err(e) = session.flush().await {
+        tracing::warn!(error = %e, "could not remove the session of a silent OIDC check");
+    }
+    see_other("/#/sign-in")
 }
 
 enum Finished {
@@ -107,12 +165,11 @@ const QUIET_ERRORS: [&str; 4] =
 async fn finish(
     st: &ApiState,
     session: &Session,
-    q: &Result<Query<HashMap<String, String>>, QueryRejection>,
+    q: &Params,
+    pending: Option<Pending>,
 ) -> Result<Finished, SignInError> {
     let o = oidc(st)?;
     let pool = st.pool.as_ref().ok_or(SignInError::Failed)?;
-    // Single use: removed before anything can fail.
-    let pending = session.remove::<Pending>(PENDING_KEY).await.map_err(|e| internal(&OcError::internal(e)))?;
     let Some(pending) = pending else {
         tracing::warn!("OIDC callback without a pending sign-in");
         return Err(SignInError::Failed);

@@ -6,6 +6,7 @@ test('each failure code has its sentence', () => {
   assert.equal(ssoError('failed'), 'Sign-in with the provider failed. Try again.');
   assert.equal(ssoError('unreachable'), 'The sign-in provider is not reachable. Try again later.');
   assert.equal(ssoError('no-account'), 'No account for this sign-in. Ask an admin to add you.');
+  assert.equal(ssoError('limited'), 'Too many attempts. Wait a minute and try again.');
 });
 
 test('an unknown code reads as a failed sign-in, never as text from the address', () => {
@@ -70,6 +71,8 @@ test('no silent check when signed in, open, without single sign-on, after a fail
     [signedOut, '#/sign-in/failed', memorySession()],
     [signedOut, hash, null],
     [signedOut, hash, { ...memorySession(), setItem() { throw new Error('full'); } }],
+    // Neither throws nor keeps: the next load would leave again.
+    [signedOut, hash, { getItem: () => null, setItem() {}, removeItem() {} }],
   ];
   for (const [config, h, session] of cases) assert.equal(silentCheck({ config, hash: h, session }), null);
 });

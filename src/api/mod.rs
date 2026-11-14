@@ -9,7 +9,7 @@ mod storage;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::middleware::map_response;
+use axum::middleware::{from_fn_with_state, map_response};
 use axum::routing::{get, post, put};
 use sqlx::SqlitePool;
 
@@ -51,11 +51,15 @@ pub fn router(state: Arc<ApiState>) -> Router {
             router = router
                 .route(
                     "/auth/oidc/start",
-                    get(oidc::start).layer(rate_limit(10, 5)).layer(map_response(oidc::no_store)),
+                    get(oidc::start)
+                        .layer(from_fn_with_state(oidc::StartLimits::new(), oidc::limit_start))
+                        .layer(map_response(oidc::no_store)),
                 )
                 .route(
                     "/auth/oidc/callback",
-                    get(oidc::callback).layer(rate_limit(10, 5)).layer(map_response(oidc::no_store)),
+                    get(oidc::callback)
+                        .layer(from_fn_with_state(oidc::callback_limit(), oidc::limit_callback))
+                        .layer(map_response(oidc::no_store)),
                 );
         }
         router = router
