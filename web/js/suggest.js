@@ -1,4 +1,6 @@
 // Pools of past values (history, setups, scales) and the matching behind the grey suggestion.
+import { neutralName } from './variants.js';
+
 export const POOLS = ['question', 'situation', 'option', 'description', 'level', 'key', 'name'];
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -32,7 +34,10 @@ function addQuestions(pools, questions, at, fromHistory) {
     if (!q || typeof q !== 'object') continue;
     add(pools.question, q.text, at, fromHistory);
     add(pools.key, q.key, at, fromHistory);
-    for (const o of list(q.options)) {
+    // A "Neutral names" variant run's A, B, C… were made up for it, not chosen by anyone.
+    const options = list(q.options);
+    const neutral = options.length > 0 && options.every((o, i) => text(o?.name) === neutralName(i));
+    for (const o of neutral ? [] : options) {
       if (!o || typeof o !== 'object') continue;
       add(pools.option, o.name, at, fromHistory);
       add(pools.description, o.description, at, fromHistory, text(o.name));
@@ -54,7 +59,8 @@ function better(a, b) {
 const isHigh = (c) => c >= 0xd800 && c <= 0xdbff;
 const isLow = (c) => c >= 0xdc00 && c <= 0xdfff;
 
-function cut(rest, room) {
+// The first `room` code units of rest, never splitting a surrogate pair.
+export function cut(rest, room) {
   if (room >= rest.length) return rest;
   if (room <= 0) return '';
   let end = room;

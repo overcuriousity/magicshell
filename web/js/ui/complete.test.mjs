@@ -14,6 +14,9 @@ class FakeNode {
     this.hidden = false;
     this.scrollTop = 0;
     this.scrollLeft = 0;
+    this.scrollWidth = 0;
+    this.clientWidth = 0;
+    this.scrollHeight = 0;
     this._value = '';
     this.selectionStart = 0;
     this.selectionEnd = 0;
@@ -31,6 +34,17 @@ class FakeNode {
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   hasAttribute(k) { return this.attributes.has(k); }
   removeAttribute(k) { this.attributes.delete(k); }
+  get classList() {
+    const names = () => (this.getAttribute('class') ?? '').split(' ').filter(Boolean);
+    return {
+      contains: (c) => names().includes(c),
+      toggle: (c, on = !names().includes(c)) => {
+        const rest = names().filter((n) => n !== c);
+        this.setAttribute('class', (on ? [...rest, c] : rest).join(' '));
+        return on;
+      },
+    };
+  }
   append(...nodes) {
     for (const n of nodes) {
       const node = n !== null && typeof n === 'object' ? n : new FakeNode('#text', String(n));
@@ -387,7 +401,7 @@ test('the field is described by one shared hint, added to what it had', () => {
   assert.equal(hints.length, 1);
   assert.equal(hints[0].parentNode, body);
   assert.equal(hints[0].getAttribute('class'), 'oc-sr-only');
-  assert.equal(hints[0].textContent, 'Tab takes the suggested word.');
+  assert.equal(hints[0].textContent, 'Tab takes the suggested word. Escape hides it.');
 });
 
 test('the suggestion is announced once it has stayed for 700 ms', (t) => {
@@ -402,9 +416,124 @@ test('the suggestion is announced once it has stayed for 700 ms', (t) => {
   t.mock.timers.tick(699);
   assert.equal(live.textContent, '');
   t.mock.timers.tick(1);
-  assert.equal(live.textContent, 'Suggestion: Which team should handle this?');
+  assert.equal(live.textContent, 'Suggestion: am should handle this?');
   type(field, 'zzz');
   assert.equal(live.textContent, '');
   t.mock.timers.tick(1000);
   assert.equal(live.textContent, '');
+});
+
+test('the announcement is the rest only, cut at 80 characters', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const long = `Which ${'x'.repeat(100)}`;
+  const field = h('input', { type: 'text', class: 'oc-input' });
+  const wrap = completing(field, { suggest: stub([entry('2026-11-13T00:00:00Z', '', [choice(long)])]), pool: 'question' });
+  body.append(wrap);
+  const live = all(wrap, (n) => n.getAttribute('aria-live') === 'polite')[0];
+  field.focus();
+  type(field, 'Which');
+  t.mock.timers.tick(700);
+  assert.equal(live.textContent, `Suggestion: ${` ${'x'.repeat(100)}`.slice(0, 80)}…`);
+});
+
+// A browser's insertText: at the caret (here the end), with its own `input` event.
+function withExecCommand(t, result = true) {
+  const calls = [];
+  document.execCommand = (cmd, ui, text) => {
+    calls.push([cmd, ui, text]);
+    if (!result) return false;
+    const f = document.activeElement;
+    f.value += text;
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  };
+  t.after(() => { delete document.execCommand; });
+  return calls;
+}
+
+test('a taken word goes in through insertText, so undo takes it back, with one input event', (t) => {
+  const calls = withExecCommand(t);
+  const { field, seen } = setup();
+  field.focus();
+  type(field, 'Which te');
+  seen.length = 0;
+  assert.equal(key(field, 'Tab').prevented, true);
+  assert.deepEqual(calls, [['insertText', false, 'am']]);
+  assert.equal(field.value, 'Which team');
+  assert.deepEqual(seen, ['Which team']);
+});
+
+test('a row pick focuses the field and goes in through insertText too', (t) => {
+  const calls = withExecCommand(t);
+  const { field, wrap, seen } = setup({ row: { label: 'Recent:', items: (s) => s.recent('question') } });
+  fire(byClass(wrap, 'ms-complete__pick')[0], 'click');
+  assert.deepEqual(calls, [['insertText', false, 'Which tool fits?']]);
+  assert.equal(document.activeElement, field);
+  assert.deepEqual(seen, ['Which tool fits?']);
+});
+
+test('without insertText the value is set, reported once, and scrolled to its end', (t) => {
+  const calls = withExecCommand(t, false);
+  const { field, seen } = setup();
+  field.focus();
+  type(field, 'Which te');
+  field.scrollWidth = 300;
+  field.scrollHeight = 90;
+  seen.length = 0;
+  key(field, 'Tab');
+  assert.equal(calls.length, 1);
+  assert.equal(field.value, 'Which team');
+  assert.deepEqual(seen, ['Which team']);
+  assert.equal(field.scrollLeft, 300);
+  assert.equal(field.scrollTop, 90);
+});
+
+test('a row pick longer than the limit is cut to it', () => {
+  const { field } = setup({ limit: 5, row: { label: 'Recent:', items: (s) => s.recent('question') } });
+  const wrap = field.parentNode.parentNode;
+  fire(byClass(wrap, 'ms-complete__pick')[0], 'click');
+  assert.equal(field.value, 'Which');
+});
+
+test('a caret moved by a key without keyup is seen before Tab', () => {
+  const { field } = setup();
+  field.focus();
+  type(field, 'Which te');
+  // ArrowLeft moves the caret on keydown; the Tab's keydown comes before any keyup.
+  field.selectionStart = field.selectionEnd = 7;
+  key(field, 'ArrowLeft');
+  assert.equal(key(field, 'Tab').prevented, false);
+  assert.equal(field.value, 'Which te');
+});
+
+test('the strip button checks the caret before taking', () => {
+  const { field, wrap } = setup();
+  field.focus();
+  type(field, 'Which te');
+  const take = one(wrap, 'ms-complete__take');
+  field.selectionStart = field.selectionEnd = 2;
+  fire(take, 'click');
+  assert.equal(field.value, 'Which te');
+});
+
+test('a field whose text overflows marks the wrapper clipped while a rest shows', () => {
+  const { field, wrap } = setup();
+  field.focus();
+  field.clientWidth = 200;
+  field.scrollWidth = 300;
+  type(field, 'Which te');
+  assert.equal(wrap.classList.contains('ms-complete--clipped'), true);
+  type(field, 'zzz');
+  assert.equal(wrap.classList.contains('ms-complete--clipped'), false);
+  type(field, 'Which te');
+  assert.equal(wrap.classList.contains('ms-complete--clipped'), true);
+  field.scrollWidth = 200;
+  type(field, 'Which t');
+  assert.equal(wrap.classList.contains('ms-complete--clipped'), false);
+  assert.equal(wrap.getAttribute('class'), 'ms-complete');
+});
+
+test('pick buttons carry an id after their field\'s', () => {
+  const { wrap } = setup({ row: { label: 'Recent:', items: (s) => s.recent('question') } });
+  assert.deepEqual(byClass(wrap, 'ms-complete__pick').map((p) => p.getAttribute('data-fid')), ['f-pick-0', 'f-pick-1']);
 });

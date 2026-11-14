@@ -11,7 +11,11 @@ class FakeNode {
     this.listeners = {};
     this.text = text ?? '';
     this.value = '';
-    this.classList = { add: (c) => this.setAttribute('class', `${this.getAttribute('class') ?? ''} ${c}`.trim()) };
+    const names = () => (this.getAttribute('class') ?? '').split(' ').filter(Boolean);
+    this.classList = {
+      add: (c) => this.setAttribute('class', [...names(), c].join(' ')),
+      toggle: (c, on) => this.setAttribute('class', [...names().filter((n) => n !== c), ...(on ? [c] : [])].join(' ')),
+    };
   }
   setAttribute(k, v) {
     this.attributes.set(k, String(v));
@@ -91,6 +95,19 @@ test('Ctrl+Enter in the key field commits the new key before the run sees it', (
   // Later edits use the committed key.
   byFid(card, 'q0:text').dispatch('input', { target: { value: 'Where now?' } });
   assert.deepEqual(calls[1], ['updateText', 'where', 'Where now?']);
+});
+
+test('a key changed without typing (a taken word) is committed on leaving the field', () => {
+  const { ops, calls } = recordingOps();
+  const [card] = questionCards(run(), ops);
+  const key = byFid(card, 'q0:key');
+  key.value = 'where';
+  key.dispatch('input');
+  assert.equal(calls.length, 0);
+  key.dispatch('blur');
+  assert.deepEqual(calls, [['renameQuestion', 'dinner', 'where']]);
+  key.dispatch('change');
+  assert.equal(calls.length, 1);
 });
 
 test('plain Enter in the key field does not commit early', () => {

@@ -1,17 +1,20 @@
 // Completion for one text field: the rest of a past value in grey behind the caret (Tab takes a
-// word), a button that does the same on touch screens, and an optional row of past values to pick.
-// The field stays the view's own: a taken word is set as its value and reported as an `input` event.
-import { nextWord } from '../suggest.js';
+// word), a button that does the same on touch screens (and wherever the text runs past the field's
+// edge), and an optional row of past values to pick.
+// The field stays the view's own: a taken word is typed in through the browser, so undo takes it
+// back, and the view hears it as an `input` event.
+import { cut, nextWord } from '../suggest.js';
 import { h } from './dom.js';
 
 const HINT_ID = 'ms-complete-hint';
 const ROW_MAX = 5;
 const ANNOUNCE_MS = 700;
+const ANNOUNCE_MAX = 80;
 
 // One description for every completing field; looked up each time so a re-rendered page still has it.
 function hint() {
   if (!document.getElementById(HINT_ID)) {
-    document.body.append(h('span', { class: 'oc-sr-only', id: HINT_ID }, 'Tab takes the suggested word.'));
+    document.body.append(h('span', { class: 'oc-sr-only', id: HINT_ID }, 'Tab takes the suggested word. Escape hides it.'));
   }
   return HINT_ID;
 }
@@ -33,12 +36,24 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   const ghost = h('div', { class: 'ms-complete__ghost', 'aria-hidden': 'true' }, typed, restEl);
   const live = h('span', { class: 'oc-sr-only', 'aria-live': 'polite' });
 
-  const fill = (text) => {
-    field.value = text;
+  // At the caret, which is at the end whenever this is called. insertText keeps the browser's undo
+  // and scrolls the caret into view, and fires its own `input`; without it the value is set, the
+  // event sent once by hand, and the field scrolled to its end, where the new text is.
+  const insert = (text) => {
+    const word = cut(text, limit - field.value.length);
+    if (!word) return;
+    if (document.activeElement === field && document.execCommand?.('insertText', false, word)) return;
+    field.value += word;
     field.dispatchEvent(new Event('input', { bubbles: true }));
+    // Only one of the two moves anything: an input scrolls sideways, a textarea down.
+    field.scrollLeft = field.scrollWidth;
+    field.scrollTop = field.scrollHeight;
+    sync();
   };
+  // The rest is worked out again first: a key or click may have moved the caret since it was drawn.
   const take = () => {
-    if (rest) fill(field.value + nextWord(rest));
+    update();
+    if (rest) insert(nextWord(rest));
   };
 
   const takeBtn = h('button', {
@@ -50,6 +65,10 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     onclick: take,
   });
   const strip = h('div', { class: 'ms-complete__strip' }, takeBtn);
+
+  const label = row ? h('span', { class: 'ms-complete__label' }, row.label) : null;
+  const rowEl = row ? h('div', { class: 'ms-complete__row' }) : null;
+  const wrap = h('div', { class: 'ms-complete' }, h('div', { class: 'ms-complete__box' }, field, ghost), strip, rowEl, live);
 
   const caretAtEnd = () => field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length;
   const sync = () => {
@@ -63,7 +82,9 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
       live.textContent = '';
       return;
     }
-    const text = `Suggestion: ${field.value}${next}`;
+    // The rest only: the typed part has been heard already, and a long one would drown the rest.
+    const shown = next.length > ANNOUNCE_MAX ? `${cut(next, ANNOUNCE_MAX)}…` : next;
+    const text = `Suggestion: ${shown}`;
     timer = setTimeout(() => { live.textContent = text; }, ANNOUNCE_MS);
   };
 
@@ -75,6 +96,8 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     if (next !== rest) announce(next);
     rest = next;
     strip.hidden = !rest;
+    // Text past the right edge hides the grey rest, so the strip shows on any pointer then.
+    wrap.classList.toggle('ms-complete--clipped', Boolean(rest) && field.scrollWidth > field.clientWidth);
     if (rest) {
       const word = nextWord(rest).trim();
       takeBtn.textContent = `${word} →`;
@@ -83,24 +106,26 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     sync();
   };
 
-  const label = row ? h('span', { class: 'ms-complete__label' }, row.label) : null;
-  const rowEl = row ? h('div', { class: 'ms-complete__row' }) : null;
   const renderRow = () => {
     if (!row) return;
     const items = field.value === '' ? row.items(suggest.current()).slice(0, ROW_MAX) : [];
     rowEl.hidden = items.length === 0;
-    rowEl.replaceChildren(label, ...items.map((text) =>
+    // An id of their own, so a view rebuilt under a pick can find the field's place again.
+    const fid = field.getAttribute('data-fid');
+    rowEl.replaceChildren(label, ...items.map((text, i) =>
       h('button', {
         type: 'button',
         class: 'oc-btn ms-complete__pick',
         title: text,
+        'data-fid': fid ? `${fid}-pick-${i}` : null,
         onclick: () => {
           if (row.onPick) {
             row.onPick(text);
             renderRow();
           } else {
-            fill(text);
+            // The field is empty: focused, the text goes in where insertText puts it.
             field.focus();
+            insert(text);
           }
         },
       }, text)));
@@ -129,10 +154,12 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   });
   field.addEventListener('scroll', sync);
   field.addEventListener('keydown', (e) => {
+    // An arrow key moves the caret on keydown; the next key can come before its keyup.
+    update();
     if (!rest) return;
     if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
-      take();
+      insert(nextWord(rest));
     } else if (e.key === 'Escape') {
       // So a dialog or panel around the field does not close on the same key.
       e.stopPropagation();
@@ -145,7 +172,6 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   const id = hint();
   if (!(described ?? '').split(/\s+/).includes(id)) field.setAttribute('aria-describedby', described ? `${described} ${id}` : id);
 
-  const wrap = h('div', { class: 'ms-complete' }, h('div', { class: 'ms-complete__box' }, field, ghost), strip, rowEl, live);
   update();
   renderRow();
   suggest.load().then(() => {

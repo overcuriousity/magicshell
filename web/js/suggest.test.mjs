@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EMPTY, createSuggestions, nextWord } from './suggest.js';
+import { neutralNames } from './variants.js';
 
 const entry = (at, state, questions) => ({ id: at, at, run: { state, questions } });
 const choice = (text, ...names) => ({ key: 'team', type: 'choice', text, options: names.map((n) => ({ id: n, name: n, description: `${n} things` })) });
@@ -81,4 +82,23 @@ test('setups and scales do not change the order of the history rows', () => {
   const h = [entry('2026-11-01T00:00:00Z', '', [opt('alpha')]), entry('2026-11-02T00:00:00Z', '', [opt('beta')]), entry('2026-11-03T00:00:00Z', '', [opt('beta')])];
   const o = createSuggestions({ history: h, setups: [setup, setup, setup] });
   assert.deepEqual(o.frequent('option'), ['beta', 'alpha']);
+});
+
+test('a neutral-names variant run feeds no options or descriptions, but its question and key count', () => {
+  const run = { state: 'Printer is on fire', questions: [choice('Which team should handle this?', 'billing', 'tech', 'other')] };
+  const neutral = neutralNames(run);
+  const both = createSuggestions({ history: [
+    entry('2026-11-10T10:00:00Z', run.state, run.questions),
+    entry('2026-11-10T10:01:00Z', run.state, neutral.questions),
+  ] });
+  assert.deepEqual(both.frequent('option', 10).sort(), ['billing', 'other', 'tech']);
+  assert.deepEqual(both.recent('description', 10).sort(), ['billing things', 'other things', 'tech things']);
+  const alone = createSuggestions({ history: [entry('2026-11-10T10:01:00Z', run.state, neutral.questions)] });
+  assert.deepEqual(alone.frequent('option'), []);
+  assert.deepEqual(alone.frequent('description'), []);
+  assert.deepEqual(alone.frequent('question'), ['Which team should handle this?']);
+  assert.deepEqual(alone.frequent('key'), ['team']);
+  // Names that only look alike (not A, B, C in order) are kept.
+  const odd = createSuggestions({ history: [entry('2026-11-10T10:00:00Z', '', [choice('q', 'B', 'A')])] });
+  assert.deepEqual(odd.frequent('option').sort(), ['A', 'B']);
 });

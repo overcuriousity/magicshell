@@ -212,3 +212,19 @@ test('services carry single sign-on in accounts mode only', async () => {
   assert.equal(servicesFor({ mode: 'accounts', model: 'm', user: null, version: null, why: null }).sso, null);
   assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why: null, sso }).sso, null);
 });
+
+test('the accounts-mode store offers suggestions, stays persistent and leads to Sign in when the session ran out', async () => {
+  const { serverStore } = await import('./app.js');
+  const { RunError } = await import('./run-error.js');
+  const fetchFn = async () => ({ ok: false, status: 401, text: async () => 'Sign in first.' });
+  let lost = 0;
+  const store = serverStore(fetchFn, () => { lost += 1; });
+  assert.equal(typeof store.suggest?.load, 'function');
+  assert.equal(typeof store.suggest?.current, 'function');
+  assert.equal(store.persistent, true);
+  await assert.rejects(store.listSetups(), (e) => e instanceof RunError && e.kind === 'auth');
+  assert.equal(lost, 1);
+  // A write goes through both wraps and still reaches the handler.
+  await assert.rejects(store.saveEntry({ id: 'x' }), (e) => e instanceof RunError && e.kind === 'auth');
+  assert.equal(lost, 2);
+});

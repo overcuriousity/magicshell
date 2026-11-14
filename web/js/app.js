@@ -286,6 +286,23 @@ export function servicesFor(config) {
   return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null };
 }
 
+// Every store call that fails because the session ran out calls onAuthLost, and still fails.
+const signInOnAuth = (store, onAuthLost) => {
+  const wrapped = { persistent: true };
+  for (const [name, fn] of Object.entries(store)) {
+    if (typeof fn !== 'function') continue;
+    wrapped[name] = (...args) => Promise.resolve().then(() => fn(...args)).catch((e) => {
+      if (e instanceof RunError && e.kind === 'auth') onAuthLost();
+      throw e;
+    });
+  }
+  return wrapped;
+};
+
+// The accounts-mode store. Suggestions go outside: the auth wrap copies functions only, so the
+// other way round would drop `suggest` and leave every field plain.
+export const serverStore = (fetchFn, onAuthLost) => withSuggestions(signInOnAuth(createServerStore(fetchFn), onAuthLost));
+
 // Learns the mode and wires the client and store for it; Sign in changes them in place. Without
 // its server the app shows one line and nothing else.
 async function boot(shell) {
@@ -319,26 +336,18 @@ async function boot(shell) {
   const navigate = (hash) => shellApi.navigate(hash);
 
   // Accounts mode: a session that ran out during use leads to Sign in, whichever view noticed.
-  const signInOnAuth = (store) => {
-    const wrapped = { persistent: true };
-    for (const [name, fn] of Object.entries(store)) {
-      if (typeof fn !== 'function') continue;
-      wrapped[name] = (...args) => Promise.resolve().then(() => fn(...args)).catch((e) => {
-        if (e instanceof RunError && e.kind === 'auth' && route(location.hash).view !== 'sign-in') navigate(HREF.signIn);
-        throw e;
-      });
-    }
-    return wrapped;
+  const onAuthLost = () => {
+    if (route(location.hash).view !== 'sign-in') navigate(HREF.signIn);
   };
   // A fresh store per user, so nothing one user loaded is shown to the next.
   const userChanged = async () => {
     const now = await detectMode(fetchFn);
     services.user = now.mode === 'accounts' ? now.user : null;
-    services.store = withSuggestions(signInOnAuth(createServerStore(fetchFn)));
+    services.store = serverStore(fetchFn, onAuthLost);
   };
 
   services.client = createServerClient(fetchFn);
-  services.store = mode === 'accounts' ? withSuggestions(signInOnAuth(createServerStore(fetchFn))) : withSuggestions(browserStore());
+  services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : withSuggestions(browserStore());
   if (mode === 'accounts') {
     // Under single sign-on the server signs in; the page only links there.
     if (!services.sso) {

@@ -16,12 +16,14 @@ export const withoutDescriptions = (run) =>
   });
 
 // A, B, C… by position; a question has at most LIMITS.maxOptions (8) options, well within A to Z.
+export const neutralName = (i) => String.fromCharCode(65 + i);
+
 export const neutralNames = (run) =>
   mapQuestions(run, (q) => {
     if (q.type === 'choice') {
       q.options = q.options.map((o, i) => ({
         ...o,
-        name: String.fromCharCode(65 + i),
+        name: neutralName(i),
         description: trimmed(o.description) || trimmed(o.name),
       }));
     }
