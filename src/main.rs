@@ -103,12 +103,21 @@ async fn serve(file: Option<PathBuf>) -> Result<(), AppError> {
     Ok(())
 }
 
-/// `key=value` lines for the installer: where the server listens and where its database is.
+/// `key=value` lines for the installer: where the server listens, the host name it answers for
+/// (with a `public_url`) and where its database is.
 fn check_config(file: Option<PathBuf>) -> Result<(), AppError> {
     magicshell::kit::config::defer_credentials();
     let (cfg, app) = read_config(file)?;
     magicshell::app::check(&cfg, &app)?;
     println!("bind={}", cfg.bind);
+    // With a public address the server answers for that host name only, also on loopback.
+    if let Some(url) = &cfg.public_url {
+        let host = url.host_str().unwrap_or_default();
+        match url.port() {
+            Some(port) => println!("host={host}:{port}"),
+            None => println!("host={host}"),
+        }
+    }
     match &app.database {
         Some(db) => {
             println!("mode=accounts");

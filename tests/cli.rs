@@ -345,6 +345,22 @@ fn check_config_prints_where_the_server_listens_and_its_database() {
     assert_eq!(run.out, "bind=127.0.0.1:8080\nmode=open\n");
 }
 
+// Behind a proxy the server answers only for the host of `public_url`; the installer's health
+// check on loopback must send that name, or a running server looks down.
+#[test]
+fn check_config_names_the_host_the_server_answers_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = "[app]\nendpoint = \"http://127.0.0.1:9/v1\"\nmodel = \"m\"\n";
+    let plain = config_in(&dir, &format!("public_url = \"https://magicshell.example.org\"\n{app}"));
+    let run = magicshell(&plain, &["check-config"], "");
+    assert!(run.ok, "{}", run.err);
+    assert_eq!(run.out, "bind=127.0.0.1:8080\nhost=magicshell.example.org\nmode=open\n");
+
+    let ported = config_in(&dir, &format!("public_url = \"https://magicshell.example.org:8443\"\n{app}"));
+    let run = magicshell(&ported, &["check-config"], "");
+    assert_eq!(run.out, "bind=127.0.0.1:8080\nhost=magicshell.example.org:8443\nmode=open\n");
+}
+
 #[test]
 fn check_config_refuses_what_a_start_refuses() {
     let dir = tempfile::tempdir().unwrap();
