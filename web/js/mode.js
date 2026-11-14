@@ -8,7 +8,7 @@ export async function detectMode(fetchFn) {
     const body = JSON.parse(await response.text());
     if (body === null || typeof body !== 'object') return NO_SERVER;
     if (body.mode !== 'open' && body.mode !== 'accounts') return NO_SERVER;
-    const user = body.user && typeof body.user.username === 'string' ? { username: body.user.username } : null;
+    const user = body.user && typeof body.user.username === 'string' ? { username: body.user.username, password: body.user.password === true } : null;
     const text = (v) => (typeof v === 'string' ? v : null);
     const words = body.why?.maxWords;
     const why = Number.isInteger(words) && words > 0 ? { maxWords: words } : null;

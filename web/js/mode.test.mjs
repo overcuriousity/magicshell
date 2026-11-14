@@ -20,7 +20,7 @@ test('an html 404 page means no mode', async () => {
 
 test('a server reports its mode', async () => {
   const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: { username: 'ada' } });
-  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada' }, version: null, why: null, sso: null });
+  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada', password: false }, version: null, why: null, sso: null });
   const open = JSON.stringify({ mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null });
   assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null });
 });
@@ -46,5 +46,12 @@ test('sso is null when absent or malformed', async () => {
   for (const sso of [undefined, null, {}, { label: 7 }, { label: '' }, 'x', 7]) {
     const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: null, sso });
     assert.equal((await detectMode(reply(200, body))).sso, null, JSON.stringify(sso));
+  }
+});
+
+test('password is true only for a literal true', async () => {
+  for (const [password, expected] of [[true, true], [false, false], [undefined, false], ['true', false], [1, false], [null, false]]) {
+    const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: { username: 'ada', password } });
+    assert.deepEqual((await detectMode(reply(200, body))).user, { username: 'ada', password: expected }, String(password));
   }
 });

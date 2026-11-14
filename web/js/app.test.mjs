@@ -228,3 +228,35 @@ test('the accounts-mode store offers suggestions, stays persistent and leads to 
   await assert.rejects(store.saveEntry({ id: 'x' }), (e) => e instanceof RunError && e.kind === 'auth');
   assert.equal(lost, 2);
 });
+
+test('accounts mode can sign in with a password with or without single sign-on', async () => {
+  const { accountsActions } = await import('./app.js');
+  for (const sso of [null, { label: 'x' }]) {
+    const services = { mode: 'accounts', sso, user: null, client: { signIn: async () => {} } };
+    const went = [];
+    const deps = {
+      userChanged: async () => { services.user = { username: 'ada', password: true }; },
+      navigate: (hash) => went.push(hash),
+      asked: () => '#/history',
+      session: null,
+    };
+    const { signIn, signOut } = accountsActions(services, deps);
+    assert.equal(typeof signIn, 'function');
+    assert.equal(typeof signOut, 'function');
+    await signIn('ada', 'pw');
+    assert.deepEqual(went, ['#/history']);
+  }
+});
+
+test('signing out marks the tab as checked so no silent trip follows', async () => {
+  const { accountsActions } = await import('./app.js');
+  const { SSO_CHECKED } = await import('./sso.js');
+  const stored = new Map();
+  const session = { setItem: (k, v) => stored.set(k, v) };
+  const services = { mode: 'accounts', sso: { label: 'x' }, user: null, client: { signOut: async () => {} } };
+  const went = [];
+  const { signOut } = accountsActions(services, { userChanged: async () => {}, navigate: (h) => went.push(h), asked: () => '#/ask', session });
+  await signOut();
+  assert.equal(stored.get(SSO_CHECKED), '#/ask');
+  assert.deepEqual(went, ['#/ask']);
+});

@@ -6,6 +6,7 @@ import { createServerClient } from './client-server.js';
 import { detectMode } from './mode.js';
 import { HREF, hrefOf } from './routes.js';
 import { RunError } from './run-error.js';
+import { askedAfterCheck, markChecked, silentCheck } from './sso.js';
 import { createBrowserStore } from './store-browser.js';
 import { createServerStore } from './store-server.js';
 import { withSuggestions } from './suggest-store.js';
@@ -154,7 +155,7 @@ function navLinks(withIcons) {
 
 // services: { mode, client, store, user, ... }, handed to every view with the route and navigate.
 // It is read at every route change, so boot can swap the client or the user in place.
-function mountShell(shell, services = {}) {
+function mountShell(shell, services = {}, firstAsked = HREF.ask) {
   const modeSwitch = h('div', { class: 'oc-topbar__slot', id: 'mode-switch' });
   const topnav = h('nav', { class: 'oc-topnav', 'aria-label': 'Main' }, navLinks(false));
   const tabbar = h('nav', { class: 'oc-tabbar', 'aria-label': 'Main' }, navLinks(true));
@@ -179,7 +180,7 @@ function mountShell(shell, services = {}) {
   let current = null;
   let first = true;
   // The route to return to after signing in.
-  let asked = HREF.ask;
+  let asked = firstAsked;
   const navigate = (hash) => {
     // Views send the app here when the server refused the session: whoever it was is signed out.
     if (services.mode === 'accounts' && route(hash).view === 'sign-in') services.user = null;
@@ -303,12 +304,47 @@ const signInOnAuth = (store, onAuthLost) => {
 // other way round would drop `suggest` and leave every field plain.
 export const serverStore = (fetchFn, onAuthLost) => withSuggestions(signInOnAuth(createServerStore(fetchFn), onAuthLost));
 
+// What Sign in and Sign out do in accounts mode. A password sign-in exists with or without single
+// sign-on; the provider's own sign-in is a link on the page.
+export const accountsActions = (services, { userChanged, navigate, asked, session }) => ({
+  signIn: async (username, password) => {
+    await services.client.signIn(username, password);
+    await userChanged();
+    if (!services.user) throw new RunError(NO_COOKIE, 'auth');
+    navigate(asked());
+  },
+  signOut: async () => {
+    await services.client.signOut();
+    // Nothing one user entered or handed over stays for the next.
+    forget(ENTERED);
+    takeRun();
+    takeGuidedRun();
+    // The provider may still know them; sign-out must not bounce straight back in.
+    markChecked(session);
+    await userChanged();
+    // Whoever signs in next starts at Ask.
+    navigate(HREF.ask);
+  },
+});
+
 // Learns the mode and wires the client and store for it; Sign in changes them in place. Without
 // its server the app shows one line and nothing else.
 async function boot(shell) {
   const fetchFn = (...args) => fetch(...args);
   if (!window.isSecureContext || !navigator.clipboard) document.documentElement.dataset.ocNoCopy = '';
   const config = await detectMode(fetchFn);
+  // The tab's real sessionStorage only: a stand-in in memory would forget the check on reload.
+  let session = null;
+  try {
+    session = sessionStorage;
+  } catch {
+    // Blocked: no silent check.
+  }
+  const href = silentCheck({ config, hash: location.hash, session });
+  if (href) {
+    location.replace(href);
+    return;
+  }
   const { mode } = config;
   if (!mode) {
     shell.append(h('main', { class: 'oc-main', id: 'main' }, h('p', { class: 'ms-empty' }, NO_SERVER)));
@@ -349,25 +385,7 @@ async function boot(shell) {
   services.client = createServerClient(fetchFn);
   services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : withSuggestions(browserStore());
   if (mode === 'accounts') {
-    // Under single sign-on the server signs in; the page only links there.
-    if (!services.sso) {
-      services.signIn = async (username, password) => {
-        await services.client.signIn(username, password);
-        await userChanged();
-        if (!services.user) throw new RunError(NO_COOKIE, 'auth');
-        navigate(shellApi.asked());
-      };
-    }
-    services.signOut = async () => {
-      await services.client.signOut();
-      // Nothing one user entered or handed over stays for the next.
-      forget(ENTERED);
-      takeRun();
-      takeGuidedRun();
-      await userChanged();
-      // Whoever signs in next starts at Ask.
-      navigate(HREF.ask);
-    };
+    Object.assign(services, accountsActions(services, { userChanged, navigate, asked: () => shellApi.asked(), session }));
   }
 
   registerView('ask', createAskView());
@@ -375,7 +393,7 @@ async function boot(shell) {
   registerView('setups', createSetupsView());
   registerView('settings', createSettingsView());
   registerView('sign-in', createSignInView());
-  shellApi = mountShell(shell, services);
+  shellApi = mountShell(shell, services, askedAfterCheck(session) ?? HREF.ask);
   if (showsNotSaving({ mode, storage, store: services.store })) warnNotSaving();
 }
 
