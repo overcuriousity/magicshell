@@ -55,6 +55,15 @@ pub async fn has_password(pool: &SqlitePool, id: i64) -> Result<bool, OcError> {
     Ok(has.unwrap_or(false))
 }
 
+/// Whether the user signs in through a provider.
+pub async fn has_identity(pool: &SqlitePool, id: i64) -> Result<bool, OcError> {
+    let has =
+        sqlx::query_scalar!(r#"SELECT EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = ?) AS "has!: bool""#, id)
+            .fetch_one(pool)
+            .await?;
+    Ok(has)
+}
+
 /// False for an empty name, one over 255 bytes, or one with a control character.
 pub fn usable_name(name: &str) -> bool {
     !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
@@ -193,12 +202,32 @@ pub async fn count(pool: &SqlitePool) -> Result<i64, OcError> {
     Ok(sqlx::query_scalar!(r#"SELECT COUNT(*) AS "n!: i64" FROM users"#).fetch_one(pool).await?)
 }
 
-/// Every user with the day they were created, oldest first.
-pub async fn list(pool: &SqlitePool) -> Result<Vec<(User, String)>, OcError> {
-    let rows = sqlx::query!(r#"SELECT id AS "id!: i64", username AS "username!", created_at FROM users ORDER BY id"#)
-        .fetch_all(pool)
-        .await?;
-    Ok(rows.into_iter().map(|r| (User { id: r.id, username: r.username }, r.created_at)).collect())
+/// A user as the shell lists them.
+pub struct Listed {
+    pub user: User,
+    pub created_at: String,
+    pub password: bool,
+    pub provider: bool,
+}
+
+/// Every user with when they were created and their ways in, oldest first.
+pub async fn list(pool: &SqlitePool) -> Result<Vec<Listed>, OcError> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!: i64", username AS "username!", created_at, password_hash <> '' AS "password!: bool",
+                  EXISTS (SELECT 1 FROM oidc_identities i WHERE i.user_id = users.id) AS "provider!: bool"
+           FROM users ORDER BY id"#
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| Listed {
+            user: User { id: r.id, username: r.username },
+            created_at: r.created_at,
+            password: r.password,
+            provider: r.provider,
+        })
+        .collect())
 }
 
 /// Deletes the user and, through foreign keys, their data; false when there is no such user.
