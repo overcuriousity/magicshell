@@ -143,14 +143,14 @@ fn usable_names() {
 }
 
 #[tokio::test]
-async fn sessions_do_not_cross_the_mode() {
+async fn a_password_session_outlives_the_mode_but_a_provider_one_does_not() {
     let (_d, pool) = pool().await;
     let pw = users::create(&pool, "bob", "pw-123456", OffsetDateTime::now_utc()).await.unwrap();
     let sso = oidc(&pool, "https://idp", "sub-1", "ada").await.unwrap();
     let e_pw = users::session_epoch(&pool, pw.id).await.unwrap().unwrap();
     let e_sso = users::session_epoch(&pool, sso.id).await.unwrap().unwrap();
     assert!(users::by_session(&pool, pw.id, e_pw, false).await.unwrap().is_some());
-    assert!(users::by_session(&pool, pw.id, e_pw, true).await.unwrap().is_none());
+    assert!(users::by_session(&pool, pw.id, e_pw, true).await.unwrap().is_some());
     assert!(users::by_session(&pool, sso.id, e_sso, true).await.unwrap().is_some());
     assert!(users::by_session(&pool, sso.id, e_sso, false).await.unwrap().is_none());
 }

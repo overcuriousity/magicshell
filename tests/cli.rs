@@ -141,7 +141,7 @@ async fn a_password_set_from_the_shell_ends_the_users_sessions() {
     let res = support::post_json(&app, "/api/run", &json!({}), Some(&ada)).await;
     assert_eq!(res.status(), 401);
     let config: serde_json::Value = support::get_with(&app, "/api/config", Some(&bob)).await.json().await.unwrap();
-    assert_eq!(config["user"], json!({"username": "bob"}));
+    assert_eq!(config["user"], json!({"username": "bob", "password": true}));
 }
 
 #[tokio::test]
@@ -246,23 +246,21 @@ fn sso_config(dir: &tempfile::TempDir) -> std::path::PathBuf {
 }
 
 #[tokio::test]
-async fn password_commands_refuse_in_sso_mode() {
+async fn password_commands_work_in_sso_mode() {
+    use magicshell::kit::identity::users;
     let dir = tempfile::tempdir().unwrap();
     let file = sso_config(&dir);
     support::create_database(dir.path()).await;
-    for args in &USER_COMMANDS[..2] {
-        let run = magicshell(&file, args, &format!("{PASSWORD}\n"));
-        assert_eq!(run.code, Some(1), "{args:?}");
-        assert_eq!(
-            run.err.trim(),
-            "Accounts come from the sign-in provider. Remove [auth.oidc] to manage passwords.",
-            "{args:?}"
-        );
-        assert!(run.out.is_empty());
-    }
-    let list = magicshell(&file, &["user", "list"], "");
-    assert!(list.ok, "{}", list.err);
-    assert!(list.out.is_empty(), "no user may have been created");
+    let add = magicshell(&file, USER_COMMANDS[0], &format!("{PASSWORD}\n"));
+    assert!(add.ok, "{}", add.err);
+    assert_eq!(add.out.trim(), "Added ada.");
+    let pool = magicshell::kit::db::connect(dir.path(), "magicshell.db").await.unwrap();
+    assert!(users::verify_password(&pool, "ada", PASSWORD).await.unwrap().is_some());
+
+    let passwd = magicshell(&file, USER_COMMANDS[1], "another long password\n");
+    assert!(passwd.ok, "{}", passwd.err);
+    assert!(users::verify_password(&pool, "ada", PASSWORD).await.unwrap().is_none());
+    assert!(users::verify_password(&pool, "ada", "another long password").await.unwrap().is_some());
 }
 
 #[tokio::test]

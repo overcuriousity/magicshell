@@ -30,20 +30,29 @@ pub async fn create(pool: &SqlitePool, username: &str, secret: &str, now: Offset
 }
 
 /// The user of a session signed in under `epoch`; `None` once the password changed since.
-/// `sso`: the user must have an identity row; otherwise a non-empty password hash.
+/// The user needs a non-empty password hash, or, when `sso` is on, an identity row.
+/// A password session therefore outlives switching `[auth.oidc]` on; a provider one does not outlive switching it off.
 pub async fn by_session(pool: &SqlitePool, id: i64, epoch: i64, sso: bool) -> Result<Option<User>, OcError> {
     Ok(sqlx::query_as!(
         User,
         r#"SELECT id AS "id!: i64", username AS "username!" FROM users
            WHERE id = ? AND session_epoch = ?
-             AND CASE WHEN ? THEN EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)
-                      ELSE password_hash <> '' END"#,
+             AND (password_hash <> ''
+                  OR (? AND EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)))"#,
         id,
         epoch,
         sso
     )
     .fetch_optional(pool)
     .await?)
+}
+
+/// Whether the user has a password; provider accounts are created with an empty hash and have none.
+pub async fn has_password(pool: &SqlitePool, id: i64) -> Result<bool, OcError> {
+    let has = sqlx::query_scalar!(r#"SELECT password_hash <> '' AS "has!: bool" FROM users WHERE id = ?"#, id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(has.unwrap_or(false))
 }
 
 /// False for an empty name, one over 255 bytes, or one with a control character.

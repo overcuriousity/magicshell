@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT password_hash <> '' AS \"has!: bool\" FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "has!: bool",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "112c0e664e470b738ef3e971b97714bcdec3e5abd4ac92fb076bb0ab59aa1161"
+}

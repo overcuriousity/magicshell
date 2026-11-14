@@ -129,9 +129,6 @@ async fn user(file: Option<PathBuf>, cmd: UserCommand) -> Result<(), AppError> {
         return Err(OcError::Config("Accounts are off. Set database under [app] first.".into()).into());
     };
     existing_database(&cfg.data_dir("magicshell").join(database))?;
-    if app.oidc.is_some() && matches!(cmd, UserCommand::Add { .. } | UserCommand::Passwd { .. }) {
-        return Err(invalid("Accounts come from the sign-in provider. Remove [auth.oidc] to manage passwords."));
-    }
     // `database` is set, so there is a pool.
     let pool = magicshell::app::open_pool(&cfg, &app).await?.ok_or_else(|| OcError::internal("no database pool"))?;
     match cmd {

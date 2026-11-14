@@ -26,7 +26,7 @@ pub struct ApiState {
     pub pool: Option<SqlitePool>,
     /// "Why?": accounts mode only, and only while its word limit is above 0.
     pub why: Option<Why>,
-    /// Sign-in through `[auth.oidc]`: accounts mode only; password sign-in is then not routed.
+    /// Sign-in through `[auth.oidc]`: accounts mode only; password sign-in stays routed beside it.
     pub oidc: Option<Arc<Oidc>>,
 }
 
@@ -38,8 +38,11 @@ pub struct Why {
 pub fn router(state: Arc<ApiState>) -> Router {
     let mut router = Router::new().route("/api/config", get(config::get)).route("/api/run", post(run::post));
     if state.pool.is_some() {
-        router = if state.oidc.is_some() {
-            router
+        router = router
+            .route("/api/auth/sign-in", post(auth::sign_in).layer(rate_limit(10, 5)))
+            .route("/api/auth/password", post(auth::change_password).layer(rate_limit(10, 5)));
+        if state.oidc.is_some() {
+            router = router
                 .route(
                     "/auth/oidc/start",
                     get(oidc::start).layer(rate_limit(10, 5)).layer(map_response(oidc::no_store)),
@@ -47,12 +50,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .route(
                     "/auth/oidc/callback",
                     get(oidc::callback).layer(rate_limit(10, 5)).layer(map_response(oidc::no_store)),
-                )
-        } else {
-            router
-                .route("/api/auth/sign-in", post(auth::sign_in).layer(rate_limit(10, 5)))
-                .route("/api/auth/password", post(auth::change_password).layer(rate_limit(10, 5)))
-        };
+                );
+        }
         router = router
             .route("/api/auth/sign-out", post(auth::sign_out))
             .route("/api/setups", get(setups::list))

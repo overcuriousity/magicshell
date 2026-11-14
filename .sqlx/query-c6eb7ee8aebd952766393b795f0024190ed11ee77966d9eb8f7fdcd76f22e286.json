@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!: i64\", username AS \"username!\" FROM users\n           WHERE id = ? AND session_epoch = ?\n             AND CASE WHEN ? THEN EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)\n                      ELSE password_hash <> '' END",
+  "query": "SELECT id AS \"id!: i64\", username AS \"username!\" FROM users\n           WHERE id = ? AND session_epoch = ?\n             AND (password_hash <> ''\n                  OR (? AND EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)))",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "f8fd03b161e2658a7574e2fa23ec40be397e18a4492a87bc49d40fba69a9da6b"
+  "hash": "c6eb7ee8aebd952766393b795f0024190ed11ee77966d9eb8f7fdcd76f22e286"
 }

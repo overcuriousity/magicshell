@@ -150,15 +150,74 @@ async fn an_encoded_next_arrives_unchanged() {
 }
 
 #[tokio::test]
-async fn password_routes_are_gone_in_sso_mode() {
+async fn passwords_work_beside_sso() {
+    let (_idp, app) = sso_app(true).await;
+    add_user(&app, "grace", "a long enough password").await;
+    let res =
+        post_json(&app, "/api/auth/sign-in", &json!({"username": "grace", "password": "a long enough password"}), None)
+            .await;
+    assert_eq!(res.status(), 204);
+    let cookie = cookie_of(&res);
+    let cfg = config(&app, Some(&cookie)).await;
+    assert_eq!(cfg["user"]["username"], "grace");
+    assert_eq!(cfg["user"]["password"], true);
+    let change = post_json(
+        &app,
+        "/api/auth/password",
+        &json!({"current": "a long enough password", "new": "another long password"}),
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(change.status(), 204);
+}
+
+#[tokio::test]
+async fn a_provider_account_reports_no_password() {
     let (idp, app) = sso_app(true).await;
-    let sign_in = post_json(&app, "/api/auth/sign-in", &json!({"username": "ada", "password": "x"}), None).await;
-    assert_eq!(sign_in.status(), 404);
-    let password = post_json(&app, "/api/auth/password", &json!({"current": "x", "new": "y"}), None).await;
-    assert_eq!(password.status(), 404);
     let cookie = sso_sign_in(&app, &idp, "").await.cookie.unwrap();
-    assert_eq!(post_json(&app, "/api/auth/sign-out", &json!({}), Some(&cookie)).await.status(), 204);
-    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["password"], false);
+    for password in ["", "anything-at-all"] {
+        let res = post_json(&app, "/api/auth/sign-in", &json!({"username": "ada", "password": password}), None).await;
+        assert_eq!(res.status(), 401, "{password:?}");
+    }
+}
+
+async fn put_setup(app: &TestApp, cookie: &str, id: &str) {
+    let setup = json!({
+        "id": id, "name": id, "sampleState": "The server crashed twice today.",
+        "questions": [{"key": "team", "type": "choice", "text": "Which team?",
+                       "options": [{"id": "o1", "name": "ops"}, {"id": "o2", "name": "support"}]}]
+    });
+    let res = app
+        .client
+        .put(format!("{}/api/setups/{id}", app.base))
+        .header("origin", &app.base)
+        .header("cookie", cookie)
+        .json(&setup)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 204);
+}
+
+async fn setup_ids(app: &TestApp, cookie: &str) -> Vec<String> {
+    let list: Value = get_with(app, "/api/setups", Some(cookie)).await.json().await.unwrap();
+    list.as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect()
+}
+
+#[tokio::test]
+async fn the_same_name_twice_is_two_accounts() {
+    let (idp, app) = sso_app(true).await;
+    add_user(&app, "ada", "a long enough password").await;
+    let password = sign_in(&app, "ada", "a long enough password").await;
+    // The provider names its person "ada" too; the account gets the next free name.
+    let sso = sso_sign_in(&app, &idp, "").await.cookie.unwrap();
+    assert_eq!(config(&app, Some(&password)).await["user"]["username"], "ada");
+    assert_eq!(config(&app, Some(&sso)).await["user"]["username"], "ada-2");
+    put_setup(&app, &password, "mine").await;
+    put_setup(&app, &sso, "theirs").await;
+    assert_eq!(setup_ids(&app, &password).await, ["mine"]);
+    assert_eq!(setup_ids(&app, &sso).await, ["theirs"]);
 }
 
 #[tokio::test]
@@ -353,15 +412,15 @@ async fn an_issuer_that_differs_from_the_providers_is_unreachable() {
 }
 
 #[tokio::test]
-async fn a_password_session_ends_when_sso_is_switched_on() {
+async fn a_password_session_survives_switching_sso_on() {
     let app = spawn(ACCOUNTS).await;
     add_user(&app, "ada", "a long enough password").await;
     let cookie = sign_in(&app, "ada", "a long enough password").await;
     assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
     let idp = fake_idp::spawn().await;
     let app = spawn_in(&sso_toml(&idp.issuer, true), app.dir).await;
-    assert_eq!(config(&app, Some(&cookie)).await["user"], Value::Null);
-    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 401);
+    assert_eq!(config(&app, Some(&cookie)).await["user"]["username"], "ada");
+    assert_eq!(get_with(&app, "/api/setups", Some(&cookie)).await.status(), 200);
 }
 
 #[tokio::test]
