@@ -37,14 +37,15 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   const live = h('span', { class: 'oc-sr-only', 'aria-live': 'polite' });
 
   // At the caret, which is at the end whenever this is called. insertText keeps the browser's undo
-  // and scrolls the caret into view, and fires its own `input`; without it the value is set, the
-  // event sent once by hand, and the field scrolled to its end, where the new text is.
+  // and fires its own `input`; without it the value is set and the event sent once by hand. Either
+  // way the field is scrolled to its end, where the new text is: Chromium's insertText does not.
   const insert = (text) => {
     const word = cut(text, limit - field.value.length);
     if (!word) return;
-    if (document.activeElement === field && document.execCommand?.('insertText', false, word)) return;
-    field.value += word;
-    field.dispatchEvent(new Event('input', { bubbles: true }));
+    if (!(document.activeElement === field && document.execCommand?.('insertText', false, word))) {
+      field.value += word;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     // Only one of the two moves anything: an input scrolls sideways, a textarea down.
     field.scrollLeft = field.scrollWidth;
     field.scrollTop = field.scrollHeight;

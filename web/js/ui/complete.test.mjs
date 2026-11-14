@@ -463,6 +463,22 @@ test('a taken word goes in through insertText, so undo takes it back, with one i
   assert.deepEqual(seen, ['Which team']);
 });
 
+// Chromium's insertText leaves a full field where it was, with the new word out of sight.
+test('a word taken through insertText is scrolled into view, the grey text with it', (t) => {
+  withExecCommand(t);
+  const { field, wrap } = setup();
+  field.focus();
+  type(field, 'Which te');
+  field.scrollWidth = 300;
+  field.scrollHeight = 90;
+  key(field, 'Tab');
+  assert.equal(field.scrollLeft, 300);
+  assert.equal(field.scrollTop, 90);
+  const ghost = byClass(wrap, 'ms-complete__ghost')[0];
+  assert.equal(ghost.scrollLeft, 300);
+  assert.equal(ghost.scrollTop, 90);
+});
+
 test('a row pick focuses the field and goes in through insertText too', (t) => {
   const calls = withExecCommand(t);
   const { field, wrap, seen } = setup({ row: { label: 'Recent:', items: (s) => s.recent('question') } });
