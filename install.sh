@@ -172,12 +172,15 @@ health_url() {
 }
 
 # Up for good: active, and /healthz answers within 30 s (without curl or wget: still active after 3 s).
+# $2 is the host name the server answers for when it has a public address: it refuses every other
+# name, loopback included, so the question on loopback must carry it.
 healthy() {
   url=$(health_url "$1")
+  health_host=${2:-}
   if command -v curl >/dev/null 2>&1; then
-    get() { curl -fsS -m 2 -o /dev/null "$url" 2>/dev/null; }
+    get() { curl -fsS -m 2 -o /dev/null ${health_host:+-H "Host: $health_host"} "$url" 2>/dev/null; }
   elif command -v wget >/dev/null 2>&1; then
-    get() { wget -q -T 2 -O /dev/null "$url" 2>/dev/null; }
+    get() { wget -q -T 2 -O /dev/null ${health_host:+--header="Host: $health_host"} "$url" 2>/dev/null; }
   else
     sleep 3
     systemctl is-active --quiet "$app"
@@ -308,6 +311,7 @@ system_install() {
   fi
   grep -v '^Not checked: ' "$work/check.err" >&2 || true
   bind=$(fact bind "$work/facts")
+  host=$(fact host "$work/facts")
   database=$(fact database "$work/facts")
 
   # --- backups (updates) -----------------------------------------------------------------
@@ -382,7 +386,7 @@ system_install() {
   # --- start, check, roll back -----------------------------------------------------------------
   started=1
   start_service || started=0
-  if [ "$started" -eq 1 ] && healthy "$bind"; then
+  if [ "$started" -eq 1 ] && healthy "$bind" "$host"; then
     :
   elif [ "$upgrade" -eq 1 ] && [ -f "$backup/$app" ]; then
     warn "$app $new_version did not come up; putting $old_version back."
@@ -400,7 +404,7 @@ system_install() {
         if [ -f "$db_backup-$x" ]; then cp -p "$db_backup-$x" "$database-$x"; fi
       done
     fi
-    if start_service && healthy "$bind"; then
+    if start_service && healthy "$bind" "$host"; then
       die "$app $old_version runs again. $new_version did not start; see the log above and run the installer again once it is fixed."
     fi
     die "Neither $new_version nor $old_version came up. See: journalctl -u $app -n 50"

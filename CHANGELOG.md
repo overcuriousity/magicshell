@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.10] - 2026-11-14
+
+### Fixed
+
+- Updating a server that has a `public_url` no longer fails with "did not come up". Such a server answers only for its public host name, also on loopback, so the installer's health check got a refusal from a server that was running, put the old version back and then reported that one as down too. `check-config` now prints the host name and the installer asks `/healthz` with it. After a failed update of this kind the old version is in fact running; run the installer again.
+
 ## [2026.11.9] - 2026-11-14
 
 ### Added
