@@ -3,6 +3,7 @@
 // Typing edits the model quietly; other changes rebuild the step, and focus finds its way back by
 // data-fid (or to the heading when the step changed).
 import { LIMITS } from '../limits.js';
+import { lostNotice } from '../pictures.js';
 import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
 import { levelClass, optionClass } from '../ui/colors.js';
@@ -11,6 +12,7 @@ import { h, present } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
+import { busyNote, createPictureField, thumbs } from '../ui/picture-field.js';
 import { answerResult, guidedVerdict } from '../ui/results.js';
 import { createGuidedModel, takeGuidedRun } from './guided-model.js';
 import { createWhyPanel, whyButton } from './why-panel.js';
@@ -43,6 +45,8 @@ export function createGuidedView() {
   let refused = false;
   let lastWhyOpen = false;
   let panel = null;
+  // The picture field; null when the server takes no pictures.
+  let pictures = null;
   const hosts = {};
 
   const typing = (fn) => (...args) => {
@@ -77,8 +81,10 @@ export function createGuidedView() {
       'data-fid': 'context',
       oninput: typing((e) => model.setContext(e.target.value)),
     }, state.context);
-    return h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL),
+    const text = h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL),
       completing(area, { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }));
+    if (!pictures) return text;
+    return pictures.attach(h('div', { class: 'ms-situation-zone' }, text, pictures.element()));
   }
 
   // One button per kind, two by two: choosing one goes on to the question; "something else"
@@ -254,6 +260,7 @@ export function createGuidedView() {
   function resultStep(state) {
     const { question, answer, entry } = state.result;
     const asked = h('h1', { class: 'ms-guide__asked', tabindex: '-1' }, question.text);
+    const shown = thumbs(state.result.pictures);
     if (state.whyOpen && entry) {
       panel ??= createWhyPanel({
         client: ctx.client,
@@ -262,14 +269,15 @@ export function createGuidedView() {
         onBack: model.closeWhy,
         onAuth: () => ctx.navigate(HREF.signIn),
       });
-      return [asked, panel.el];
+      return [asked, shown, panel.el];
     }
     closePanel();
     return [
       asked,
+      shown,
       guidedVerdict(question, answer),
       answerResult(question, answer, { percent: true, pick: false }),
-      whyButton({ entry, why: ctx.why, onOpen: model.openWhy }),
+      whyButton({ entry, why: model.canWhy() ? ctx.why : null, onOpen: model.openWhy }),
     ];
   }
 
@@ -280,7 +288,13 @@ export function createGuidedView() {
     // Step 1 has no Next: each kind button goes on by itself.
     if (state.step === 1) return [];
     const back = button('Back', () => model.back(), { fid: 'back', disabled: state.busy });
-    if (state.step === model.lastStep()) return [back, button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy })];
+    if (state.step === model.lastStep()) {
+      const ask = button('Ask', () => model.ask(), { primary: true, fid: 'ask', busy: state.busy });
+      // An answer about pictures takes seconds: the wait says so and can be given up.
+      const reading = state.busy ? state.pictures.length : 0;
+      if (reading === 0) return [back, ask];
+      return [back, ask, button('Stop', () => model.stop(), { fid: 'stop' }), h('span', { class: 'ms-busy-note', role: 'status' }, busyNote(reading))];
+    }
     return [back, button('Next', () => model.next(), { primary: true, fid: 'next' })];
   }
 
@@ -387,16 +401,31 @@ export function createGuidedView() {
       // so a round trip leaves both drafts as they were.
       const handed = takeGuidedRun();
       refused = Boolean(handed) && !model.load(handed);
+      hosts.live = h('span', { class: 'oc-sr-only', 'aria-live': 'polite' });
+      // Bound now: a picture still being shrunk may arrive after unmount has dropped `model`.
+      const m = model;
+      pictures = ctx.pictures
+        ? createPictureField({
+            id: 'pictures',
+            get: () => m.state.pictures,
+            set: (list) => m.setPictures(list),
+            limits: ctx.pictures,
+            notify: ctx.notify,
+            announce: (text) => { hosts.live.textContent = text; },
+          })
+        : null;
       hosts.body = h('div', { class: 'ms-guide__body' });
       hosts.error = h('div', { class: 'ms-error-host' });
       hosts.actions = h('div', { class: 'oc-row ms-guide__actions' });
-      root.append(h('section', { class: 'ms-guide__panel', 'aria-label': 'Ask' }, hosts.body, hosts.error, hosts.actions));
+      root.append(h('section', { class: 'ms-guide__panel', 'aria-label': 'Ask' }, hosts.body, hosts.error, hosts.actions), hosts.live);
       root.addEventListener('keydown', onKey);
       off = model.subscribe((s) => {
         refused = false;
         render(s);
       });
       render(model.state);
+      const lost = model.takeLost();
+      if (lost > 0) ctx.notify?.(lostNotice(lost));
     },
     // The setup as entered, for the bench when the user switches over; null when nothing was, or
     // when the bench's run was refused and nothing changed since.

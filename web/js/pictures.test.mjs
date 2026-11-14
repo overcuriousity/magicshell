@@ -161,6 +161,6 @@ test('a picture memory recalls what it was last given, all or nothing', () => {
 });
 
 test('the notice for pictures that are gone', () => {
-  assert.equal(lostNotice(1), 'This run had 1 picture. History keeps only previews; add it again to ask the same.');
-  assert.equal(lostNotice(3), 'This run had 3 pictures. History keeps only previews; add them again to ask the same.');
+  assert.equal(lostNotice(1), 'This run had 1 picture, which is not kept. Add it again to ask the same.');
+  assert.equal(lostNotice(3), 'This run had 3 pictures, which are not kept. Add them again to ask the same.');
 });

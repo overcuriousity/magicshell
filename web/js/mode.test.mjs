@@ -3,7 +3,7 @@ import test from 'node:test';
 import { detectMode } from './mode.js';
 
 const reply = (status, text) => async () => ({ ok: status >= 200 && status < 300, status, text: async () => text });
-const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false };
+const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false, pictures: null };
 
 test('a missing server means no mode', async () => {
   const fetchFn = async () => {
@@ -20,9 +20,9 @@ test('an html 404 page means no mode', async () => {
 
 test('a server reports its mode', async () => {
   const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: { username: 'ada' } });
-  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada', password: false }, version: null, why: null, sso: null, preheat: false });
+  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada', password: false }, version: null, why: null, sso: null, preheat: false, pictures: null });
   const open = JSON.stringify({ mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null });
-  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null, preheat: false });
+  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null, preheat: false, pictures: null });
 });
 
 test('reads the why limit', async () => {
@@ -60,5 +60,14 @@ test('preheat is true only for a literal true', async () => {
   for (const [preheat, want] of [[true, true], [false, false], [undefined, false], ['true', false], [1, false], [null, false]]) {
     const body = JSON.stringify({ mode: 'open', model: 'm1', user: null, preheat });
     assert.equal((await detectMode(reply(200, body))).preheat, want, String(preheat));
+  }
+});
+
+test('the picture limits are read, or null when the server takes none', async () => {
+  const config = (pictures) => reply(200, JSON.stringify({ mode: 'open', model: 'm', pictures }));
+  assert.deepEqual((await detectMode(config({ max: 4, edge: 768 }))).pictures, { max: 4, edge: 768 });
+  assert.deepEqual((await detectMode(config({ max: 1, edge: 2048, more: 'x' }))).pictures, { max: 1, edge: 2048 });
+  for (const none of [null, undefined, 'yes', { max: 0, edge: 768 }, { max: 2 }, { max: '2', edge: 768 }, { max: 2, edge: 0 }]) {
+    assert.equal((await detectMode(config(none))).pictures, null, JSON.stringify(none));
   }
 });

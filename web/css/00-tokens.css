@@ -88,6 +88,9 @@
   --shadow-float: 0 4px 16px color-mix(in srgb, var(--color-fg-primary) 14%, transparent);
   --focus-ring: 1.5px solid var(--color-accent);
   --focus-offset: 2px;
+
+  /* What shows through the transparent parts of a picture once it is a JPEG; the same in both themes. */
+  --picture-matte: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {

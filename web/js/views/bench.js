@@ -1,7 +1,9 @@
 // The bench: the situation and question cards on one side, results on the other (side by side from
 // 90rem). Typing edits the model quietly; structural changes rebuild the form and focus finds its way
 // back by data-fid. Results always come from the run that produced them (state.ranA / ranB).
+import { hasPictures } from '../client-server.js';
 import { LIMITS } from '../limits.js';
+import { lostNotice } from '../pictures.js';
 import { HREF } from '../routes.js';
 import { messageOf } from '../run-error.js';
 import { BUILTIN } from '../setups-builtin.js';
@@ -10,6 +12,7 @@ import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { menuButton, picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
+import { busyNote, createPictureField } from '../ui/picture-field.js';
 import { validateSetup } from '../transfer.js';
 import { VARIANTS } from '../variants.js';
 import { createBenchModel, takeRun } from './bench-model.js';
@@ -56,13 +59,16 @@ function opsForB(model) {
   };
 }
 
-function situationField(value, id, onText, suggest) {
-  return h('div', { class: 'oc-field' },
+// The situation: its text and, when the server takes them, its pictures (a picture field).
+function situationField(value, id, onText, suggest, pictures = null) {
+  const text = h('div', { class: 'oc-field' },
     h('label', { for: id }, 'Situation'),
     completing(
       h('textarea', { class: 'oc-input ms-situation', id, rows: '4', 'data-fid': `${id}`, oninput: (e) => onText(e.target.value) }, value),
       { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }),
   );
+  if (!pictures) return text;
+  return pictures.attach(h('div', { class: 'ms-situation-zone' }, text, pictures.element()));
 }
 
 export function createBenchView(deps = {}) {
@@ -80,6 +86,9 @@ export function createBenchView(deps = {}) {
   let ctx = null;
   let panel = null;
   let lastWhyOpen = false;
+  // The picture fields of A and of the variant editor; null when the server takes no pictures.
+  let picturesA = null;
+  let picturesB = null;
   const hosts = {};
 
   // Typing goes through here: the model changes, the form is left alone.
@@ -176,7 +185,7 @@ export function createBenchView(deps = {}) {
 
   function renderForm(state) {
     hosts.form.replaceChildren(
-      situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v)), suggest),
+      situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v)), suggest, picturesA),
       h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)), { idPrefix: 'bench-a', suggest })),
       h('div', { class: 'oc-row' },
         h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= LIMITS.questions, onclick: () => model.addQuestion('noul') },
@@ -189,7 +198,9 @@ export function createBenchView(deps = {}) {
   // model ignores runs while busy. They are rebuilt only when what they show changes.
   let actionsKey = null;
   function renderActions(state) {
-    const key = [state.busy, spinner, Boolean(state.resultA), state.variant].join('|');
+    // A run with pictures takes seconds: it says so and can be stopped.
+    const reading = state.busy ? (state.busy === 'a' ? state.a : state.b)?.pictures?.length ?? 0 : 0;
+    const key = [state.busy, spinner, Boolean(state.resultA), state.variant, reading].join('|');
     if (key === actionsKey) return;
     actionsKey = key;
     const run = h('button', {
@@ -214,7 +225,9 @@ export function createBenchView(deps = {}) {
     const vbutton = variant.querySelector('button');
     vbutton.setAttribute('data-fid', 'variant');
     if (state.busy === 'b' && spinner && state.variant) vbutton.setAttribute('aria-busy', 'true');
-    hosts.actions.replaceChildren(h('div', { class: 'oc-row ms-actions' }, run, variant));
+    const stop = reading > 0 ? h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'stop', onclick: () => model.stop() }, 'Stop') : null;
+    const note = reading > 0 ? h('span', { class: 'ms-busy-note', role: 'status' }, busyNote(reading)) : null;
+    hosts.actions.replaceChildren(h('div', { class: 'oc-row ms-actions' }, run, variant, stop, note));
   }
 
   // Each run's error sits beside it: A's above Run, B's in B's editor or above the results.
@@ -243,7 +256,7 @@ export function createBenchView(deps = {}) {
         h('h2', { class: 'ms-result__title' }, variantLabel(null)),
         h('button', { type: 'button', class: 'oc-btn oc-btn--icon', 'aria-label': 'Drop variant', 'data-oc-tip': 'Drop variant', 'data-fid': 'drop-b', onclick: () => model.dropVariant() }, icon('x')),
       ),
-      situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; })), suggest),
+      situationField(state.b.state, 'bench-situation-b', typing((v) => model.editVariant((b) => { b.state = v; })), suggest, picturesB),
       h('div', { class: 'ms-cards' }, questionCards(state.b, wrapOps(opsForB(model)), {
         locked: true,
         idPrefix: 'bench-b',
@@ -295,7 +308,7 @@ export function createBenchView(deps = {}) {
     closePanel();
     hosts.results.replaceChildren(...resultsSection(state, model.diff(), {
       showIO,
-      why: whyButton({ entry, why: state.busy ? null : ctx.why, onOpen: model.openWhy }),
+      why: whyButton({ entry, why: state.busy || !model.canWhy() ? null : ctx.why, onOpen: model.openWhy }),
       notify: deps.notify,
       toggleIO: () => {
         showIO = !showIO;
@@ -308,6 +321,7 @@ export function createBenchView(deps = {}) {
   function refocus(fid) {
     if (!fid) return;
     const card = fid.split(':')[0];
+    // A removed picture's button is gone: the next one takes its place, or the add button.
     for (const f of [fid, `${card}:add`, `${card}:text`, 'add-question']) {
       const el = root.querySelector(`[data-fid="${f}"]`);
       if (el && !el.disabled) {
@@ -386,6 +400,17 @@ export function createBenchView(deps = {}) {
       // A run handed over (by the guide, Setups or History) replaces the one kept from last time.
       const queued = takeRun();
       if (queued) model.loadRun(queued.run, queued.result, queued.entry);
+      hosts.live = h('span', { class: 'oc-sr-only', 'aria-live': 'polite' });
+      const announce = (text) => { hosts.live.textContent = text; };
+      // Bound now: a picture still being shrunk may arrive after unmount has dropped `model`.
+      const m = model;
+      const field = (id, get, set) => (ctx.pictures ? createPictureField({ id, get, set, limits: ctx.pictures, notify: c.notify, announce }) : null);
+      picturesA = field('pictures-a', () => m.state.a.pictures ?? [], (list) => m.setPictures(list));
+      picturesB = field('pictures-b', () => m.state.b?.pictures ?? [], (list) =>
+        m.editVariant((b) => {
+          if (list.length > 0) b.pictures = list;
+          else delete b.pictures;
+        }));
       hosts.picker = h('div', { class: 'ms-setup-picker' }, setupPicker());
       hosts.saveAs = h('div', { class: 'ms-save-as-host' }, saveAsControl());
       hosts.form = h('div', { class: 'oc-stack' });
@@ -408,10 +433,13 @@ export function createBenchView(deps = {}) {
           hosts.actions,
         ),
         h('section', { class: 'ms-output', 'aria-label': 'Results' }, hosts.variant, hosts.results),
+        hosts.live,
       );
       root.addEventListener('keydown', onKey);
       off = model.subscribe(render);
       render(model.state);
+      const lost = model.takeLost();
+      if (lost > 0) c.notify?.(lostNotice(lost));
       Promise.resolve(ctx.store?.listSetups?.())
         .then((own) => {
           if (!root || !Array.isArray(own) || own.length === 0) return;

@@ -83,8 +83,12 @@ export function browserCodec(doc = document) {
       canvas.width = width;
       canvas.height = height;
       const g = canvas.getContext('2d');
-      g.fillStyle = '#fff';
-      g.fillRect(0, 0, width, height);
+      // A JPEG has no transparency; without a fill those parts would be black.
+      const matte = getComputedStyle(doc.documentElement).getPropertyValue('--picture-matte').trim();
+      if (matte) {
+        g.fillStyle = matte;
+        g.fillRect(0, 0, width, height);
+      }
       g.imageSmoothingQuality = 'high';
       g.drawImage(bitmap, 0, 0, width, height);
       return canvas.toDataURL('image/jpeg', quality);
@@ -116,10 +120,11 @@ export function forgetPictures() {
   for (const m of memories) m.keep([]);
 }
 
+// For a run from History and for a draft after a reload alike: neither keeps the pictures.
 export const lostNotice = (n) =>
   n === 1
-    ? 'This run had 1 picture. History keeps only previews; add it again to ask the same.'
-    : `This run had ${n} pictures. History keeps only previews; add them again to ask the same.`;
+    ? 'This run had 1 picture, which is not kept. Add it again to ask the same.'
+    : `This run had ${n} pictures, which are not kept. Add them again to ask the same.`;
 
 const kb = (bytes) => `${Math.max(1, Math.round(bytes / 1024))} KB`;
 

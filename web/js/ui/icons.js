@@ -34,6 +34,8 @@ const PATHS = {
   danger: [['circle', { cx: 12, cy: 12, r: 10 }], p('m15 9-6 6'), p('m9 9 6 6')],
   info: [['circle', { cx: 12, cy: 12, r: 10 }], p('M12 16v-4'), p('M12 8h.01')],
   plus: [p('M5 12h14'), p('M12 5v14')],
+  // Lucide image (the manifest has no icon for a picture)
+  picture: [['rect', { width: 18, height: 18, x: 3, y: 3, rx: 2, ry: 2 }], ['circle', { cx: 9, cy: 9, r: 2 }], p('m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21')],
   // The kinds of question in the guide. Lucide toggle-right, list-checks, gauge, sliders-horizontal.
   'kind-noul': [['circle', { cx: 15, cy: 12, r: 3 }], ['rect', { width: 20, height: 14, x: 2, y: 5, rx: 7 }]],
   'kind-choice': [p('M13 5h8'), p('M13 12h8'), p('M13 19h8'), p('m3 17 2 2 4-4'), p('m3 7 2 2 4-4')],
