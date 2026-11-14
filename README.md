@@ -34,10 +34,10 @@ In both, the endpoint, key and model are server configuration, and the browser t
 
 ## Install
 
-The standard install is a system service under systemd. As root:
+The standard install is a system service under systemd. It needs root, so `sudo` goes after the pipe, on `sh` (in a root shell, leave it out):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sh -s -- --system
+curl -fsSL https://raw.githubusercontent.com/overcuriousity/magicshell/main/scripts/install-online.sh | sudo sh -s -- --system
 ```
 
 The script downloads the latest release bundle for x86_64 or aarch64, checks it against `SHA256SUMS` and runs the bundled `install.sh`. It never calls `sudo`. A system install puts these in place:

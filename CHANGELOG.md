@@ -4,6 +4,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Fixed
+
+- The README's install line puts `sudo` on `sh`, after the pipe. `install-online.sh --system` run without root says how, before downloading anything.
+
 ## [2026.11.7] - 2026-11-14
 
 ### Added
