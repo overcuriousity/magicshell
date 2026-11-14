@@ -8,6 +8,7 @@ import { HREF, hrefOf } from './routes.js';
 import { RunError } from './run-error.js';
 import { createBrowserStore } from './store-browser.js';
 import { createServerStore } from './store-server.js';
+import { withSuggestions } from './suggest-store.js';
 import { h } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { notify } from './ui/notice.js';
@@ -333,11 +334,11 @@ async function boot(shell) {
   const userChanged = async () => {
     const now = await detectMode(fetchFn);
     services.user = now.mode === 'accounts' ? now.user : null;
-    services.store = signInOnAuth(createServerStore(fetchFn));
+    services.store = withSuggestions(signInOnAuth(createServerStore(fetchFn)));
   };
 
   services.client = createServerClient(fetchFn);
-  services.store = mode === 'accounts' ? signInOnAuth(createServerStore(fetchFn)) : browserStore();
+  services.store = mode === 'accounts' ? withSuggestions(signInOnAuth(createServerStore(fetchFn))) : withSuggestions(browserStore());
   if (mode === 'accounts') {
     // Under single sign-on the server signs in; the page only links there.
     if (!services.sso) {
