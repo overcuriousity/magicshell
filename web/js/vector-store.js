@@ -44,15 +44,24 @@ function completion(transaction) {
 
 function openDatabase(indexedDB) {
   return new Promise((resolve, reject) => {
+    let failed = false;
     const idbRequest = indexedDB.open(DATABASE, VERSION);
     idbRequest.onupgradeneeded = () => {
       try {
         idbRequest.result.createObjectStore(RECORDS, { keyPath: 'key' });
       } catch (error) {
+        failed = true;
         reject(error);
+        idbRequest.transaction.abort();
       }
     };
-    idbRequest.onsuccess = () => resolve(idbRequest.result);
+    idbRequest.onsuccess = () => {
+      if (failed) {
+        idbRequest.result.close();
+        return;
+      }
+      resolve(idbRequest.result);
+    };
     idbRequest.onerror = () => reject(idbRequest.error);
   });
 }

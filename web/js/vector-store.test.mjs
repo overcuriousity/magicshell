@@ -11,13 +11,22 @@ const record = (questionKey = 'q') => ({
   refused: false,
 });
 
-function fakeIndexedDB() {
+function fakeIndexedDB({ upgradeFailures = 0, lateSuccess = false } = {}) {
   const records = new Map();
   const stores = new Set();
+  let version = 0;
+  let closeCalls = 0;
   const db = {
+    close() {
+      closeCalls += 1;
+    },
     createObjectStore(name, options) {
       assert.equal(name, 'records');
       assert.deepEqual(options, { keyPath: 'key' });
+      if (upgradeFailures > 0) {
+        upgradeFailures -= 1;
+        throw new Error('upgrade failed');
+      }
       stores.add(name);
       return {};
     },
@@ -76,14 +85,27 @@ function fakeIndexedDB() {
     },
   };
   return {
-    open(name, version) {
+    get closeCalls() {
+      return closeCalls;
+    },
+    open(name, requestedVersion) {
       assert.equal(name, 'magicshell-vectors');
-      assert.equal(version, 1);
+      assert.equal(requestedVersion, 1);
       const request = {};
       queueMicrotask(() => {
         try {
           request.result = db;
-          if (!stores.has('records')) request.onupgradeneeded?.();
+          if (version < requestedVersion) {
+            let aborted = false;
+            request.transaction = { abort: () => { aborted = true; } };
+            request.onupgradeneeded?.();
+            if (!aborted) version = requestedVersion;
+            else {
+              request.error = new Error('upgrade aborted');
+              request.onerror?.();
+              if (!lateSuccess) return;
+            }
+          }
           request.onsuccess?.();
         } catch (error) {
           request.error = error;
@@ -185,6 +207,19 @@ test('an IndexedDB upgrade failure uses the in-memory adapter', async () => {
   const store = await openVectorStore(indexedDB);
   await store.claim('memory');
   assert.deepEqual(await store.all(), []);
+});
+
+test('a failed upgrade aborts and closes a late connection so reopening can succeed', async () => {
+  const indexedDB = fakeIndexedDB({ upgradeFailures: 1, lateSuccess: true });
+  const fallback = await openVectorStore(indexedDB);
+  await fallback.claim('memory');
+  await fallback.put(record());
+  assert.deepEqual(await fallback.all(), [record()]);
+  const reopened = await openVectorStore(indexedDB);
+  await reopened.claim('alice');
+  await reopened.put(record());
+  assert.deepEqual(await reopened.all(), [record()]);
+  assert.equal(indexedDB.closeCalls, 1);
 });
 
 test('IndexedDB keeps records for the same owner and clears them for a new owner', async () => {
