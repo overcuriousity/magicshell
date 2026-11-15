@@ -230,6 +230,12 @@ export function createGuidedModel({
     },
 
     ask() {
+      // The endpoint refuses a choice with nothing to choose from; a name still in the field is not one yet.
+      if (state.kind === 'choice' && state.options.length === 0) {
+        state.error = 'Add at least one option.';
+        changed();
+        return undefined;
+      }
       const run = model.toRun();
       let mine = null;
       return runner.send(run, {

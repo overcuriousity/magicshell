@@ -112,6 +112,20 @@ test('a choice with one option can be asked', async () => {
   assert.deepEqual(client.calls[0].questions[0].options.map((o) => o.name), ['Pizza']);
 });
 
+test('a choice without options is not sent', async () => {
+  const { model, client } = make();
+  model.setKind('choice');
+  model.next();
+  model.setQuestion('What should we have for dinner tonight?');
+  model.next();
+  await model.ask();
+  assert.equal(client.calls.length, 0);
+  assert.equal(model.state.step, 3);
+  assert.equal(model.state.error, 'Add at least one option.');
+  model.addOption('Pizza');
+  assert.equal(model.state.error, null);
+});
+
 test('options are removed by id', () => {
   const { model } = make();
   model.setKind('choice');
