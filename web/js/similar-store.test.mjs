@@ -269,6 +269,48 @@ test('a failed retry is not scheduled again', async () => {
   assert.equal(clock.size, 0);
 });
 
+test('same-question load does not immediately loop after the scheduled retry fails', async () => {
+  const clock = fakeClock();
+  let calls = 0;
+  const service = makeService(async () => {
+    calls += 1;
+    await new Promise((resolve) => setImmediate(resolve));
+    throw new RunError('down', 'network');
+  }, empty, memoryVectorStore(), clock);
+  await service.load('Query?');
+  await clock.advance(30000);
+  const loading = service.load('Query?');
+  try {
+    await settle();
+    assert.equal(calls, 3);
+    assert.equal(clock.size, 0);
+  } finally {
+    await service.clear();
+    await loading;
+  }
+});
+
+test('update does not immediately loop after the scheduled retry fails', async () => {
+  const clock = fakeClock();
+  let calls = 0;
+  const service = makeService(async () => {
+    calls += 1;
+    await new Promise((resolve) => setImmediate(resolve));
+    throw new RunError('down', 'network');
+  }, empty, memoryVectorStore(), clock);
+  await service.load('Query?');
+  await clock.advance(30000);
+  service.update({ history: [entry('2026-11-01T00:00:00Z', choice('Dinner?', 'pizza'))], setups: [] });
+  try {
+    await settle();
+    assert.equal(calls, 3);
+    assert.equal(clock.size, 0);
+  } finally {
+    await service.clear();
+    await settle();
+  }
+});
+
 test('deleting a source prunes its offers immediately and removes its persistent record', async () => {
   const vectors = memoryVectorStore();
   const data = { history: [entry('2026-11-01T00:00:00Z', choice('Dinner?', 'pizza'))], setups: [] };

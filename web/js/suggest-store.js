@@ -68,12 +68,13 @@ export function withSuggestions(store, {
 
   const load = () => {
     if (loading) return loading;
-    if (failedAt !== null && now() - failedAt < RETRY_MS) return Promise.resolve();
+    if (failedAt !== null && now() - failedAt < RETRY_MS) return false;
     failedAt = null;
-    loading = read().catch(() => {
+    loading = read().then(() => true).catch(() => {
       // Offer nothing, and let a load after RETRY_MS try again.
       loading = null;
       failedAt = now();
+      return false;
     });
     return loading;
   };
@@ -95,7 +96,7 @@ export function withSuggestions(store, {
   };
 
   const sources = async () => {
-    await load();
+    if (!(await load())) throw new Error('Could not read history and setups');
     return sourceData();
   };
   const service = similar ? createService({

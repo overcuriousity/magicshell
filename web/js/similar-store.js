@@ -178,7 +178,7 @@ export function createSimilarService({
     }
   }
 
-  async function runBatches(atGeneration, retrying) {
+  async function runBatches(atGeneration) {
     const state = { failed: false };
     while (atGeneration === generation && active) {
       const missing = sources.filter((source) => !memory.has(source.key) && embeddingText(source.text));
@@ -192,7 +192,7 @@ export function createSimilarService({
         if (atGeneration !== generation) return;
         await fetchBatch(batch, atGeneration, state);
       }
-      if (retryTimer !== null || (retrying && state.failed)) return;
+      if (state.failed || retryTimer !== null) return;
     }
   }
 
@@ -213,7 +213,7 @@ export function createSimilarService({
         if (atGeneration !== generation || !active) return;
         if (memory.has(active.key)) active.query = memory.get(active.key);
         if (active.query) notify(atGeneration);
-        await runBatches(atGeneration, retrying);
+        await runBatches(atGeneration);
       } catch {
         // Loading suggestions is best effort; the guide never waits for it.
       }

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createSimilarService } from './similar-store.js';
 import { withSuggestions } from './suggest-store.js';
+import { memoryVectorStore } from './vector-store.js';
 
 const entry = (id, at, state, question = 'Which printer?') => ({
   id,
@@ -66,6 +68,43 @@ test('similar sources share the cached history and setups, including built-ins',
   assert.deepEqual(await similar.options().sources(), expected);
   assert.equal(store.calls.listHistory, 1);
   assert.equal(store.calls.listSetups, 1);
+});
+
+test('an initial failed read preserves history and setup vectors until recovery', async () => {
+  const history = [{
+    id: 'dinner', at: '2026-11-12T10:00:00Z', run: { state: '', questions: [
+      { key: 'q', type: 'choice', text: 'Dinner?', options: [{ name: 'pizza' }] },
+    ] },
+  }];
+  const saved = { id: 'saved', name: 'Saved', questions: [
+    { key: 'r', type: 'score', text: 'Rating?', levels: [{ text: 'Low' }, { text: 'High' }] },
+  ] };
+  const store = memoryStore({ history, setups: [saved] });
+  store.failRead = 1;
+  const vectors = memoryVectorStore();
+  await vectors.claim('open');
+  for (const questionKey of ['query?', 'dinner?', 'rating?']) {
+    await vectors.put({ key: `c\0${questionKey}`, configId: 'c', questionKey, text: questionKey, vector: new Float32Array([1, 0]), refused: false });
+  }
+  let time = 0;
+  let embeds = 0;
+  const wrapped = withSuggestions(store, {
+    builtin: [],
+    now: () => time,
+    similar: {
+      client: { async embed() { embeds += 1; return [[1, 0]]; } },
+      config: { id: 'c', min: 0.75, owner: 'open' },
+    },
+    createService(args) { return createSimilarService({ ...args, vectors }); },
+  });
+  await assert.doesNotReject(wrapped.similar.load('Query?'));
+  assert.equal((await vectors.all()).length, 3);
+  time = 30001;
+  await wrapped.similar.load('Query?');
+  assert.deepEqual(wrapped.similar.options('Query?'), ['pizza']);
+  assert.deepEqual(wrapped.similar.scales('Query?'), [['Low', 'High']]);
+  assert.equal((await vectors.all()).length, 3);
+  assert.equal(embeds, 0);
 });
 
 test('successful history writes and their undo update similar sources without another read', async () => {

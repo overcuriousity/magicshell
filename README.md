@@ -110,7 +110,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] embedding_api_key` | bearer key for a separate embedding endpoint; `file://` reads it from a file |
 | `[app] embedding_prefix` | text prepended to each question before embedding; default empty |
 | `[app] embedding_min_similarity` | minimum similarity for similar questions, 0 to 1, default 0.75 |
-| `[app] embeds_per_minute` | embedding requests per client per minute (burst is the same), default 600 |
+| `[app] embeds_per_minute` | texts embedded per client per minute (burst is the same number of texts), default 600 |
 | `[app] database` | SQLite file name; setting it turns accounts on |
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions grows large |
