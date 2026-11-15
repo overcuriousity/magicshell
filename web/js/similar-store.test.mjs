@@ -307,6 +307,34 @@ test('an old typed answer and its callback are dropped after loading a new quest
   assert.deepEqual((await vectors.all()).map((record) => record.questionKey), ['new?']);
 });
 
+test('a superseded refusal split stops before requesting remaining old sources', async () => {
+  const pending = deferred();
+  const calls = [];
+  const data = { history: [entry(
+    '2026-11-01T00:00:00Z',
+    choice('One?', 'one'),
+    choice('Two?', 'two'),
+    choice('Three?', 'three'),
+  )], setups: [] };
+  const service = makeService(async (texts) => {
+    calls.push(texts);
+    if (texts.length > 1 && texts[0] === 'Old?') throw new RunError('refused', 'validation');
+    if (texts.length === 1 && texts[0] === 'One?' && calls.length === 3) return pending.promise;
+    return texts.map(() => [1, 0]);
+  }, data);
+  const oldLoad = service.load('Old?');
+  await settle();
+  const newLoad = service.load('New?');
+  pending.resolve([[1, 0]]);
+  await Promise.all([oldLoad, newLoad]);
+  assert.deepEqual(calls, [
+    ['Old?', 'One?', 'Two?', 'Three?'],
+    ['Old?'],
+    ['One?'],
+    ['New?', 'One?', 'Two?', 'Three?'],
+  ]);
+});
+
 test('concurrent loads of one question do not duplicate network work', async () => {
   const pending = deferred();
   let calls = 0;

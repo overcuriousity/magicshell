@@ -168,7 +168,10 @@ export function createSimilarService({
         return;
       }
       if (batch.length > 1) {
-        for (const source of batch) await fetchBatch([source], atGeneration, state);
+        for (const source of batch) {
+          if (atGeneration !== generation) return;
+          await fetchBatch([source], atGeneration, state);
+        }
       } else {
         await saveRefusal(batch[0], atGeneration);
       }
