@@ -44,20 +44,11 @@ test('a shrunk picture says what it is', async () => {
   assert.equal(validateRun({ state: '', images: [p.url], questions: [{ key: 'q', type: 'noul', text: 'Q?' }] }), null);
 });
 
-test('the quality goes down until the picture fits', async () => {
+test('a picture is encoded once, at quality 0.85, however large it is', async () => {
   const calls = [];
-  // 768×578 at 0.85 bytes per pixel: 377 KB at quality 0.85, 311 KB at 0.7, 222 KB at 0.5.
-  const p = await shrink(photo(4080, 3072, 1), opts({ encode: encoder(calls) }));
-  assert.deepEqual(calls.filter((c) => c.width === 768).map((c) => c.quality), [0.85, 0.7, 0.5]);
-  assert.ok(p.bytes <= LIMITS.pictureBytes);
-});
-
-test('a picture that never fits is refused', async () => {
-  await assert.rejects(shrink(photo(4080, 3072, 3), opts()), (e) => {
-    assert.ok(e instanceof RunError);
-    assert.equal(e.message, 'This picture is too large even after shrinking.');
-    return true;
-  });
+  const p = await shrink(photo(4080, 3072, 3), opts({ encode: encoder(calls) }));
+  assert.deepEqual(calls.filter((c) => c.width === 768).map((c) => c.quality), [0.85]);
+  assert.ok(p.bytes > 300 * 1024);
 });
 
 test('the preview gets smaller until it fits its limit', async () => {
@@ -80,7 +71,7 @@ const decode = async (f) => {
   if (!f.source) throw new Error('not a picture');
   return f.source;
 };
-const adding = (extra = {}) => ({ max: 4, edge: 768, decode, encode: encoder(), uid, ...extra });
+const adding = (extra = {}) => ({ max: 4, edge: 768, budget: 12 * 1024 * 1024, decode, encode: encoder(), uid, ...extra });
 
 test('files are added in order after the ones already held', async () => {
   const held = [await shrink(photo(), opts())];
@@ -120,18 +111,19 @@ test('nothing is added when the list is full', async () => {
 });
 
 test('the run budget is kept', async () => {
-  // Each about 250 KB after shrinking: two fit into 600 KB, the third does not, a small fourth does.
+  // Each about 250 KB after shrinking: two fit into a 600 KB budget, the third does not, a small fourth does.
   const big = () => file('big', photo(4080, 3072, 0.66));
-  const { pictures, problems } = await addFiles([big(), big(), big(), file('small', photo(100, 100))], [], adding());
+  const { pictures, problems } = await addFiles([big(), big(), big(), file('small', photo(100, 100))], [], adding({ budget: 600 * 1024 }));
   assert.equal(pictures.length, 3);
-  assert.ok(pictures.reduce((sum, p) => sum + p.bytes, 0) <= LIMITS.picturesBytes);
+  assert.ok(pictures.reduce((sum, p) => sum + p.bytes, 0) <= 600 * 1024);
   assert.deepEqual(problems, ['These pictures are too large together. Remove one first.']);
 });
 
-test('a picture that is too large is reported and the rest are added', async () => {
-  const { pictures, problems } = await addFiles([file('huge', photo(4080, 3072, 3)), file('ok')], [], adding());
-  assert.equal(pictures.length, 1);
-  assert.deepEqual(problems, ['This picture is too large even after shrinking.']);
+test('a fifth picture is added when the server sets no limit', async () => {
+  const files = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => file(name, photo(100, 100)));
+  const { pictures, problems } = await addFiles(files, [], adding({ max: Infinity }));
+  assert.equal(pictures.length, 6);
+  assert.deepEqual(problems, []);
 });
 
 test('the line under the pictures', () => {
@@ -140,6 +132,8 @@ test('the line under the pictures', () => {
   assert.equal(picturesLine([p(84 * 1024)], 4), '1 of 4 · 768×576 · 84 KB');
   assert.equal(picturesLine([p(84 * 1024), p(128 * 1024)], 4), '2 of 4 · 212 KB together');
   assert.equal(picturesLine([p(200)], 1), '1 of 1 · 768×576 · 1 KB');
+  assert.equal(picturesLine([p(84 * 1024)], Infinity), '1 picture · 768×576 · 84 KB');
+  assert.equal(picturesLine([p(84 * 1024), p(128 * 1024)], Infinity), '2 pictures · 212 KB together');
 });
 
 test('a short url names the size', () => {

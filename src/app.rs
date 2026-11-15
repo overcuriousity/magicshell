@@ -61,7 +61,7 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
             .with_max_reply_bytes(max_body_bytes),
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
-        max_pictures: app.max_pictures as usize,
+        max_pictures: app.max_pictures.map(|n| n as usize),
         picture_max_edge: app.picture_max_edge,
         max_body_bytes,
         pool,

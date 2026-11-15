@@ -19,11 +19,8 @@ use crate::error::AppError;
 use crate::kit::OcError;
 use crate::systemone::Run;
 
-// Until pictures lose their own count (Task 4).
-const MAX_PICTURES: usize = 4;
-
 const MAX_ENTRIES: i64 = 500;
-/// A preview is a small JPEG data URL; an entry has at most one per picture of a run.
+/// A preview is a small JPEG data URL; an entry has at most one per picture of its run.
 const MAX_PREVIEW_CHARS: usize = 4000;
 const PREVIEW_PREFIX: &str = "data:image/jpeg;base64,";
 
@@ -59,7 +56,7 @@ pub struct PicturePart {
 
 fn check_pictures(pictures: &[PicturePart]) -> Result<(), AppError> {
     let preview_ok = |p: &str| p.starts_with(PREVIEW_PREFIX) && p.len() <= MAX_PREVIEW_CHARS;
-    if pictures.len() > MAX_PICTURES || !pictures.iter().all(|p| p.preview.as_deref().is_none_or(preview_ok)) {
+    if !pictures.iter().all(|p| p.preview.as_deref().is_none_or(preview_ok)) {
         return Err(AppError::Invalid("A preview of this entry is not valid.".into()));
     }
     Ok(())

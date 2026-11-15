@@ -436,9 +436,8 @@ async fn an_entry_with_pictures_in_its_run_is_refused() {
 async fn a_bad_preview_is_refused() {
     let (app, ada, _) = two_users().await;
     let part = |preview: String| json!([{ "preview": preview, "width": 1, "height": 1, "bytes": 1 }]);
-    let five = json!(vec![json!({ "width": 1, "height": 1, "bytes": 1 }); 5]);
     for pictures in
-        [part(preview(4001)), part("data:image/png;base64,AAAA".into()), part("https://example.org/a.jpg".into()), five]
+        [part(preview(4001)), part("data:image/png;base64,AAAA".into()), part("https://example.org/a.jpg".into())]
     {
         let res = put(&app, "/api/history/e1", &entry_with_pictures("e1", pictures), Some(&ada)).await;
         assert_eq!(res.status(), 422);
@@ -480,4 +479,12 @@ async fn a_setup_with_a_20000_character_situation_is_kept() {
     let mut s = setup("s1", "Long");
     s["sampleState"] = json!("x".repeat(20_000));
     assert_eq!(put(&app, "/api/setups/s1", &s, Some(&ada)).await.status(), 204);
+}
+
+#[tokio::test]
+async fn an_entry_keeps_more_than_four_previews() {
+    let (app, ada, _) = two_users().await;
+    let six = json!(vec![json!({ "preview": preview(4000), "width": 1, "height": 1, "bytes": 1 }); 6]);
+    let e = entry_with_pictures("e1", six);
+    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
 }

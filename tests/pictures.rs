@@ -64,6 +64,25 @@ async fn pictures_reach_the_endpoint() {
 }
 
 #[tokio::test]
+async fn with_max_pictures_unset_a_run_with_six_pictures_is_sent() {
+    let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    assert_eq!(post_run(&app, &run_with(6)).await.status(), 200);
+    assert_eq!(fake.requests.lock().unwrap().len(), 1);
+    let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
+    assert_eq!(body["pictures"], json!({ "max": null, "edge": 768 }));
+}
+
+#[tokio::test]
+async fn a_picture_of_500_kb_is_sent() {
+    let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    let mut run = run_with(0);
+    run["images"] = json!([picture(500 * 1024)]);
+    assert_eq!(post_run(&app, &run).await.status(), 200);
+}
+
+#[tokio::test]
 async fn pictures_over_the_server_limit_are_refused() {
     let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
     let app = spawn_against(&format!("{OPEN}max_pictures = 2\n"), &fake).await;
@@ -204,7 +223,7 @@ async fn config_tells_the_page_about_pictures() {
     let fake = fake_upstream(vec![]).await;
     let app = spawn_against(OPEN, &fake).await;
     let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
-    assert_eq!(body["pictures"], json!({ "max": 4, "edge": 768 }));
+    assert_eq!(body["pictures"], json!({ "max": null, "edge": 768 }));
 
     let app = spawn_against(&format!("{OPEN}max_pictures = 2\npicture_max_edge = 1024\n"), &fake).await;
     let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
@@ -219,10 +238,8 @@ async fn config_tells_the_page_about_pictures() {
 fn picture_keys_outside_their_range_are_refused() {
     assert!(app_config("").is_ok());
     assert!(app_config("max_pictures = 4\npicture_max_edge = 2048\n").is_ok());
-    assert_eq!(
-        app_config("max_pictures = 5\n").unwrap_err(),
-        "Invalid [app] configuration: max_pictures must be 0 to 4."
-    );
+    assert_eq!(app_config("").unwrap().max_pictures, None);
+    assert_eq!(app_config("max_pictures = 10\n").unwrap().max_pictures, Some(10));
     for edge in [255, 2049] {
         assert_eq!(
             app_config(&format!("picture_max_edge = {edge}\n")).unwrap_err(),

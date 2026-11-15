@@ -35,8 +35,8 @@ pub struct ApiState {
     pub oidc: Option<Arc<Oidc>>,
     /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off or in open mode.
     pub preheat: Option<Preheat>,
-    /// Pictures a run may carry on this server; 0 is off.
-    pub max_pictures: usize,
+    /// Pictures a run may carry on this server; 0 is off, `None` is no limit.
+    pub max_pictures: Option<usize>,
     /// The edge the page shrinks pictures to.
     pub picture_max_edge: u32,
     /// The body of the routes that carry a run or a setup (`[app] max_request_mb`).

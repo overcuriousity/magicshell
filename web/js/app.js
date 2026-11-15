@@ -3,7 +3,6 @@
 // Boot learns the mode and wires client and store for it; accounts mode shows only Sign in until
 // someone is signed in.
 import { createServerClient } from './client-server.js';
-import { LIMITS } from './limits.js';
 import { detectMode } from './mode.js';
 import { forgetPictures } from './pictures.js';
 import { HREF, hrefOf } from './routes.js';
@@ -281,15 +280,20 @@ export const trimmedSentence = (n) =>
 const STARTED_OVER = 'Started over. What you entered is cleared.';
 const NO_COOKIE = 'This browser did not keep the sign-in. Open the app over https or localhost.';
 const ENTERED = ['magicshell.bench', 'magicshell.guided'];
+// The server's default `[app] max_request_mb`, for a config that does not name it.
+const DEFAULT_REQUEST_BYTES = 16 * 1024 * 1024;
 const NO_SERVER = 'This app needs its magicshell server. Start it and reload the page.';
 
 // What every view gets from the server's config; Why? exists in accounts mode only.
 export function servicesFor(config) {
   const { mode } = config;
   const accounts = mode === 'accounts';
-  // Pictures: { max, edge } when the server takes them, in both modes.
+  // Pictures: { max, edge, budget } when the server takes them, in both modes. `max` is Infinity when
+  // the server sets no count; `budget` is what of the request size the pictures may fill as base64.
   const p = config.pictures;
-  const pictures = Number.isInteger(p?.max) && p.max > 0 && Number.isInteger(p.edge) ? { max: Math.min(p.max, LIMITS.pictures), edge: p.edge } : null;
+  const takes = p && (p.max === null || (Number.isInteger(p.max) && p.max > 0)) && Number.isInteger(p.edge);
+  const requestBytes = Number.isInteger(config.max_request_bytes) ? config.max_request_bytes : DEFAULT_REQUEST_BYTES;
+  const pictures = takes ? { max: p.max ?? Infinity, edge: p.edge, budget: Math.floor((requestBytes * 3) / 4) - 64 * 1024 } : null;
   return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures };
 }
 

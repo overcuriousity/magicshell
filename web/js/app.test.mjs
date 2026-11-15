@@ -298,7 +298,10 @@ test('history the browser store trims leaves the suggestions', async () => {
 test('servicesFor passes the picture limits through, or null when the server takes none', async () => {
   const { servicesFor } = await import('./app.js');
   const base = { mode: 'open', model: 'm', user: null, version: null, why: null };
-  assert.deepEqual(servicesFor({ ...base, pictures: { max: 2, edge: 1024 } }).pictures, { max: 2, edge: 1024 });
+  const bytes = 16 * 1024 * 1024;
+  assert.deepEqual(servicesFor({ ...base, max_request_bytes: bytes, pictures: { max: 2, edge: 1024 } }).pictures, { max: 2, edge: 1024, budget: 12517376 });
+  assert.deepEqual(servicesFor({ ...base, max_request_bytes: bytes, pictures: { max: null, edge: 768 } }).pictures, { max: Infinity, edge: 768, budget: 12517376 });
+  assert.equal(servicesFor({ ...base, max_request_bytes: bytes, pictures: { max: 9, edge: 768 } }).pictures.max, 9);
   assert.equal(servicesFor({ ...base, pictures: null }).pictures, null);
   assert.equal(servicesFor(base).pictures, null);
   assert.equal(servicesFor({ ...base, pictures: { max: 0, edge: 768 } }).pictures, null);

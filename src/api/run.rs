@@ -96,8 +96,9 @@ pub async fn preheat(State(st): State<Arc<ApiState>>, _caller: Caller) -> Status
     StatusCode::NO_CONTENT
 }
 
-/// The server's own picture limit, which may be below what a run can carry at most.
-fn check_pictures(run: &Run, max: usize) -> Result<(), AppError> {
+/// The server's own picture limit (`[app] max_pictures`); `None` sets none.
+fn check_pictures(run: &Run, max: Option<usize>) -> Result<(), AppError> {
+    let Some(max) = max else { return Ok(()) };
     let sentence = match (run.images.len(), max) {
         (n, max) if n <= max => return Ok(()),
         (_, 0) => "This server does not take pictures.".to_owned(),

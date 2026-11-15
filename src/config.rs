@@ -3,8 +3,6 @@ use url::Url;
 
 use crate::kit::OcError;
 use crate::kit::config::{OcConfig, OidcConfig, Secret};
-// Until pictures lose their own count (Task 4).
-const MAX_PICTURES: usize = 4;
 
 fn runs_per_minute() -> u32 {
     60
@@ -24,10 +22,6 @@ fn preheat() -> bool {
 
 fn upstream_timeout_secs() -> u64 {
     60
-}
-
-fn max_pictures() -> u32 {
-    4
 }
 
 fn max_request_mb() -> u32 {
@@ -62,9 +56,9 @@ pub struct AppConfig {
     pub preheat: bool,
     #[serde(default = "upstream_timeout_secs")]
     pub upstream_timeout_secs: u64,
-    /// Pictures one run may carry, 0 to 4; 0 turns pictures off.
-    #[serde(default = "max_pictures")]
-    pub max_pictures: u32,
+    /// Pictures one run may carry; 0 turns pictures off, absent sets no limit.
+    #[serde(default)]
+    pub max_pictures: Option<u32>,
     /// Longest edge, in pixels, the page shrinks a picture to; 256 to 2048.
     #[serde(default = "picture_max_edge")]
     pub picture_max_edge: u32,
@@ -87,11 +81,6 @@ impl AppConfig {
             app.deserialize().map_err(|e| OcError::Config(format!("Invalid [app] configuration: {e}.")))?;
         if app.model.trim().is_empty() {
             return Err(OcError::Config("Invalid [app] configuration: `model` must not be empty.".into()));
-        }
-        if app.max_pictures as usize > MAX_PICTURES {
-            return Err(OcError::Config(format!(
-                "Invalid [app] configuration: max_pictures must be 0 to {MAX_PICTURES}."
-            )));
         }
         if !(1..=1024).contains(&app.max_request_mb) {
             return Err(OcError::Config("Invalid [app] configuration: max_request_mb must be 1 to 1024.".into()));
