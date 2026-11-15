@@ -151,7 +151,11 @@ export function createGuidedView() {
       model.addOption(text);
       root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
     };
-    const add = () => pick(input.value);
+    const add = () => {
+      const text = input.value;
+      input.value = '';
+      pick(text);
+    };
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
