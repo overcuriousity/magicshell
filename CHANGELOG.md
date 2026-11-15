@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.13] - 2026-11-15
+
 ### Changed
 
 - magicshell sets no limits of its own on a request any more. Questions per run (was 8), options per choice (was 2 to 8), levels per score (was 2 to 10), the length of every text (situation 8,000, question 500, option 40, description and level 200), the form of a question key (was 1 to 30 of `a-z`, `0-9`, `_`) and the number and size of pictures (was 4, 300 KB each, 600 KB together) are now the model's to judge. The checks left are what a request cannot be built without.
