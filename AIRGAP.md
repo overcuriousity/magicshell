@@ -50,7 +50,7 @@ printf '%s' 'the-key' | install -m 0600 /dev/stdin /etc/magicshell/api-key
 systemctl edit magicshell   # add: [Service] LoadCredential=api-key:/etc/magicshell/api-key
 ```
 
-and in `config.toml` under `[app]`: `api_key = "file:///run/credentials/magicshell.service/api-key"`. The endpoint must be reachable from the server; no other outbound connection is made.
+and in `config.toml` under `[app]`: `api_key = "file:///run/credentials/magicshell.service/api-key"`. The decision endpoint must be reachable from the server. A separately configured embedding endpoint is optional and, when used, must also be reachable. No other outbound connection is made.
 
 ## TLS on an airgapped network
 

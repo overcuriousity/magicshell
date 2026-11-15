@@ -142,6 +142,27 @@ test('a rating on my own scale uses the levels typed', async () => {
   assert.deepEqual(client.calls[0].questions[0].levels.map((l) => l.text), ['mild', 'hot', 'fire']);
 });
 
+test('a suggested scale selects a ready scale or fills my own in one change', () => {
+  const { model } = make();
+  model.setKind('score');
+  let heard = 0;
+  model.subscribe(() => { heard += 1; });
+  model.useScale(['can wait', 'this week', 'today', 'right now']);
+  assert.equal(model.state.scaleId, 'urgency');
+  assert.deepEqual(model.currentScale(), ['can wait', 'this week', 'today', 'right now']);
+  model.useScale(['mild', 'hot', 'fire']);
+  assert.equal(model.state.scaleId, 'own');
+  assert.deepEqual(model.currentScale(), ['mild', 'hot', 'fire']);
+  assert.equal(heard, 2);
+});
+
+test('a suggested custom scale may contain any number of levels', () => {
+  const { model } = make();
+  model.setKind('score');
+  model.useScale(['only']);
+  assert.deepEqual(model.toRun().questions[0].levels.map((level) => level.text), ['only']);
+});
+
 test('an empty question cannot be passed', () => {
   const { model } = make();
   model.setKind('choice');

@@ -168,6 +168,18 @@ export function createGuidedModel({
         if (id === 'own' && state.levels.length === 0) state.levels = [{ id: uuid(), text: '' }, { id: uuid(), text: '' }];
       });
     },
+    currentScale: () => levelsOf().map((level) => level.text),
+    useScale(texts) {
+      edit(() => {
+        const ready = SCALES.find((scale) => sameTexts(scale.levels, texts));
+        if (ready) {
+          state.scaleId = ready.id;
+          return;
+        }
+        state.scaleId = 'own';
+        state.levels = texts.map((text) => ({ id: uuid(), text }));
+      });
+    },
     setLevels: (levels) => edit(() => { state.levels = levels.map((l) => ({ id: l.id, text: l.text })); }),
     setContext: (text) => edit(() => { state.context = text; }),
     setPictures: (list) => edit(() => { state.pictures = [...list]; }),

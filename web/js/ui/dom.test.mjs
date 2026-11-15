@@ -18,6 +18,17 @@ test('the caret of a text field is read and put back on the field that replaces 
   assert.equal(fresh.scrollTop, 40);
 });
 
+test('an uncontrolled draft restores its value before its caret', () => {
+  const old = { value: 'abcd', selectionStart: 2, selectionEnd: 2, scrollTop: 0 };
+  const caret = caretOf(old, { value: true });
+  assert.deepEqual(caret, { start: 2, end: 2, scroll: 0, value: 'abcd' });
+  const calls = [];
+  const fresh = { value: '', scrollTop: 0, setSelectionRange: (a, b) => calls.push([a, b]) };
+  restoreCaret(fresh, caret);
+  assert.equal(fresh.value, 'abcd');
+  assert.deepEqual(calls, [[2, 2]]);
+});
+
 test('what has no caret is left alone', () => {
   assert.equal(caretOf(null), null);
   assert.equal(caretOf({ tagName: 'BUTTON' }), null);

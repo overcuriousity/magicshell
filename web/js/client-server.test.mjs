@@ -188,3 +188,40 @@ test('the longest refusal the server sends is shown, not replaced', async () => 
   assert.equal(refusal.length, 300);
   assert.equal(serverSentence(refusal, 502), refusal);
 });
+
+test('embed posts only texts to api/embed and returns the vectors', async () => {
+  const seen = [];
+  const client = createServerClient(stub(200, '{"vectors":[[0.25,1],[0,0.5]]}', seen));
+  assert.deepEqual(await client.embed(['First?', 'Second?']), [[0.25, 1], [0, 0.5]]);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, 'api/embed');
+  assert.equal(seen[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(seen[0].init.body), { texts: ['First?', 'Second?'] });
+  assert.equal(seen[0].init.body, '{"texts":["First?","Second?"]}');
+});
+
+test('embed maps HTTP and network failures to the existing error kinds', async () => {
+  const map = [[401, 'auth'], [413, 'validation'], [422, 'validation'], [429, 'limit'], [502, 'upstream'], [404, 'upstream']];
+  for (const [status, kind] of map) {
+    await fails(createServerClient(stub(status, 'One sentence.')).embed(['Q?']), kind, 'One sentence.');
+  }
+  const down = async () => {
+    throw new TypeError('fetch failed');
+  };
+  await fails(createServerClient(down).embed(['Q?']), 'network');
+});
+
+test('embed rejects malformed successful replies as upstream errors', async () => {
+  const bodies = [
+    'not json',
+    'null',
+    '{}',
+    '{"vectors":null}',
+    '{"vectors":[1]}',
+    '{"vectors":[[1,"2"]]}',
+    '{"vectors":[[1,null]]}',
+  ];
+  for (const body of bodies) {
+    await fails(createServerClient(stub(200, body)).embed(['Q?']), 'upstream');
+  }
+});

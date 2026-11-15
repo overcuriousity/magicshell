@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createSimilarService } from './similar-store.js';
 import { withSuggestions } from './suggest-store.js';
+import { memoryVectorStore } from './vector-store.js';
 
 const entry = (id, at, state, question = 'Which printer?') => ({
   id,
@@ -33,6 +35,144 @@ const memoryStore = ({ history = [], setups = [] } = {}) => {
 };
 
 const fire = entry('a', '2026-11-12T10:00:00Z', 'Printer is on fire');
+
+const similarDouble = () => {
+  const updates = [];
+  let options = null;
+  const service = { update: (data) => updates.push(data) };
+  return {
+    updates,
+    service,
+    options: () => options,
+    createService(args) { options = args; return service; },
+  };
+};
+
+const similarOptions = (similar) => ({
+  builtin: [{ id: 'builtin', name: 'Built in', questions: [] }],
+  similar: { client: {}, config: { id: 'c', min: 0.75, owner: 'open' } },
+  createService: similar.createService,
+});
+
+test('similar sources share the cached history and setups, including built-ins', async () => {
+  const saved = { id: 'saved', name: 'Saved', questions: [] };
+  const store = memoryStore({ history: [fire], setups: [saved] });
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  assert.equal(wrapped.similar, similar.service);
+  const expected = {
+    history: [fire],
+    setups: [{ id: 'builtin', name: 'Built in', questions: [] }, saved],
+  };
+  assert.deepEqual(await similar.options().sources(), expected);
+  assert.deepEqual(await similar.options().sources(), expected);
+  assert.equal(store.calls.listHistory, 1);
+  assert.equal(store.calls.listSetups, 1);
+});
+
+test('an initial failed read preserves history and setup vectors until recovery', async () => {
+  const history = [{
+    id: 'dinner', at: '2026-11-12T10:00:00Z', run: { state: '', questions: [
+      { key: 'q', type: 'choice', text: 'Dinner?', options: [{ name: 'pizza' }] },
+    ] },
+  }];
+  const saved = { id: 'saved', name: 'Saved', questions: [
+    { key: 'r', type: 'score', text: 'Rating?', levels: [{ text: 'Low' }, { text: 'High' }] },
+  ] };
+  const store = memoryStore({ history, setups: [saved] });
+  store.failRead = 1;
+  const vectors = memoryVectorStore();
+  await vectors.claim('open');
+  for (const questionKey of ['query?', 'dinner?', 'rating?']) {
+    await vectors.put({ key: `c\0${questionKey}`, configId: 'c', questionKey, text: questionKey, vector: new Float32Array([1, 0]), refused: false });
+  }
+  let time = 0;
+  let embeds = 0;
+  const wrapped = withSuggestions(store, {
+    builtin: [],
+    now: () => time,
+    similar: {
+      client: { async embed() { embeds += 1; return [[1, 0]]; } },
+      config: { id: 'c', min: 0.75, owner: 'open' },
+    },
+    createService(args) { return createSimilarService({ ...args, vectors }); },
+  });
+  await assert.doesNotReject(wrapped.similar.load('Query?'));
+  assert.equal((await vectors.all()).length, 3);
+  time = 30001;
+  await wrapped.similar.load('Query?');
+  assert.deepEqual(wrapped.similar.options('Query?'), ['pizza']);
+  assert.deepEqual(wrapped.similar.scales('Query?'), [['Low', 'High']]);
+  assert.equal((await vectors.all()).length, 3);
+  assert.equal(embeds, 0);
+});
+
+test('successful history writes and their undo update similar sources without another read', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const other = entry('b', '2026-11-13T10:00:00Z', 'Scanner is on fire');
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [fire]);
+  await wrapped.saveEntry(other);
+  assert.deepEqual(similar.updates.at(-1).history, [fire, other]);
+  await wrapped.deleteEntry('a');
+  assert.deepEqual(similar.updates.at(-1).history, [other]);
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [other, fire]);
+  await wrapped.clearHistory();
+  assert.deepEqual(similar.updates.at(-1).history, []);
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [fire]);
+  assert.equal(store.calls.listHistory, 1);
+  assert.equal(store.calls.listSetups, 1);
+});
+
+test('successful setup writes and their undo update similar sources with built-ins', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const saved = { id: 'saved', name: 'Saved', questions: [] };
+  await wrapped.saveSetup(saved);
+  assert.deepEqual(similar.updates.at(-1).setups, [
+    { id: 'builtin', name: 'Built in', questions: [] }, saved,
+  ]);
+  await wrapped.deleteSetup(saved.id);
+  assert.deepEqual(similar.updates.at(-1).setups, [{ id: 'builtin', name: 'Built in', questions: [] }]);
+  await wrapped.saveSetup(saved);
+  assert.deepEqual(similar.updates.at(-1).setups, [
+    { id: 'builtin', name: 'Built in', questions: [] }, saved,
+  ]);
+});
+
+test('a failed write does not update similar sources', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const count = similar.updates.length;
+  assert.equal(count, 1);
+  store.failWrite = true;
+  await assert.rejects(wrapped.saveEntry(fire), /write failed/);
+  assert.equal(similar.updates.length, count);
+});
+
+test('a refresh updates similar sources after the read succeeds', async () => {
+  const store = memoryStore({ history: [fire] });
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  await store.deleteEntry(fire.id);
+  await wrapped.suggest.refresh();
+  assert.deepEqual(similar.updates.at(-1).history, []);
+});
+
+test('similarity is off without a config', () => {
+  const wrapped = withSuggestions(memoryStore());
+  assert.equal(wrapped.similar, null);
+});
 
 test('reads history and setups once, however often load is called', async () => {
   const store = memoryStore();
@@ -131,6 +271,22 @@ test('a failed read offers nothing and is tried again after a while, not by ever
   t = 30_000;
   await wrapped.suggest.load();
   assert.equal(wrapped.suggest.current().rest('situation', 'Pri'), 'nter is on fire');
+  assert.equal(store.calls.listHistory, 2);
+});
+
+test('a cooldown load stays a thenable resolving false until the same retry time', async () => {
+  const store = memoryStore({ history: [fire] });
+  store.failRead = 1;
+  let t = 0;
+  const wrapped = withSuggestions(store, { now: () => t });
+  assert.equal(await wrapped.suggest.load(), false);
+  t = 29_999;
+  const cooling = wrapped.suggest.load();
+  assert.equal(typeof cooling.then, 'function');
+  assert.equal(await cooling, false);
+  assert.equal(store.calls.listHistory, 1);
+  t = 30_000;
+  assert.equal(await wrapped.suggest.load(), true);
   assert.equal(store.calls.listHistory, 2);
 });
 

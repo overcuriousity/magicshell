@@ -1,13 +1,13 @@
 // Completion for one text field: the rest of a past value in grey behind the caret (Tab takes a
 // word), a button that does the same on touch screens (and wherever the text runs past the field's
-// edge), and an optional row of past values to pick.
+// edge), and optional rows of values to pick.
 // The field stays the view's own: a taken word is typed in through the browser, so undo takes it
 // back, and the view hears it as an `input` event.
 import { cut, nextWord } from '../suggest.js';
 import { h } from './dom.js';
+import { picksRow } from './picks.js';
 
 const HINT_ID = 'ms-complete-hint';
-const ROW_MAX = 5;
 const ANNOUNCE_MS = 700;
 const ANNOUNCE_MAX = 80;
 
@@ -19,7 +19,7 @@ function hint() {
   return HINT_ID;
 }
 
-export function completing(field, { suggest, pool, limit = Infinity, pairedName = () => '', row = null }) {
+export function completing(field, { suggest, pool, limit = Infinity, pairedName = () => '', row = null, similarRow = null }) {
   if (!suggest || field.hasAttribute('readonly')) return field;
 
   let rest = '';
@@ -71,9 +71,29 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   });
   const strip = h('div', { class: 'ms-complete__strip' }, takeBtn);
 
-  const label = row ? h('span', { class: 'ms-complete__label' }, row.label) : null;
-  const rowEl = row ? h('div', { class: 'ms-complete__row' }) : null;
-  const wrap = h('div', { class: 'ms-complete' }, h('div', { class: 'ms-complete__box' }, field, ghost), strip, rowEl, live);
+  const fid = field.getAttribute('data-fid') ?? '';
+  const makeRow = (config, similar = false) => config ? picksRow({
+    label: config.label,
+    items: () => field.value === '' ? (similar ? config.items() : config.items(suggest.current())).map((text) => ({ text, value: text })) : [],
+    onPick: (text) => {
+      if (config.onPick) {
+        config.onPick(text);
+      } else {
+        // The field is empty: focused, the text goes in where insertText puts it.
+        field.focus();
+        insert(text);
+      }
+      refreshRows();
+    },
+    fid,
+  }) : null;
+  const similarPicker = makeRow(similarRow, true);
+  const rowPicker = makeRow(row);
+  const refreshRows = () => {
+    similarPicker?.refresh();
+    rowPicker?.refresh();
+  };
+  const wrap = h('div', { class: 'ms-complete' }, h('div', { class: 'ms-complete__box' }, field, ghost), strip, similarPicker?.el, rowPicker?.el, live);
 
   const caretAtEnd = () => field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length;
   const sync = () => {
@@ -111,34 +131,10 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
     sync();
   };
 
-  const renderRow = () => {
-    if (!row) return;
-    const items = field.value === '' ? row.items(suggest.current()).slice(0, ROW_MAX) : [];
-    rowEl.hidden = items.length === 0;
-    // An id of their own, so a view rebuilt under a pick can find the field's place again.
-    const fid = field.getAttribute('data-fid');
-    rowEl.replaceChildren(label, ...items.map((text, i) =>
-      h('button', {
-        type: 'button',
-        class: 'oc-btn ms-complete__pick',
-        title: text,
-        'data-fid': fid ? `${fid}-pick-${i}` : null,
-        onclick: () => {
-          if (row.onPick) {
-            row.onPick(text);
-            renderRow();
-          } else {
-            // The field is empty: focused, the text goes in where insertText puts it.
-            field.focus();
-            insert(text);
-          }
-        },
-      }, text)));
-  };
   field.addEventListener('input', () => {
     dismissed = false;
     update();
-    renderRow();
+    refreshRows();
   });
   for (const type of ['keyup', 'click', 'select']) field.addEventListener(type, update);
   field.addEventListener('focus', () => {
@@ -187,10 +183,10 @@ export function completing(field, { suggest, pool, limit = Infinity, pairedName 
   if (!(described ?? '').split(/\s+/).includes(id)) field.setAttribute('aria-describedby', described ? `${described} ${id}` : id);
 
   update();
-  renderRow();
+  refreshRows();
   suggest.load().then(() => {
     update();
-    renderRow();
+    refreshRows();
   });
   return wrap;
 }

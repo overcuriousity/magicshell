@@ -222,6 +222,43 @@ test('services carry single sign-on in accounts mode only', async () => {
   assert.equal(servicesFor({ mode: 'open', model: 'm', user: null, version: null, why: null, sso }).sso, null);
 });
 
+test('services accept only complete public similar config', async () => {
+  const { servicesFor } = await import('./app.js');
+  const similar = { model: 'e', id: 'abc', min: 0.75 };
+  assert.deepEqual(servicesFor({ mode: 'open', model: 'm', similar }).similar, similar);
+  assert.equal(servicesFor({ mode: 'open', model: 'm', similar: { model: 'e' } }).similar, null);
+  assert.equal(servicesFor({ mode: 'open', model: 'm', similar: null }).similar, null);
+});
+
+test('the browser store scopes similar vectors to open mode', async () => {
+  const { browserStoreWithSuggestions } = await import('./app.js');
+  const client = {};
+  const similar = { model: 'e', id: 'abc', min: 0.75 };
+  let received = null;
+  browserStoreWithSuggestions({}, {
+    client,
+    similar,
+    createService(options) { received = options; return { update() {} }; },
+  });
+  assert.equal(received.client, client);
+  assert.deepEqual(received.config, { ...similar, owner: 'open' });
+});
+
+test('the account store scopes similar vectors to the signed-in username', async () => {
+  const { serverStore } = await import('./app.js');
+  const client = {};
+  const similar = { model: 'e', id: 'abc', min: 0.75 };
+  let received = null;
+  serverStore(async () => {}, () => {}, {
+    client,
+    similar,
+    owner: 'alice',
+    createService(options) { received = options; return { update() {} }; },
+  });
+  assert.equal(received.client, client);
+  assert.deepEqual(received.config, { ...similar, owner: 'alice' });
+});
+
 test('the accounts-mode store offers suggestions, stays persistent and leads to Sign in when the session ran out', async () => {
   const { serverStore } = await import('./app.js');
   const { RunError } = await import('./run-error.js');
@@ -255,6 +292,21 @@ test('accounts mode can sign in with a password with or without single sign-on',
     await signIn('ada', 'pw');
     assert.deepEqual(went, ['#/history']);
   }
+});
+
+test('signing out clears the account vectors before the store is replaced', async () => {
+  const { accountsActions } = await import('./app.js');
+  const order = [];
+  const services = {
+    mode: 'accounts', sso: null, user: { username: 'alice' },
+    client: { signOut: async () => order.push('server') },
+    store: { similar: { clear: async () => order.push('vectors') } },
+  };
+  const { signOut } = accountsActions(services, {
+    userChanged: async () => order.push('replace'), navigate: () => {}, asked: () => '#/ask', session: null,
+  });
+  await signOut();
+  assert.deepEqual(order, ['server', 'vectors', 'replace']);
 });
 
 test('signing out marks the tab as checked so no silent trip follows', async () => {
@@ -313,4 +365,25 @@ test('services carry the request size, 16 MB when the server does not name it', 
   const base = { mode: 'open', model: 'm', user: null, version: null, why: null };
   assert.equal(servicesFor({ ...base, max_request_bytes: 1048576 }).maxRequestBytes, 1048576);
   assert.equal(servicesFor(base).maxRequestBytes, 16 * 1024 * 1024);
+});
+
+test('Settings discloses the embedding model only when similarity is configured', async (t) => {
+  const { createSettingsView } = await import('./views/settings.js');
+  const previousWindow = globalThis.window;
+  globalThis.document = { createElement: fakeEl };
+  globalThis.window = { addEventListener() {}, removeEventListener() {} };
+  t.after(() => { globalThis.window = previousWindow; });
+  const root = { ...fakeEl('div'), classList: { add() {} } };
+  const view = createSettingsView();
+  view.mount(root, { mode: 'open', similar: { model: '<b>embedding</b>' } });
+  const section = root.children.find((node) => node.attrs?.['aria-labelledby'] === 'settings-similar');
+  assert.ok(section);
+  assert.equal(section.children[0].children[0], 'Similar questions');
+  assert.equal(section.children[1].children[0], 'Question texts go to the embedding model <b>embedding</b> so the guide can suggest options and scales from similar earlier questions. The resulting vectors are kept in this browser, not on the server.');
+  view.unmount();
+
+  const withoutSimilar = { ...fakeEl('div'), classList: { add() {} } };
+  view.mount(withoutSimilar, { mode: 'open', similar: null });
+  assert.equal(withoutSimilar.children.some((node) => node.attrs?.['aria-labelledby'] === 'settings-similar'), false);
+  view.unmount();
 });

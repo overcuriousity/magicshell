@@ -3,7 +3,7 @@ import test from 'node:test';
 import { detectMode } from './mode.js';
 
 const reply = (status, text) => async () => ({ ok: status >= 200 && status < 300, status, text: async () => text });
-const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false, pictures: null };
+const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false, pictures: null, similar: null };
 
 test('a missing server means no mode', async () => {
   const fetchFn = async () => {
@@ -20,9 +20,19 @@ test('an html 404 page means no mode', async () => {
 
 test('a server reports its mode', async () => {
   const body = JSON.stringify({ mode: 'accounts', model: 'm1', user: { username: 'ada' } });
-  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada', password: false }, version: null, why: null, sso: null, preheat: false, pictures: null });
+  assert.deepEqual(await detectMode(reply(200, body)), { mode: 'accounts', model: 'm1', user: { username: 'ada', password: false }, version: null, why: null, sso: null, preheat: false, pictures: null, similar: null });
   const open = JSON.stringify({ mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null });
-  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null, preheat: false, pictures: null });
+  assert.deepEqual(await detectMode(reply(200, open)), { mode: 'open', model: 'm1', user: null, version: '2026.11.4', why: null, sso: null, preheat: false, pictures: null, similar: null });
+});
+
+test('similar config survives detectMode and is null when absent or off', async () => {
+  const similar = { model: 'embedding', id: 'abc123', min: 0.75 };
+  const configured = JSON.stringify({ mode: 'open', model: 'm1', similar });
+  assert.deepEqual((await detectMode(reply(200, configured))).similar, similar);
+  for (const value of [undefined, null]) {
+    const body = JSON.stringify({ mode: 'open', model: 'm1', similar: value });
+    assert.equal((await detectMode(reply(200, body))).similar, null, JSON.stringify(value));
+  }
 });
 
 test('reads the why limit', async () => {

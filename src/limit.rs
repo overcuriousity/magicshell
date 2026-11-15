@@ -23,6 +23,10 @@ impl Limiter {
 
     /// Takes one token for `key`; false when the bucket is empty.
     pub fn take(&self, key: &str) -> bool {
+        self.take_n(key, 1)
+    }
+
+    pub fn take_n(&self, key: &str, count: u32) -> bool {
         // The guarded code leaves the map consistent even if it panics, so a poisoned lock keeps limiting.
         let mut map = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
@@ -37,8 +41,8 @@ impl Limiter {
         let entry = map.entry(key.to_owned()).or_insert((self.burst, now));
         let refilled = (entry.0 + now.duration_since(entry.1).as_secs_f64() * self.per_second).min(self.burst);
         entry.1 = now;
-        if refilled >= 1.0 {
-            entry.0 = refilled - 1.0;
+        if refilled >= f64::from(count) {
+            entry.0 = refilled - f64::from(count);
             true
         } else {
             entry.0 = refilled;
@@ -51,6 +55,16 @@ impl Limiter {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weighted_tokens_never_take_more_than_the_bucket() {
+        let limiter = Limiter::new(3);
+        assert!(limiter.take_n("a", 2));
+        assert!(limiter.take_n("a", 1));
+        assert!(!limiter.take_n("a", 1));
+        assert!(!limiter.take_n("b", 4));
+        assert!(limiter.take_n("b", 3));
+    }
 
     #[test]
     fn a_poisoned_lock_keeps_limiting() {

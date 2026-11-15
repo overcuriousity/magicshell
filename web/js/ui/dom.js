@@ -5,11 +5,13 @@
 export const present = (nodes) => nodes.filter((n) => n != null && n !== false);
 
 // Where the caret is in a text field, to put it back on the field a rebuild puts in its place;
-// null for anything without one.
-export function caretOf(el) {
+// null for anything without one. An uncontrolled draft also needs its value restored before the caret.
+export function caretOf(el, { value = false } = {}) {
   try {
     if (el == null || typeof el.selectionStart !== 'number') return null;
-    return { start: el.selectionStart, end: el.selectionEnd, scroll: el.scrollTop ?? 0 };
+    const caret = { start: el.selectionStart, end: el.selectionEnd, scroll: el.scrollTop ?? 0 };
+    if (value) caret.value = el.value;
+    return caret;
   } catch {
     return null;
   }
@@ -17,6 +19,7 @@ export function caretOf(el) {
 export function restoreCaret(el, caret) {
   if (!el || !caret) return;
   try {
+    if (Object.hasOwn(caret, 'value')) el.value = caret.value;
     el.setSelectionRange(caret.start, caret.end);
     el.scrollTop = caret.scroll;
   } catch {

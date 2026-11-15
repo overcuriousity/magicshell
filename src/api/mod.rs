@@ -1,5 +1,6 @@
 pub mod auth;
 mod config;
+mod embed;
 mod history;
 mod oidc;
 mod run;
@@ -14,19 +15,21 @@ use axum::routing::{get, post, put};
 use sqlx::SqlitePool;
 use tower_http::limit::RequestBodyLimitLayer;
 
+use crate::embed::Embedding;
 use crate::kit::oidc::Oidc;
 use crate::kit::security::rate_limit;
 use crate::limit::Limiter;
 use crate::preheat::Preheat;
 use crate::upstream::Upstream;
 
-/// The body of the routes that carry no run: sign-in, password, sign-out, preheat.
+/// The body of the routes that carry no run: sign-in, password, sign-out, preheat, embeddings.
 const BODY_BYTES: usize = 64 * 1024;
 
 pub struct ApiState {
     pub upstream: Upstream,
     pub limiter: Limiter,
     pub model: String,
+    pub similar: Option<Similar>,
     /// The accounts database; `None` is open mode.
     pub pool: Option<SqlitePool>,
     /// "Why?": accounts mode only, and only while its word limit is above 0.
@@ -48,12 +51,23 @@ pub struct Why {
     pub max_words: u32,
 }
 
+pub struct Similar {
+    pub model: String,
+    pub id: String,
+    pub min: f64,
+    pub upstream: Embedding,
+    pub limiter: Limiter,
+}
+
 pub fn router(state: Arc<ApiState>) -> Router {
     // Routes that carry no run keep the small limit; the rest take `[app] max_request_mb`.
     let mut small = Router::new();
     let mut large = Router::new().route("/api/run", post(run::post));
     if state.preheat.is_some() {
         small = small.route("/api/preheat", post(run::preheat));
+    }
+    if state.similar.is_some() {
+        small = small.route("/api/embed", post(embed::post));
     }
     if state.pool.is_some() {
         small = small

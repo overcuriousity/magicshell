@@ -10,9 +10,10 @@ use axum::response::Response;
 use axum::routing::get;
 use sqlx::SqlitePool;
 
-use crate::api::{self, ApiState, Why};
+use crate::api::{self, ApiState, Similar, Why};
 use crate::assets;
 use crate::config::AppConfig;
+use crate::embed::Embedding;
 use crate::error::AppError;
 use crate::kit::config::OcConfig;
 use crate::kit::oidc::Oidc;
@@ -56,11 +57,26 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
     // Accounts mode only: the route then needs a session, so nobody unknown can make upstream requests.
     let preheat = (pool.is_some() && app.preheat).then(Preheat::new);
     let max_body_bytes = app.max_request_mb as usize * 1024 * 1024;
+    let similar = app
+        .embedding()
+        .map(|e| {
+            let upstream = Embedding::new(e.endpoint, e.api_key, e.model.clone(), e.prefix, timeout)?
+                .with_max_reply_bytes(max_body_bytes);
+            Ok::<Similar, AppError>(Similar {
+                model: e.model,
+                id: e.id,
+                min: e.min_similarity,
+                upstream,
+                limiter: Limiter::new(e.per_minute),
+            })
+        })
+        .transpose()?;
     let state = Arc::new(ApiState {
         upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?
             .with_max_reply_bytes(max_body_bytes),
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
+        similar,
         max_pictures: app.max_pictures.map(|n| n as usize),
         picture_max_edge: app.picture_max_edge,
         max_body_bytes,

@@ -294,7 +294,12 @@ export function servicesFor(config) {
   const takes = p && (p.max === null || (Number.isInteger(p.max) && p.max > 0)) && Number.isInteger(p.edge);
   const requestBytes = Number.isInteger(config.max_request_bytes) ? config.max_request_bytes : DEFAULT_REQUEST_BYTES;
   const pictures = takes ? { max: p.max ?? Infinity, edge: p.edge, budget: Math.floor((requestBytes * 3) / 4) - 64 * 1024 } : null;
-  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures, maxRequestBytes: requestBytes };
+  const s = config.similar;
+  const similar = s && typeof s.model === 'string' && s.model && typeof s.id === 'string' && s.id
+    && typeof s.min === 'number' && Number.isFinite(s.min) && s.min >= 0 && s.min <= 1
+    ? { model: s.model, id: s.id, min: s.min }
+    : null;
+  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures, maxRequestBytes: requestBytes, similar };
 }
 
 // Every store call that fails because the session ran out calls onAuthLost, and still fails.
@@ -311,19 +316,36 @@ const signInOnAuth = (store, onAuthLost) => {
 };
 
 // The open-mode store. History the browser store trims to make room leaves the suggestions too.
-export const browserStoreWithSuggestions = (storage, { onNotSaving, onTrimmed = () => {} } = {}) => {
+export const browserStoreWithSuggestions = (storage, {
+  onNotSaving,
+  onTrimmed = () => {},
+  client = null,
+  similar = null,
+  createService,
+} = {}) => {
   let wrapped = null;
   const refreshing = (n) => {
     onTrimmed(n);
     wrapped?.suggest.refresh();
   };
-  wrapped = withSuggestions(createBrowserStore(storage, { onNotSaving, onTrimmed: refreshing }));
+  wrapped = withSuggestions(createBrowserStore(storage, { onNotSaving, onTrimmed: refreshing }), {
+    similar: similar ? { client, config: { ...similar, owner: 'open' } } : null,
+    createService,
+  });
   return wrapped;
 };
 
 // The accounts-mode store. Suggestions go outside: the auth wrap copies functions only, so the
 // other way round would drop `suggest` and leave every field plain.
-export const serverStore = (fetchFn, onAuthLost) => withSuggestions(signInOnAuth(createServerStore(fetchFn), onAuthLost));
+export const serverStore = (fetchFn, onAuthLost, {
+  client = null,
+  similar = null,
+  owner = null,
+  createService,
+} = {}) => withSuggestions(signInOnAuth(createServerStore(fetchFn), onAuthLost), {
+  similar: similar ? { client, config: { ...similar, owner } } : null,
+  createService,
+});
 
 // What Sign in and Sign out do in accounts mode. A password sign-in exists with or without single
 // sign-on; the provider's own sign-in is a link on the page.
@@ -336,6 +358,7 @@ export const accountsActions = (services, { userChanged, navigate, asked, sessio
   },
   signOut: async () => {
     await services.client.signOut();
+    await services.store?.similar?.clear();
     // Nothing one user entered or handed over stays for the next.
     forget(ENTERED);
     forgetPictures();
@@ -400,11 +423,26 @@ async function boot(shell) {
   const userChanged = async () => {
     const now = await detectMode(fetchFn);
     services.user = now.mode === 'accounts' ? now.user : null;
-    services.store = serverStore(fetchFn, onAuthLost);
+    services.store = serverStore(fetchFn, onAuthLost, {
+      client: services.client,
+      similar: services.similar,
+      owner: services.user?.username,
+    });
   };
 
   services.client = createServerClient(fetchFn, undefined, { maxBytes: services.maxRequestBytes });
-  services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : browserStoreWithSuggestions(kept, { onNotSaving: warnNotSaving, onTrimmed: warnTrimmed });
+  services.store = mode === 'accounts'
+    ? serverStore(fetchFn, onAuthLost, {
+      client: services.client,
+      similar: services.similar,
+      owner: services.user?.username,
+    })
+    : browserStoreWithSuggestions(kept, {
+      onNotSaving: warnNotSaving,
+      onTrimmed: warnTrimmed,
+      client: services.client,
+      similar: services.similar,
+    });
   if (mode === 'accounts') {
     Object.assign(services, accountsActions(services, { userChanged, navigate, asked: () => shellApi.asked(), session }));
   }
