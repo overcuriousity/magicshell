@@ -77,11 +77,7 @@ test('percent shows whole percents', () => {
 
 test('score: level text, marker, ends and one bar per level', () => {
   const el = scoreResult(score, scoreAnswer, {});
-  const name = all(el, (n) => cls(n) === 'ms-pick__name')[0];
-  assert.equal(name.getAttribute('data-oc-tip'), 'step 3.2 of 4');
-  assert.equal(name.getAttribute('tabindex'), '0');
-  assert.equal(name.textContent, 'Today, step 3.2 of 4');
-  assert.doesNotMatch(el.textContent, /2\.2/);
+  assert.equal(all(el, (n) => cls(n) === 'ms-pick__name')[0].textContent, 'Today \u00b7 step 3.2 of 4');
   assert.equal(bars(el).length, 4);
   assert.equal(all(el, (n) => cls(n) === 'ms-mark')[0].vars.get('--at'), '68.2%');
   const ends = all(el, (n) => cls(n) === 'ms-ends')[0];

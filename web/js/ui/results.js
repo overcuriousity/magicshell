@@ -20,15 +20,11 @@ function setWidth(el, p) {
   return el;
 }
 
-// `exact`, for a score, is its exact place: a tooltip on hover or focus and read out after the name.
-function pickLine(name, confidence, opts, exact = null) {
-  const label = exact
-    ? h('span', { class: 'ms-pick__name', tabindex: '0', 'data-oc-tip': exact }, name, h('span', { class: 'oc-sr-only' }, `, ${exact}`))
-    : h('span', { class: 'ms-pick__name' }, name);
+function pickLine(name, confidence, opts) {
   return h(
     'div',
     { class: 'ms-pick' },
-    label,
+    h('span', { class: 'ms-pick__name' }, name),
     h('span', { class: 'ms-pick__meta' }, `confidence ${num(confidence, opts)}`),
   );
 }
@@ -80,7 +76,7 @@ export function scoreResult(question, answer, opts = {}) {
   return h(
     'div',
     { class: 'ms-answer' },
-    pickLine(texts[nearest], answer.confidence, opts, stepPlace(answer.score, count)),
+    pickLine(`${texts[nearest]} · ${stepPlace(answer.score, count)}`, answer.confidence, opts),
     mark,
     h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: color(i) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),

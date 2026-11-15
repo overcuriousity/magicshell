@@ -592,6 +592,7 @@ button.ms-why__w:hover { text-decoration: underline dotted; text-underline-offse
 .ms-pictures__hint { display: none; color: var(--color-fg-secondary); font-size: var(--text-ui); }
 @container app (min-width: 48rem) { .ms-pictures__hint { display: inline; } }
 @media (pointer: coarse) { .ms-pictures__hint { display: none; } }
+@media not (pointer: coarse) { .ms-pictures__camera { display: none; } }
 .ms-pictures__line, .ms-thumbs__size, .ms-io__note, .ms-asked-pictures__none { margin: 0; color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
 /* The note of a run that reads pictures sits on its own line above the buttons. */
 .ms-guide__actions { flex-wrap: wrap; }
