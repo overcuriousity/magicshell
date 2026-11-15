@@ -55,12 +55,15 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
     let oidc = app.oidc.as_ref().map(|o| Oidc::new(o, &dep)).transpose()?;
     // Accounts mode only: the route then needs a session, so nobody unknown can make upstream requests.
     let preheat = (pool.is_some() && app.preheat).then(Preheat::new);
+    let max_body_bytes = app.max_request_mb as usize * 1024 * 1024;
     let state = Arc::new(ApiState {
-        upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?,
+        upstream: Upstream::new(app.endpoint, app.api_key, app.model.clone(), timeout)?
+            .with_max_reply_bytes(max_body_bytes),
         limiter: Limiter::new(app.runs_per_minute),
         model: app.model,
         max_pictures: app.max_pictures as usize,
         picture_max_edge: app.picture_max_edge,
+        max_body_bytes,
         pool,
         why,
         oidc,
@@ -71,8 +74,8 @@ pub async fn build(cfg: &OcConfig, app: AppConfig, pool: Option<SqlitePool>) -> 
         api = api.layer(sessions);
     }
     let router = Router::new().route("/healthz", get(|| async { "ok" })).merge(api).fallback(assets::serve);
-    // The widest body any route takes; `api::router` keeps every route but `/api/run` at 64 KB.
-    let limits = Limits { body_bytes: api::RUN_BODY_BYTES, timeout: timeout + Duration::from_secs(15) };
+    // The widest body any route takes; `api::router` keeps the routes that carry no run at 64 KB.
+    let limits = Limits { body_bytes: max_body_bytes, timeout: timeout + Duration::from_secs(15) };
     Ok(secure(router, &dep, &cfg.trusted_proxies, limits).layer(from_fn(too_large_sentence)))
 }
 

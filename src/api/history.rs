@@ -23,9 +23,6 @@ use crate::systemone::Run;
 const MAX_PICTURES: usize = 4;
 
 const MAX_ENTRIES: i64 = 500;
-const MAX_STORED: usize = 64 * 1024;
-/// The kept Why? part, measured on its own so the whole request stays under the 64 KB body limit.
-const MAX_WHY: usize = 40 * 1024;
 /// A preview is a small JPEG data URL; an entry has at most one per picture of a run.
 const MAX_PREVIEW_CHARS: usize = 4000;
 const PREVIEW_PREFIX: &str = "data:image/jpeg;base64,";
@@ -86,10 +83,6 @@ struct WhyQuestion {
 }
 
 fn check_why(why: &Value, run: &Run) -> Result<(), AppError> {
-    let size = serde_json::to_string(why).map_err(OcError::internal)?.len();
-    if size > MAX_WHY {
-        return Err(AppError::Invalid("The kept Why? result of this entry is too large to keep.".into()));
-    }
     let bad = || AppError::Invalid("The kept Why? result of this entry is not valid.".into());
     let part: WhyPart = serde_json::from_value(why.clone()).map_err(|_| bad())?;
     let done = part.done as usize;
@@ -160,12 +153,6 @@ pub async fn put(
     }
     let pictures = entry.pictures.as_deref().unwrap_or_default();
     check_pictures(pictures)?;
-    let stored = serde_json::to_string(&entry.run).map_err(OcError::internal)?.len()
-        + serde_json::to_string(&entry.reply).map_err(OcError::internal)?.len()
-        + serde_json::to_string(pictures).map_err(OcError::internal)?.len();
-    if stored > MAX_STORED {
-        return Err(AppError::Invalid("This entry is too large to keep.".into()));
-    }
     if let Some(why) = &entry.why {
         check_why(why, &entry.run)?;
     }

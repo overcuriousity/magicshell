@@ -18,7 +18,6 @@ use crate::systemone::{Question, Run};
 
 const MAX_SETUPS: i64 = 100;
 const MAX_NAME: usize = 60;
-const MAX_STATE: usize = 8000;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -30,7 +29,7 @@ pub struct Setup {
 }
 
 impl Setup {
-    /// Name first, then the sample situation, then the questions like a run (an empty question
+    /// Name first, then the questions like a run (an empty question
     /// text is allowed: the built-in "Yes or no" setup has one).
     fn validate(&self) -> Result<(), AppError> {
         let name = self.name.trim();
@@ -39,9 +38,6 @@ impl Setup {
         }
         if name.chars().count() > MAX_NAME {
             return Err(AppError::Invalid("Keep the setup name to 60 characters or fewer.".into()));
-        }
-        if self.sample_state.chars().count() > MAX_STATE {
-            return Err(AppError::Invalid("Shorten the situation to 8,000 characters or fewer.".into()));
         }
         Run { state: String::new(), images: Vec::new(), questions: self.questions.clone() }.validate_questions(true)
     }

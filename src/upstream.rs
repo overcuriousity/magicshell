@@ -26,9 +26,11 @@ pub struct Upstream {
     url: String,
     key: Option<Secret>,
     model: String,
+    max_reply_bytes: usize,
 }
 
-/// System One replies are a few KB; a longer body is not read to its end.
+/// System One replies are a few KB; a longer body is not read to its end. A server sets its own
+/// with [`Upstream::with_max_reply_bytes`].
 const MAX_REPLY_BYTES: usize = 1024 * 1024;
 
 fn upstream_error(sentence: &str) -> AppError {
@@ -88,10 +90,10 @@ fn refusal(bytes: &[u8]) -> Option<String> {
     Some(message)
 }
 
-async fn read_capped(mut response: reqwest::Response, pictures: bool) -> Result<Vec<u8>, AppError> {
+async fn read_capped(mut response: reqwest::Response, max: usize, pictures: bool) -> Result<Vec<u8>, AppError> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| transport_error(&e, pictures))? {
-        if bytes.len() + chunk.len() > MAX_REPLY_BYTES {
+        if bytes.len() + chunk.len() > max {
             return Err(upstream_error(
                 "The model endpoint sent an answer that is too large. Check the server configuration.",
             ));
@@ -108,7 +110,14 @@ impl Upstream {
                 |_| upstream_error("The model endpoint client could not be set up. Check the server configuration."),
             )?;
         let url = format!("{}/systemone", endpoint.as_str().trim_end_matches('/'));
-        Ok(Self { client, url, key, model })
+        Ok(Self { client, url, key, model, max_reply_bytes: MAX_REPLY_BYTES })
+    }
+
+    /// The longest answer read from the endpoint.
+    #[must_use]
+    pub fn with_max_reply_bytes(mut self, bytes: usize) -> Self {
+        self.max_reply_bytes = bytes;
+        self
     }
 
     pub async fn run(&self, run: &Run) -> Result<Reply, AppError> {
@@ -124,7 +133,7 @@ impl Upstream {
         let started = Instant::now();
         let response = request.send().await.map_err(|e| transport_error(&e, pictures))?;
         let status = response.status();
-        let bytes = read_capped(response, pictures).await?;
+        let bytes = read_capped(response, self.max_reply_bytes, pictures).await?;
         let upstream_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         if matches!(status.as_u16(), 400 | 422)
             && let Some(message) = refusal(&bytes)

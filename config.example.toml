@@ -22,7 +22,7 @@ model = "decision-model"
 # database = "magicshell.db"
 # Questions one client may ask per minute (burst is the same number). Environment: MAGICSHELL__APP__RUNS_PER_MINUTE
 runs_per_minute = 60
-# Longest situation "Why?" accepts, in words; 0 turns "Why?" off. Well above 300 words a result over many questions can become too large to keep. Environment: MAGICSHELL__APP__WHY_MAX_WORDS
+# Longest situation "Why?" accepts, in words; 0 turns "Why?" off. Well above 300 words a result over many questions grows large. Environment: MAGICSHELL__APP__WHY_MAX_WORDS
 why_max_words = 300
 # "Why?" questions one user may ask per minute, counted apart from runs (burst is the same number). Environment: MAGICSHELL__APP__WHY_PER_MINUTE
 why_per_minute = 600
@@ -32,6 +32,8 @@ preheat = true
 upstream_timeout_secs = 60
 # Pictures one question may carry, 0 to 4; 0 turns pictures off, for a model that cannot read them. Environment: MAGICSHELL__APP__MAX_PICTURES
 max_pictures = 4
+# Largest request in MB the server reads (a run with its pictures, a Why? question, a history entry, a setup) and largest answer it reads from the model, 1 to 1024. Behind nginx, set client_max_body_size to the same. Environment: MAGICSHELL__APP__MAX_REQUEST_MB
+max_request_mb = 16
 # Longest edge in pixels a picture is shrunk to in the browser before it is sent, 256 to 2048. Larger is slower: the model spends about one token per 1000 pixels. Environment: MAGICSHELL__APP__PICTURE_MAX_EDGE
 picture_max_edge = 768
 

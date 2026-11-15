@@ -92,37 +92,61 @@ async fn pictures_are_refused_when_turned_off() {
 }
 
 #[tokio::test]
-async fn run_takes_a_large_body_and_other_routes_do_not() {
+async fn max_request_mb_bounds_runs_and_what_is_kept_and_sign_in_stays_small() {
     let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
-    let app = spawn_against(ACCOUNTS, &fake).await;
+    let app = spawn_against(&format!("{ACCOUNTS}max_request_mb = 1\n"), &fake).await;
     add_user(&app, "ada", PASSWORD).await;
     let cookie = sign_in(&app, "ada", PASSWORD).await;
 
     let mut run = run_with(0);
-    run["images"] = json!([picture(290 * 1024), picture(290 * 1024)]);
-    assert!(run.to_string().len() > 700 * 1024);
+    run["state"] = json!("y".repeat(900 * 1024));
     assert_eq!(post_json(&app, "/api/run", &run, Some(&cookie)).await.status(), 200);
 
-    let big = json!({ "x": "y".repeat(65 * 1024) });
-    for path in ["/api/why", "/api/auth/password"] {
-        let res = post_json(&app, path, &big, Some(&cookie)).await;
-        assert_eq!(res.status(), 413, "{path}");
-        assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.", "{path}");
+    // Over the old 64 KB but under the setting: refused for its content, never for its size.
+    let mid = json!({ "x": "y".repeat(300 * 1024) });
+    assert_ne!(post_json(&app, "/api/why", &mid, Some(&cookie)).await.status(), 413);
+    for path in ["/api/history/abc", "/api/setups/abc"] {
+        let res = app
+            .client
+            .put(format!("{}{path}", app.base))
+            .header("origin", &app.base)
+            .header("cookie", &cookie)
+            .json(&mid)
+            .send()
+            .await
+            .unwrap();
+        assert_ne!(res.status(), 413, "{path}");
     }
-    let res = app
-        .client
-        .put(format!("{}/api/history/abc", app.base))
-        .header("origin", &app.base)
-        .header("cookie", &cookie)
-        .json(&big)
-        .send()
-        .await
-        .unwrap();
+    let small = json!({ "x": "y".repeat(65 * 1024) });
+    let res = post_json(&app, "/api/auth/password", &small, Some(&cookie)).await;
     assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
 
     let mut huge = run_with(0);
-    huge["state"] = json!("y".repeat(961 * 1024));
-    assert_eq!(post_json(&app, "/api/run", &huge, Some(&cookie)).await.status(), 413);
+    huge["state"] = json!("y".repeat(1100 * 1024));
+    let res = post_json(&app, "/api/run", &huge, Some(&cookie)).await;
+    assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
+}
+
+#[tokio::test]
+async fn the_config_names_the_request_size() {
+    let fake = fake_upstream(vec![]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
+    assert_eq!(body["max_request_bytes"], json!(16 * 1024 * 1024));
+}
+
+#[test]
+fn max_request_mb_defaults_to_16_and_refuses_0_and_1025() {
+    assert_eq!(app_config("").unwrap().max_request_mb, 16);
+    assert_eq!(app_config("max_request_mb = 1024\n").unwrap().max_request_mb, 1024);
+    for mb in [0, 1025] {
+        assert_eq!(
+            app_config(&format!("max_request_mb = {mb}\n")).unwrap_err(),
+            "Invalid [app] configuration: max_request_mb must be 1 to 1024."
+        );
+    }
 }
 
 #[tokio::test]
