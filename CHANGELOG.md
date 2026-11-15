@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.15] - 2026-11-15
+
+### Fixed
+
+- The guided view no longer sends a choice question without options, which the model endpoint refused; Ask now says "Add at least one option." Suggested options count only once picked.
+
 ## [2026.11.14] - 2026-11-15
 
 ### Added
