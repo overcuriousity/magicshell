@@ -365,7 +365,7 @@ export function createGuidedView() {
     const ended = trackBusy(state);
     const fid = root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null;
     // A picture arriving rebuilds the step under a field being typed in: the caret goes back too.
-    const caret = fid ? caretOf(document.activeElement) : null;
+    const caret = fid ? caretOf(document.activeElement, { value: fid === 'option-new' }) : null;
     // The heading is rebuilt with the body (the history save lands after the result shows), so
     // focus on it has to follow to the new one.
     const headingFocused = document.activeElement === root.querySelector('h1');
