@@ -84,6 +84,82 @@ const OIDC: &str =
     "[auth.oidc]\nissuer = \"https://cloud.example\"\nclient_id = \"magicshell\"\nclient_secret = \"s\"\n";
 
 #[test]
+fn embedding_is_off_without_a_model() {
+    assert!(AppConfig::from_config(&cfg(APP)).unwrap().embedding().is_none());
+}
+
+#[test]
+fn embedding_defaults_to_the_decision_endpoint_key_and_other_defaults() {
+    let toml = format!("{APP}embedding_model = \"embeddinggemma:300m\"\n");
+    let app = AppConfig::from_config(&cfg(&toml)).unwrap();
+    let e = app.embedding().unwrap();
+    assert_eq!(e.endpoint.as_str(), "https://m.example/v1");
+    assert_eq!(e.prefix, "");
+    assert_eq!(e.min_similarity, 0.75);
+    assert_eq!(e.per_minute, 600);
+}
+
+#[test]
+fn a_separate_endpoint_never_inherits_the_decision_key() {
+    let base = "[app]\nendpoint = \"https://m.example/v1\"\nmodel = \"m\"\napi_key = \"main-secret\"\n";
+    let same = AppConfig::from_config(&cfg(&format!("{base}embedding_model = \"e\"\n"))).unwrap();
+    assert_eq!(same.embedding().unwrap().api_key.unwrap().expose(), "main-secret");
+    let separate = AppConfig::from_config(&cfg(&format!(
+        "{base}embedding_model = \"e\"\nembedding_endpoint = \"https://e.example/v1\"\n"
+    )))
+    .unwrap();
+    assert!(separate.embedding().unwrap().api_key.is_none());
+}
+
+#[test]
+fn an_explicit_embedding_key_and_its_file_form_are_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let secret = dir.path().join("embedding-key");
+    std::fs::write(&secret, "file-secret\n").unwrap();
+    let base =
+        format!("{APP}embedding_model = \"e\"\nembedding_endpoint = \"https://e.example/v1\"\nembedding_api_key = ");
+    let explicit = AppConfig::from_config(&cfg(&format!("{base}\"explicit-secret\"\n"))).unwrap();
+    assert_eq!(explicit.embedding().unwrap().api_key.unwrap().expose(), "explicit-secret");
+    let from_file = AppConfig::from_config(&cfg(&format!("{base}\"file://{}\"\n", secret.display()))).unwrap();
+    assert_eq!(from_file.embedding().unwrap().api_key.unwrap().expose(), "file-secret");
+}
+
+#[test]
+fn embedding_id_tracks_model_endpoint_and_prefix() {
+    let make = |extra: &str| {
+        let toml = format!("{APP}embedding_model = \"e\"\n{extra}");
+        AppConfig::from_config(&cfg(&toml)).unwrap().embedding().unwrap().id
+    };
+    let plain = make("");
+    assert_ne!(plain, make("embedding_prefix = \"query: \"\n"));
+    assert_ne!(plain, make("embedding_endpoint = \"https://other.example/v1\"\n"));
+    let other_model =
+        AppConfig::from_config(&cfg(&format!("{APP}embedding_model = \"other\"\n"))).unwrap().embedding().unwrap().id;
+    assert_ne!(plain, other_model);
+    assert!(!plain.contains("m.example"));
+}
+
+#[test]
+fn empty_embedding_models_and_similarity_outside_zero_to_one_are_refused() {
+    for extra in [
+        "embedding_model = \" \"\n",
+        "embedding_model = \"e\"\nembedding_min_similarity = -0.1\n",
+        "embedding_model = \"e\"\nembedding_min_similarity = 1.1\n",
+    ] {
+        assert!(AppConfig::from_config(&cfg(&format!("{APP}{extra}"))).is_err());
+    }
+}
+
+#[test]
+fn non_finite_embedding_similarity_is_refused_with_the_key_name() {
+    for similarity in ["nan", "inf", "-inf"] {
+        let toml = format!("{APP}embedding_model = \"e\"\nembedding_min_similarity = {similarity}\n");
+        let error = AppConfig::from_config(&cfg(&toml)).unwrap_err();
+        assert!(error.to_string().contains("embedding_min_similarity"), "{error}");
+    }
+}
+
+#[test]
 fn the_oidc_section_is_read_with_its_defaults() {
     let c = cfg(&format!("{APP}{OIDC}"));
     let oidc = AppConfig::from_config(&c).unwrap().oidc.unwrap();

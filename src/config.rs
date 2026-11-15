@@ -1,3 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use serde::Deserialize;
 use url::Url;
 
@@ -13,6 +16,14 @@ fn why_max_words() -> u32 {
 }
 
 fn why_per_minute() -> u32 {
+    600
+}
+
+fn embedding_min_similarity() -> f64 {
+    0.75
+}
+
+fn embeds_per_minute() -> u32 {
     600
 }
 
@@ -32,6 +43,17 @@ fn picture_max_edge() -> u32 {
     768
 }
 
+#[derive(Debug, Clone)]
+pub struct EmbeddingConfig {
+    pub model: String,
+    pub endpoint: Url,
+    pub api_key: Option<Secret>,
+    pub prefix: String,
+    pub min_similarity: f64,
+    pub per_minute: u32,
+    pub id: String,
+}
+
 /// The `[app]` section. `endpoint` and `model` have no default.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,6 +62,18 @@ pub struct AppConfig {
     pub endpoint: Url,
     pub api_key: Option<Secret>,
     pub model: String,
+    #[serde(default)]
+    pub embedding_model: Option<String>,
+    #[serde(default)]
+    pub embedding_endpoint: Option<Url>,
+    #[serde(default)]
+    pub embedding_api_key: Option<Secret>,
+    #[serde(default)]
+    pub embedding_prefix: String,
+    #[serde(default = "embedding_min_similarity")]
+    pub embedding_min_similarity: f64,
+    #[serde(default = "embeds_per_minute")]
+    pub embeds_per_minute: u32,
     /// Path of the SQLite file for accounts mode; absent means open mode.
     pub database: Option<String>,
     #[serde(default = "runs_per_minute")]
@@ -82,6 +116,14 @@ impl AppConfig {
         if app.model.trim().is_empty() {
             return Err(OcError::Config("Invalid [app] configuration: `model` must not be empty.".into()));
         }
+        if app.embedding_model.as_deref().is_some_and(|model| model.trim().is_empty()) {
+            return Err(OcError::Config("Invalid [app] configuration: `embedding_model` must not be empty.".into()));
+        }
+        if !app.embedding_min_similarity.is_finite() || !(0.0..=1.0).contains(&app.embedding_min_similarity) {
+            return Err(OcError::Config(
+                "Invalid [app] configuration: `embedding_min_similarity` must be finite and between 0 and 1.".into(),
+            ));
+        }
         if !(1..=1024).contains(&app.max_request_mb) {
             return Err(OcError::Config("Invalid [app] configuration: max_request_mb must be 1 to 1024.".into()));
         }
@@ -100,5 +142,27 @@ impl AppConfig {
         }
         app.oidc = cfg.auth.oidc.clone();
         Ok(app)
+    }
+
+    pub fn embedding(&self) -> Option<EmbeddingConfig> {
+        let model = self.embedding_model.clone()?;
+        let endpoint = self.embedding_endpoint.clone().unwrap_or_else(|| self.endpoint.clone());
+        let api_key =
+            if self.embedding_endpoint.is_some() { self.embedding_api_key.clone() } else { self.api_key.clone() };
+        let prefix = self.embedding_prefix.clone();
+        let mut hasher = DefaultHasher::new();
+        model.hash(&mut hasher);
+        endpoint.as_str().hash(&mut hasher);
+        prefix.hash(&mut hasher);
+        let id = format!("{:016x}", hasher.finish());
+        Some(EmbeddingConfig {
+            model,
+            endpoint,
+            api_key,
+            prefix,
+            min_similarity: self.embedding_min_similarity,
+            per_minute: self.embeds_per_minute,
+            id,
+        })
     }
 }

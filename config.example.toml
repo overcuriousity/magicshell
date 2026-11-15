@@ -10,7 +10,8 @@ trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # data_dir = "/var/lib/magicshell"
 
 [app]
-# Base address of the model endpoint (required). The server calls <endpoint>/systemone and nothing else.
+# Base address of the model endpoint (required). The server calls <endpoint>/systemone, and
+# <endpoint>/embeddings when embedding_model is set.
 # Environment: MAGICSHELL__APP__ENDPOINT
 endpoint = "https://models.example.org/v1"
 # The model to ask (required). Visitors cannot choose another one. Environment: MAGICSHELL__APP__MODEL
@@ -36,6 +37,25 @@ upstream_timeout_secs = 60
 max_request_mb = 16
 # Longest edge in pixels a picture is shrunk to in the browser before it is sent, 256 to 2048. Larger is slower: the model spends about one token per 1000 pixels. Environment: MAGICSHELL__APP__PICTURE_MAX_EDGE
 picture_max_edge = 768
+
+# Model for finding similar questions; unset turns embedding off (the default).
+# Environment: MAGICSHELL__APP__EMBEDDING_MODEL or MAGICSHELL__APP__EMBEDDING_MODEL_FILE
+# embedding_model = "embeddinggemma:300m"
+# Base address for embeddings; defaults to endpoint. A separate endpoint uses only embedding_api_key, never api_key.
+# Environment: MAGICSHELL__APP__EMBEDDING_ENDPOINT or MAGICSHELL__APP__EMBEDDING_ENDPOINT_FILE
+# embedding_endpoint = "https://models.example.org/v1"
+# Bearer key for a separate embedding_endpoint; without one, api_key is used instead. "file:///run/secrets/key" reads it from a file.
+# Environment: MAGICSHELL__APP__EMBEDDING_API_KEY or MAGICSHELL__APP__EMBEDDING_API_KEY_FILE
+# embedding_api_key = "file:///run/secrets/magicshell-embedding-key"
+# Text prepended to each question before embedding; the default is empty.
+# Environment: MAGICSHELL__APP__EMBEDDING_PREFIX or MAGICSHELL__APP__EMBEDDING_PREFIX_FILE
+# embedding_prefix = "task: sentence similarity | query: "
+# Minimum similarity for similar questions, 0 to 1; the default is 0.75.
+# Environment: MAGICSHELL__APP__EMBEDDING_MIN_SIMILARITY or MAGICSHELL__APP__EMBEDDING_MIN_SIMILARITY_FILE
+# embedding_min_similarity = 0.75
+# Embedding requests one client may make per minute (burst is the same number); the default is 600.
+# Environment: MAGICSHELL__APP__EMBEDS_PER_MINUTE or MAGICSHELL__APP__EMBEDS_PER_MINUTE_FILE
+# embeds_per_minute = 600
 
 # Single sign-on through an OpenID Connect provider. When present, the page first checks silently whether the person is signed in at the provider, and the sign-in page offers a button beside the password form; it needs database under [app].
 # Redirect URI to register: scheme, host and port of public_url, then /auth/oidc/callback
