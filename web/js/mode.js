@@ -1,5 +1,5 @@
 // Which way the server runs: open or accounts. Without its server the app has no mode (null).
-const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false, pictures: null };
+const NO_SERVER = { mode: null, model: null, user: null, version: null, why: null, sso: null, preheat: false, pictures: null, similar: null };
 
 export async function detectMode(fetchFn) {
   try {
@@ -17,7 +17,7 @@ export async function detectMode(fetchFn) {
     // Pictures: how many a run may carry and the edge they are shrunk to; null when the server takes none.
     const { max, edge } = body.pictures ?? {};
     const pictures = Number.isInteger(max) && max > 0 && Number.isInteger(edge) && edge > 0 ? { max, edge } : null;
-    return { mode: body.mode, model: text(body.model), user, version: text(body.version), why, sso, preheat: body.preheat === true, pictures };
+    return { mode: body.mode, model: text(body.model), user, version: text(body.version), why, sso, preheat: body.preheat === true, pictures, similar: body.similar ?? null };
   } catch {
     return NO_SERVER;
   }
