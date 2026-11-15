@@ -23,7 +23,7 @@ magicshell sets no limit of its own on a request: how many questions, options or
 - **Why?** (accounts mode): after a result, ask the model again once per word of the situation with that word left out. Words are marked by how far their absence moved the answer: shade for strength, two colours for direction, ⇄ where the answer flips; the numbers show on hover, tap or focus. It costs one extra call per word, can be stopped, and is kept with the run in History. Offered in the guided view, the bench (baseline only) and a History entry.
 - **Pictures**: beside the situation text, or instead of it, as many as the server allows (no limit unless `max_pictures` is set). On a touch screen "Take photo" opens the camera and "Add picture" the gallery or files; on a desktop pictures can also be dropped on the situation or pasted into it. Each picture is shrunk in the browser to a JPEG of at most 768 px on its longer edge before it is sent, which also removes its location and camera data. History keeps a small preview of each, not the picture: a run opened again from History is a draft that needs its pictures added again. "Why?" is not offered for runs with pictures. The model endpoint must be able to read pictures (for llama.cpp: started with its vision projector), and reading them takes seconds, more so when the projector runs on the CPU.
 - **Setups**: ready-made and your own, exported and imported as JSON. **History**: every run, reopened, run again or loaded as baseline.
-- **Suggestions**: fields suggest what was typed before, from History, setups and ready scales, in grey; Tab takes the next word (a button under the field does the same on touch devices, and wherever the text has filled the field). Empty question, context and situation fields offer recent values; the guide's new-option field offers often-used ones. Nothing leaves the app and the browser's autofill is not used.
+- **Suggestions**: fields suggest what was typed before, from History, setups and ready scales, in grey; Tab takes the next word (a button under the field does the same on touch devices, and wherever the text has filled the field). Empty context and situation fields offer recent values; the guide's new-option field offers often-used ones. With embeddings configured, the guide also offers options and whole scales from similar earlier questions. When asked, the situation, questions and options go to the decision model; question texts (the first 2,000 characters for this feature) go to the configured embedding model for similar suggestions. Grey and offline suggestions use local data. The browser's autofill is not used.
 
 ## Two modes
 
@@ -102,9 +102,15 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `bind` | listen address, default `127.0.0.1:8080` |
 | `trusted_proxies` | addresses whose `X-Forwarded-*` headers are believed |
 | `data_dir` | where the database lives. The system install sets `/var/lib/magicshell`. Unset: the service's state directory under systemd, otherwise `~/.local/share/magicshell` |
-| `[app] endpoint` | model endpoint base URL ending in `/v1` (required) |
-| `[app] model` | the model to ask (required) |
-| `[app] api_key` | bearer key; `file://` reads it from a file |
+| `[app] endpoint` | decision model endpoint base URL ending in `/v1` (required) |
+| `[app] model` | the decision model to ask (required) |
+| `[app] api_key` | bearer key for the decision endpoint; `file://` reads it from a file |
+| `[app] embedding_model` | model for finding similar questions; unset turns embeddings off (the default) |
+| `[app] embedding_endpoint` | embedding endpoint base URL ending in `/v1`; defaults to `endpoint`; a separate endpoint uses only `embedding_api_key`, never `api_key` |
+| `[app] embedding_api_key` | bearer key for a separate embedding endpoint; `file://` reads it from a file |
+| `[app] embedding_prefix` | text prepended to each question before embedding; default empty |
+| `[app] embedding_min_similarity` | minimum similarity for similar questions, 0 to 1, default 0.75 |
+| `[app] embeds_per_minute` | embedding requests per client per minute (burst is the same), default 600 |
 | `[app] database` | SQLite file name; setting it turns accounts on |
 | `[app] runs_per_minute` | runs per client (open) or per user (accounts), default 60 |
 | `[app] why_max_words` | longest situation "Why?" accepts, default 300; 0 turns "Why?" off; well above 300 a result over many questions grows large |
@@ -112,7 +118,7 @@ It listens on `127.0.0.1:8080`. `config.example.toml` documents every key; any k
 | `[app] preheat` | load the model when the guide reaches its Ask step, at most once a minute for the whole server, for signed-in users of accounts mode only; default `true`, ignored in open mode |
 | `[app] upstream_timeout_secs` | seconds to wait for the model, default 60 |
 | `[app] max_pictures` | pictures one question may carry; unset (the default) sets no limit; 0 turns pictures off, for a model that cannot read them |
-| `[app] max_request_mb` | largest request in MB the server reads (a run with its pictures, a "Why?" question, a history entry, a setup) and largest answer it reads from the model, 1 to 1024, default 16; behind nginx set `client_max_body_size` to the same (the shipped template has `16m`) |
+| `[app] max_request_mb` | largest request in MB the server reads (a run with its pictures, a "Why?" question, an embedding request, a history entry, a setup) and largest answer it reads from the decision or embedding model, 1 to 1024, default 16; behind nginx set `client_max_body_size` to the same (the shipped template has `16m`) |
 | `[app] picture_max_edge` | longest edge in pixels a picture is shrunk to before it is sent, 256 to 2048, default 768; the model spends about one token per 1000 pixels, so larger is slower |
 | `[auth.oidc] issuer` | the provider's issuer URL, exactly as its discovery document states it; setting this section turns single sign-on on |
 | `[auth.oidc] client_id` | the client registered at the provider |

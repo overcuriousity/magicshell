@@ -4,6 +4,14 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- Similar questions in the guided view: with an embedding model configured, the question step suggests options and whole score scales from earlier questions close in meaning. The server sends only the first 2,000 characters of each question text to the configured embedding model; vectors stay in the browser's IndexedDB, are owned by the signed-in user and are cleared on sign-out. Settings discloses this data flow. New `[app]` keys: `embedding_model`, `embedding_endpoint`, `embedding_api_key`, `embedding_prefix`, `embedding_min_similarity` and `embeds_per_minute`.
+
+### Removed
+
+- The guided question step's `Recent:` row; recent context and situation values and often-used options remain.
+
 ## [2026.11.13] - 2026-11-15
 
 ### Changed
