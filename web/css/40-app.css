@@ -310,6 +310,7 @@
 }
 .ms-guide__body textarea, .ms-guide__body > input.oc-input { width: 100%; }
 .ms-guide__chips { margin: 0; padding: 0; list-style: none; }
+.ms-guide__similar-row { margin-bottom: var(--space-3); }
 .ms-guide__add .oc-input, .ms-guide__add > .ms-complete { flex: 1 1 auto; min-width: 0; }
 /* A completed field can grow a row or a strip under it; the button stays level with the field. */
 .ms-guide__add { align-items: flex-start; }

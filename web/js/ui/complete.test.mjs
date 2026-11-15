@@ -58,6 +58,7 @@ class FakeNode {
     this.childNodes = [];
     this.append(...nodes);
   }
+  remove() { this.parentNode?.replaceChildren(...this.parentNode.childNodes.filter((c) => c !== this)); }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   dispatchEvent(event) {
     Object.defineProperty(event, 'target', { value: this, configurable: true });
@@ -91,6 +92,7 @@ globalThis.document = {
 
 const { h } = await import('./dom.js');
 const { completing } = await import('./complete.js');
+const { picksRow } = await import('./picks.js');
 
 const all = (n, pred, out = []) => { if (pred(n)) out.push(n); for (const c of n.childNodes) all(c, pred, out); return out; };
 const byClass = (root, c) => all(root, (n) => (n.getAttribute('class') ?? '').split(' ').includes(c));
@@ -126,6 +128,31 @@ function key(field, k, mods = {}) {
   return { prevented: e.defaultPrevented, stopped };
 }
 const fire = (node, type_) => node.dispatchEvent(new Event(type_, { cancelable: true }));
+
+test('a similar row appears above often used and a pick refreshes both rows', () => {
+  let near = ['sushi'];
+  const picked = [];
+  const { wrap } = setup({
+    row: { label: 'Often used:', items: () => ['pizza'], onPick: (text) => picked.push(text) },
+    similarRow: { label: 'From similar questions:', items: () => near, onPick: (text) => { picked.push(text); near = []; } },
+  });
+  const rows = byClass(wrap, 'ms-complete__row');
+  assert.equal(rows[0].textContent.includes('From similar questions:'), true);
+  assert.equal(rows[1].textContent.includes('Often used:'), true);
+  fire(byClass(rows[0], 'ms-complete__pick')[0], 'click');
+  assert.deepEqual(picked, ['sushi']);
+  assert.equal(rows[0].hidden, true);
+});
+
+test('picksRow preserves a whole scale as its value and limits it to three', () => {
+  const values = [['1', '2'], ['low', 'high'], ['a', 'b', 'c'], ['x', 'y']];
+  const picked = [];
+  const row = picksRow({ label: 'From similar questions:', items: () => values.map((levels) => ({ text: levels.join(' · '), value: levels })), onPick: (value) => picked.push(value), limit: 3 });
+  assert.equal(byClass(row.el, 'ms-complete__pick').length, 3);
+  fire(byClass(row.el, 'ms-complete__pick')[0], 'click');
+  assert.deepEqual(picked, [['1', '2']]);
+  assert.equal(byClass(row.el, 'ms-complete__pick')[0].getAttribute('title'), 'low · high');
+});
 
 test('typing shows the rest, Tab takes one word and reports it as typing', () => {
   const { field, wrap, seen, rest } = setup();
