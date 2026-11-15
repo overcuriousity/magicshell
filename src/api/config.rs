@@ -21,7 +21,8 @@ pub async fn get(State(st): State<Arc<ApiState>>, mut parts: Parts) -> Result<Js
     let why = st.why.as_ref().map(|w| json!({ "maxWords": w.max_words }));
     let pictures = (st.max_pictures != Some(0)).then(|| json!({ "max": st.max_pictures, "edge": st.picture_max_edge }));
     let sso = st.oidc.as_ref().map(|o| json!({ "label": o.label() }));
+    let similar = st.similar.as_ref().map(|s| json!({"model": s.model, "id": s.id, "min": s.min}));
     Ok(Json(json!({
-        "mode": mode, "model": st.model, "user": user, "why": why, "sso": sso, "pictures": pictures, "preheat": st.preheat.is_some(), "max_request_bytes": st.max_body_bytes, "version": env!("CARGO_PKG_VERSION")
+        "mode": mode, "model": st.model, "user": user, "why": why, "sso": sso, "pictures": pictures, "preheat": st.preheat.is_some(), "max_request_bytes": st.max_body_bytes, "similar": similar, "version": env!("CARGO_PKG_VERSION")
     })))
 }

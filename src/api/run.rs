@@ -19,7 +19,7 @@ use crate::systemone::{Run, word_count};
 use crate::upstream::Reply;
 
 /// Who the rate limit counts: the signed-in user in accounts mode, the client address in open mode.
-pub struct Caller(String);
+pub struct Caller(pub(super) String);
 
 impl FromRequestParts<Arc<ApiState>> for Caller {
     type Rejection = AppError;
