@@ -61,6 +61,33 @@ fn status_error(status: StatusCode, pictures: bool) -> AppError {
     }
 }
 
+/// The longest refusal shown, in characters.
+const MAX_REFUSAL: usize = 300;
+
+/// What the endpoint says is wrong with a run it refused: `{"error":{"message":…}}`,
+/// `{"error":"…"}`, or a body that is not JSON as text. Trimmed and cut to `MAX_REFUSAL`.
+fn refusal(bytes: &[u8]) -> Option<String> {
+    let text = match serde_json::from_slice::<Value>(bytes) {
+        Ok(json) => match &json["error"] {
+            Value::String(s) => s.clone(),
+            error => error["message"].as_str()?.to_owned(),
+        },
+        Err(_) => String::from_utf8_lossy(bytes).into_owned(),
+    };
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut message: String = text.chars().take(MAX_REFUSAL).collect();
+    if text.chars().count() > MAX_REFUSAL {
+        message.push('…');
+    }
+    if !message.ends_with(['.', '!', '?']) {
+        message.push('.');
+    }
+    Some(message)
+}
+
 async fn read_capped(mut response: reqwest::Response, pictures: bool) -> Result<Vec<u8>, AppError> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| transport_error(&e, pictures))? {
@@ -99,6 +126,11 @@ impl Upstream {
         let status = response.status();
         let bytes = read_capped(response, pictures).await?;
         let upstream_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        if matches!(status.as_u16(), 400 | 422)
+            && let Some(message) = refusal(&bytes)
+        {
+            return Err(AppError::Upstream(format!("The model endpoint refused this run: {message}")));
+        }
         if !status.is_success() {
             return Err(status_error(status, pictures));
         }
