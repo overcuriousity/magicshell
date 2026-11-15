@@ -98,13 +98,13 @@ async fn saving_a_setup_again_replaces_it() {
 }
 
 #[tokio::test]
-async fn a_setup_with_one_option_is_refused() {
+async fn a_setup_with_an_unnamed_option_is_refused() {
     let (app, ada, _bob) = two_users().await;
     let mut bad = setup("s1", "Bad");
-    bad["questions"][0]["options"] = json!([{"id": "o1", "name": "ops"}]);
+    bad["questions"][0]["options"] = json!([{"id": "o1", "name": "ops"}, {"id": "o2", "name": "  "}]);
     let res = put(&app, "/api/setups/s1", &bad, Some(&ada)).await;
     assert_eq!(res.status(), 422);
-    assert_eq!(res.text().await.unwrap(), "Add at least 2 options.");
+    assert_eq!(res.text().await.unwrap(), "Name every option.");
     assert!(list(&app, "/api/setups", &ada).await.is_empty());
 }
 
@@ -122,10 +122,6 @@ async fn a_setup_may_have_an_empty_question_text_but_needs_a_name() {
         assert_eq!(res.status(), 422);
         assert_eq!(res.text().await.unwrap(), sentence);
     }
-    let mut long_state = setup("s2", "Long");
-    long_state["sampleState"] = json!("x".repeat(8001));
-    let res = put(&app, "/api/setups/s2", &long_state, Some(&ada)).await;
-    assert_eq!(res.text().await.unwrap(), "Shorten the situation to 8,000 characters or fewer.");
 }
 
 #[tokio::test]
@@ -383,19 +379,12 @@ fn why_of_length(len: usize) -> (Value, Value) {
 }
 
 #[tokio::test]
-async fn a_why_part_at_the_size_cap_is_kept_and_one_over_is_refused() {
+async fn a_why_part_well_over_the_old_40_kb_is_kept() {
     let (app, ada, _bob) = two_users().await;
-    let cap = 40 * 1024;
-    let (why, run) = why_of_length(cap);
+    let (why, run) = why_of_length(200 * 1024);
     let mut e = entry_with_why("e1", "2026-11-13T10:00:00Z", why);
     e["run"] = run;
     assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
-    let (why, run) = why_of_length(cap + 1);
-    let mut e = entry_with_why("e1", "2026-11-13T10:00:00Z", why);
-    e["run"] = run;
-    let res = put(&app, "/api/history/e1", &e, Some(&ada)).await;
-    assert_eq!(res.status(), 422);
-    assert_eq!(res.text().await.unwrap(), "The kept Why? result of this entry is too large to keep.");
 }
 
 fn preview(chars: usize) -> String {
@@ -447,9 +436,8 @@ async fn an_entry_with_pictures_in_its_run_is_refused() {
 async fn a_bad_preview_is_refused() {
     let (app, ada, _) = two_users().await;
     let part = |preview: String| json!([{ "preview": preview, "width": 1, "height": 1, "bytes": 1 }]);
-    let five = json!(vec![json!({ "width": 1, "height": 1, "bytes": 1 }); 5]);
     for pictures in
-        [part(preview(4001)), part("data:image/png;base64,AAAA".into()), part("https://example.org/a.jpg".into()), five]
+        [part(preview(4001)), part("data:image/png;base64,AAAA".into()), part("https://example.org/a.jpg".into())]
     {
         let res = put(&app, "/api/history/e1", &entry_with_pictures("e1", pictures), Some(&ada)).await;
         assert_eq!(res.status(), 422);
@@ -460,18 +448,81 @@ async fn a_bad_preview_is_refused() {
 }
 
 #[tokio::test]
-async fn previews_count_into_the_size_limit() {
+async fn a_history_entry_of_200_kb_is_kept() {
     let (app, ada, _) = two_users().await;
-    let four = json!(vec![json!({ "preview": preview(4000), "width": 1, "height": 1, "bytes": 1 }); 4]);
-    let mut e = entry_with_pictures("e1", four);
-    e["run"]["state"] = json!("a".repeat(7900));
-    e["reply"]["response"] = json!("r".repeat(40 * 1024));
+    let options: Vec<Value> = (0..60)
+        .map(|i| json!({"id": format!("o{i}"), "name": format!("option number {i} {}", "x".repeat(40))}))
+        .collect();
+    let questions: Vec<Value> = (0..8)
+        .map(|q| json!({"key": format!("q{q}"), "type": "choice", "text": "Which?", "options": options}))
+        .collect();
+    let answers: serde_json::Map<String, Value> = (0..8)
+        .map(|q| {
+            let p = vec![1.0 / 60.0; 60];
+            (
+                format!("q{q}"),
+                json!({"type": "choice", "choice": "option number 0", "probabilities": p, "confidence": 0.1}),
+            )
+        })
+        .collect();
+    let mut e = entry("big", "2026-11-13T10:00:00Z");
+    e["run"] = json!({"state": "s".repeat(200 * 1024), "questions": questions});
+    e["reply"] = json!({"answers": answers, "model": "m", "inputTokens": 3});
+    assert!(e.to_string().len() > 200 * 1024);
+    let res = put(&app, "/api/history/big", &e, Some(&ada)).await;
+    assert_eq!(res.status(), 204, "{}", res.text().await.unwrap());
+}
+
+#[tokio::test]
+async fn a_setup_with_a_20000_character_situation_is_kept() {
+    let (app, ada, _) = two_users().await;
+    let mut s = setup("s1", "Long");
+    s["sampleState"] = json!("x".repeat(20_000));
+    assert_eq!(put(&app, "/api/setups/s1", &s, Some(&ada)).await.status(), 204);
+}
+
+#[tokio::test]
+async fn an_entry_keeps_more_than_four_previews() {
+    let (app, ada, _) = two_users().await;
+    let six = json!(vec![json!({ "preview": preview(4000), "width": 1, "height": 1, "bytes": 1 }); 6]);
+    let e = entry_with_pictures("e1", six);
     assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
-    e["reply"]["response"] = json!("r".repeat(45 * 1024));
-    let res = put(&app, "/api/history/e1", &e, Some(&ada)).await;
-    // Over 64 KB with its previews: the body limit answers before the entry is looked at.
-    assert_eq!(res.status(), 413);
-    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
-    e.as_object_mut().unwrap().remove("pictures");
-    assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
+}
+
+/// Ada, signed in, on a server with `max_request_mb = 1`: history keeps 4 MB, setups 2 MB.
+async fn ada_with_one_mb() -> (TestApp, String) {
+    let app = spawn(&format!("{ACCOUNTS}max_request_mb = 1\n")).await;
+    add_user(&app, "ada", PASSWORD).await;
+    let ada = sign_in(&app, "ada", PASSWORD).await;
+    (app, ada)
+}
+
+#[tokio::test]
+async fn history_keeps_four_times_the_request_size_and_trims_the_oldest() {
+    let (app, ada) = ada_with_one_mb().await;
+    for i in 0..6 {
+        let mut e = entry(&format!("e{i}"), &format!("2026-11-13T10:00:0{i}Z"));
+        e["run"]["state"] = json!("s".repeat(900 * 1024));
+        assert_eq!(put(&app, &format!("/api/history/e{i}"), &e, Some(&ada)).await.status(), 204, "e{i}");
+    }
+    let got = list(&app, "/api/history", &ada).await;
+    let ids: Vec<&str> = got.iter().map(|e| e["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["e5", "e4", "e3", "e2"]);
+}
+
+#[tokio::test]
+async fn setups_keep_twice_the_request_size() {
+    let (app, ada) = ada_with_one_mb().await;
+    let big = |id: &str| {
+        let mut s = setup(id, id);
+        s["sampleState"] = json!("x".repeat(900 * 1024));
+        s
+    };
+    assert_eq!(put(&app, "/api/setups/a", &big("a"), Some(&ada)).await.status(), 204);
+    assert_eq!(put(&app, "/api/setups/b", &big("b"), Some(&ada)).await.status(), 204);
+    let res = put(&app, "/api/setups/c", &big("c"), Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "Setups are full. Delete a setup before adding another.");
+    // Replacing one in place is measured without its old version.
+    assert_eq!(put(&app, "/api/setups/b", &big("b"), Some(&ada)).await.status(), 204);
 }

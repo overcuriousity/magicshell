@@ -40,12 +40,18 @@ const bodyText = (run) => JSON.stringify(wire(run, (p) => p.url));
 // The same for reading: each picture is its size, not its content.
 export const requestText = (run) => JSON.stringify(wire(run, (p) => shortPicture(p.bytes)));
 
-export function createServerClient(fetchFn, now = () => performance.now()) {
+// `maxBytes`: the server's request size (`max_request_bytes` of its config); a longer body is
+// refused here, before it is sent.
+export function createServerClient(fetchFn, now = () => performance.now(), { maxBytes = Infinity } = {}) {
   // Run and Why? share the request, the checks and the reply; only the route differs.
   async function post(url, run, { signal } = {}) {
     const request = requestText(run);
+    const text = bodyText(run);
+    if (text.length > maxBytes / 3 && new TextEncoder().encode(text).length > maxBytes) {
+      throw new RunError(`This run is too large for this server (${Math.floor(maxBytes / 1048576)} MB).`, 'validation');
+    }
     const started = now();
-    const reply = await send(fetchFn, url, bodyText(run), signal);
+    const reply = await send(fetchFn, url, text, signal);
     const response = await reply.text().catch(() => '');
     const totalMs = now() - started;
     if (!reply.ok) throw new RunError(sentence(response, reply.status), KINDS[reply.status] ?? 'upstream');

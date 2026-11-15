@@ -64,6 +64,25 @@ async fn pictures_reach_the_endpoint() {
 }
 
 #[tokio::test]
+async fn with_max_pictures_unset_a_run_with_six_pictures_is_sent() {
+    let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    assert_eq!(post_run(&app, &run_with(6)).await.status(), 200);
+    assert_eq!(fake.requests.lock().unwrap().len(), 1);
+    let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
+    assert_eq!(body["pictures"], json!({ "max": null, "edge": 768 }));
+}
+
+#[tokio::test]
+async fn a_picture_of_500_kb_is_sent() {
+    let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    let mut run = run_with(0);
+    run["images"] = json!([picture(500 * 1024)]);
+    assert_eq!(post_run(&app, &run).await.status(), 200);
+}
+
+#[tokio::test]
 async fn pictures_over_the_server_limit_are_refused() {
     let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
     let app = spawn_against(&format!("{OPEN}max_pictures = 2\n"), &fake).await;
@@ -92,37 +111,61 @@ async fn pictures_are_refused_when_turned_off() {
 }
 
 #[tokio::test]
-async fn run_takes_a_large_body_and_other_routes_do_not() {
+async fn max_request_mb_bounds_runs_and_what_is_kept_and_sign_in_stays_small() {
     let fake = fake_upstream(vec![fixture_reply("response-noul")]).await;
-    let app = spawn_against(ACCOUNTS, &fake).await;
+    let app = spawn_against(&format!("{ACCOUNTS}max_request_mb = 1\n"), &fake).await;
     add_user(&app, "ada", PASSWORD).await;
     let cookie = sign_in(&app, "ada", PASSWORD).await;
 
     let mut run = run_with(0);
-    run["images"] = json!([picture(290 * 1024), picture(290 * 1024)]);
-    assert!(run.to_string().len() > 700 * 1024);
+    run["state"] = json!("y".repeat(900 * 1024));
     assert_eq!(post_json(&app, "/api/run", &run, Some(&cookie)).await.status(), 200);
 
-    let big = json!({ "x": "y".repeat(65 * 1024) });
-    for path in ["/api/why", "/api/auth/password"] {
-        let res = post_json(&app, path, &big, Some(&cookie)).await;
-        assert_eq!(res.status(), 413, "{path}");
-        assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.", "{path}");
+    // Over the old 64 KB but under the setting: refused for its content, never for its size.
+    let mid = json!({ "x": "y".repeat(300 * 1024) });
+    assert_ne!(post_json(&app, "/api/why", &mid, Some(&cookie)).await.status(), 413);
+    for path in ["/api/history/abc", "/api/setups/abc"] {
+        let res = app
+            .client
+            .put(format!("{}{path}", app.base))
+            .header("origin", &app.base)
+            .header("cookie", &cookie)
+            .json(&mid)
+            .send()
+            .await
+            .unwrap();
+        assert_ne!(res.status(), 413, "{path}");
     }
-    let res = app
-        .client
-        .put(format!("{}/api/history/abc", app.base))
-        .header("origin", &app.base)
-        .header("cookie", &cookie)
-        .json(&big)
-        .send()
-        .await
-        .unwrap();
+    let small = json!({ "x": "y".repeat(65 * 1024) });
+    let res = post_json(&app, "/api/auth/password", &small, Some(&cookie)).await;
     assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
 
     let mut huge = run_with(0);
-    huge["state"] = json!("y".repeat(961 * 1024));
-    assert_eq!(post_json(&app, "/api/run", &huge, Some(&cookie)).await.status(), 413);
+    huge["state"] = json!("y".repeat(1100 * 1024));
+    let res = post_json(&app, "/api/run", &huge, Some(&cookie)).await;
+    assert_eq!(res.status(), 413);
+    assert_eq!(res.text().await.unwrap(), "This request is too large. Shorten it and try again.");
+}
+
+#[tokio::test]
+async fn the_config_names_the_request_size() {
+    let fake = fake_upstream(vec![]).await;
+    let app = spawn_against(OPEN, &fake).await;
+    let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
+    assert_eq!(body["max_request_bytes"], json!(16 * 1024 * 1024));
+}
+
+#[test]
+fn max_request_mb_defaults_to_16_and_refuses_0_and_1025() {
+    assert_eq!(app_config("").unwrap().max_request_mb, 16);
+    assert_eq!(app_config("max_request_mb = 1024\n").unwrap().max_request_mb, 1024);
+    for mb in [0, 1025] {
+        assert_eq!(
+            app_config(&format!("max_request_mb = {mb}\n")).unwrap_err(),
+            "Invalid [app] configuration: max_request_mb must be 1 to 1024."
+        );
+    }
 }
 
 #[tokio::test]
@@ -180,7 +223,7 @@ async fn config_tells_the_page_about_pictures() {
     let fake = fake_upstream(vec![]).await;
     let app = spawn_against(OPEN, &fake).await;
     let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
-    assert_eq!(body["pictures"], json!({ "max": 4, "edge": 768 }));
+    assert_eq!(body["pictures"], json!({ "max": null, "edge": 768 }));
 
     let app = spawn_against(&format!("{OPEN}max_pictures = 2\npicture_max_edge = 1024\n"), &fake).await;
     let body: Value = get_with(&app, "/api/config", None).await.json().await.unwrap();
@@ -195,14 +238,21 @@ async fn config_tells_the_page_about_pictures() {
 fn picture_keys_outside_their_range_are_refused() {
     assert!(app_config("").is_ok());
     assert!(app_config("max_pictures = 4\npicture_max_edge = 2048\n").is_ok());
-    assert_eq!(
-        app_config("max_pictures = 5\n").unwrap_err(),
-        "Invalid [app] configuration: max_pictures must be 0 to 4."
-    );
+    assert_eq!(app_config("").unwrap().max_pictures, None);
+    assert_eq!(app_config("max_pictures = 10\n").unwrap().max_pictures, Some(10));
     for edge in [255, 2049] {
         assert_eq!(
             app_config(&format!("picture_max_edge = {edge}\n")).unwrap_err(),
             "Invalid [app] configuration: picture_max_edge must be 256 to 2048."
         );
     }
+}
+
+#[test]
+fn the_example_config_sets_no_picture_limit() {
+    let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/config.example.toml")).unwrap();
+    let cfg: OcConfig = Figment::new().merge(Toml::string(&text)).extract().unwrap();
+    let app = AppConfig::from_config(&cfg).unwrap();
+    assert_eq!(app.max_pictures, None);
+    assert_eq!(app.max_request_mb, 16);
 }

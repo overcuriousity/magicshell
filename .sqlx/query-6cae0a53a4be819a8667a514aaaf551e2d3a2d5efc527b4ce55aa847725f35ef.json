@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM history WHERE user_id = ?1 AND id IN (SELECT id FROM (SELECT id, SUM(length(CAST(body AS BLOB))) OVER (ORDER BY at DESC, id DESC) AS total FROM history WHERE user_id = ?1) WHERE total > ?2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "6cae0a53a4be819a8667a514aaaf551e2d3a2d5efc527b4ce55aa847725f35ef"
+}

@@ -1,7 +1,6 @@
 // The bench's question cards: type, key, question text, and options or levels with move and remove.
 // `ops` edits one run (A through the model, B through editVariant); `locked` keeps type, key and the
 // set of questions fixed, as B must keep them to be compared with A.
-import { LIMITS } from '../limits.js';
 import { levelClass, optionClass } from '../ui/colors.js';
 import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
@@ -57,8 +56,9 @@ function typePicker(q, ref, ops, fid) {
 }
 
 const KINDS = {
-  option: { many: 'options', min: LIMITS.minOptions, max: LIMITS.maxOptions, add: 'Add option', remove: 'Remove option' },
-  level: { many: 'levels', min: LIMITS.minLevels, max: LIMITS.maxLevels, add: 'Add level', remove: 'Remove level' },
+  // At least one row, so the list has something to type into; how many is the endpoint's to judge.
+  option: { many: 'options', min: 1, add: 'Add option', remove: 'Remove option' },
+  level: { many: 'levels', min: 1, add: 'Add level', remove: 'Remove level' },
 };
 
 // One row of a choice or score list: its leading mark, inputs, and move and remove buttons.
@@ -74,16 +74,16 @@ function listRow(kind, ref, item, i, count, ops, fq, slot, spread, suggest) {
   const fields = kind === 'option'
     ? [
         h('div', { class: 'ms-row__name' }, textInput(item.name, `Option ${i + 1}`, `${f}:name`, (v) => { name = v; edit({ name: v }); },
-          { complete: { suggest, pool: 'option', limit: LIMITS.optionName } })),
+          { complete: { suggest, pool: 'option' } })),
         // The lead shows only where the rows stack and the head above the columns is gone.
         h('div', { class: 'ms-row__desc' },
           h('span', { class: 'ms-row__desc-lead', 'aria-hidden': 'true' }, DESCRIPTION),
           textInput(item.description, `Description ${i + 1} (optional)`, `${f}:desc`, (v) => edit({ description: v }),
             // Read when the grey text is worked out, so a name typed a moment ago counts.
-            { complete: { suggest, pool: 'description', limit: LIMITS.description, pairedName: () => name } })),
+            { complete: { suggest, pool: 'description', pairedName: () => name } })),
       ]
     : [h('div', { class: 'ms-row__name ms-row__name--wide' }, textInput(item.text, `Level ${i}`, `${f}:text`, (v) => edit({ text: v }),
-        { complete: { suggest, pool: 'level', limit: LIMITS.level } }))];
+        { complete: { suggest, pool: 'level' } }))];
   return h('div', { class: kind === 'option' ? 'ms-row' : 'ms-row ms-row--level' },
     h('div', { class: 'ms-row__lead' }, lead),
     fields,
@@ -96,7 +96,7 @@ function listRow(kind, ref, item, i, count, ops, fq, slot, spread, suggest) {
 }
 
 function list(kind, q, ref, ops, fq, slots, spread, suggest) {
-  const { many, max, add } = KINDS[kind];
+  const { many, add } = KINDS[kind];
   const items = q[many];
   const head = kind === 'option'
     ? [h('span', { class: 'ms-row__name' }, 'Options'), h('span', { class: 'ms-row__desc' }, DESCRIPTION)]
@@ -109,7 +109,6 @@ function list(kind, q, ref, ops, fq, slots, spread, suggest) {
         type: 'button',
         class: 'oc-btn',
         'data-fid': `${fq}:add`,
-        disabled: items.length >= max,
         onclick: () => ops.addItem(many, ref.key),
       }, icon('plus'), add),
     ),
@@ -163,12 +162,12 @@ function card(q, index, count, ops, locked, slots, spread, { idPrefix, fidPrefix
       // A locked key is read-only and the helper leaves it alone. A taken word is an `input` event;
       // the key is still committed on change or Ctrl+Enter.
       h('div', { class: 'oc-field ms-card__keyfield' }, h('label', { for: keyId }, 'Key'),
-        completing(keyInput, { suggest, pool: 'key', limit: LIMITS.key })),
+        completing(keyInput, { suggest, pool: 'key' })),
       locked ? null : iconButton('trash', 'Remove question', () => ops.removeQuestion(ref.key), { disabled: count <= 1, fid: `${fq}:drop` }),
     ),
     h('div', { class: 'oc-field' },
       h('label', { for: textId }, 'Question'),
-      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId, complete: { suggest, pool: 'question', limit: LIMITS.questionText } }),
+      textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId, complete: { suggest, pool: 'question' } }),
     ),
     q.type === 'choice' ? list('option', q, ref, ops, fq, slots, null, suggest) : null,
     q.type === 'score' ? list('level', q, ref, ops, fq, slots, spread, suggest) : null,

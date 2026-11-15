@@ -17,3 +17,11 @@ test('levels spread the four-step ramp over the scale', () => {
   const ten = Array.from({ length: 10 }, (_, i) => Number(levelClass(i, 10).slice(4)));
   assert.ok(ten.every((v, i) => i === 0 || v >= ten[i - 1]), 'never steps back');
 });
+
+test('colours repeat after eight options and levels map any count onto the ramp', () => {
+  assert.equal(optionClass(8), 'opt-1');
+  assert.equal(optionClass(255), 'opt-8');
+  assert.equal(levelClass(0, 1), 'lvl-4');
+  assert.equal(levelClass(0, 255), 'lvl-1');
+  assert.equal(levelClass(254, 255), 'lvl-4');
+});

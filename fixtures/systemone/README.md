@@ -4,4 +4,4 @@ Shared by the JS (`web/js/systemone.test.mjs`: `invalid-*`, the runs of `request
 
 The endpoint returns the `probabilities` of a choice sorted by name, not in request order (so `"1"`, `"10"`, `"2"`); `expected.probabilities` is in option order, and for a score in level order.
 
-`request-picture.json` carries a 32 px JPEG as a data URL in `images`; the `invalid-*picture*` cases cover the picture limits (4 pictures, 300 KB each, 600 KB together, JPEG only).
+`request-picture.json` carries a 32 px JPEG as a data URL in `images`; the `invalid-*picture*` cases cover the picture limits (a JPEG data URL that decodes; no count or size limit of the app's own).

@@ -269,11 +269,11 @@ export function createSetupsView({ uuid = () => crypto.randomUUID() } = {}) {
             h('label', { for: 'setup-situation' }, 'Sample situation'),
             completing(
               h('textarea', { class: 'oc-input ms-situation', id: 'setup-situation', rows: '4', 'data-fid': 'situation', oninput: (e) => { draft.sampleState = e.target.value; } }, draft.sampleState),
-              { suggest, pool: 'situation', limit: LIMITS.state }),
+              { suggest, pool: 'situation' }),
           ),
           h('div', { class: 'ms-cards' }, questionCards(draft, ops(), { suggest })),
           h('div', { class: 'oc-row' },
-            h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: draft.questions.length >= LIMITS.questions, onclick: () => rebuild(() => draft.questions.push(edits.newQuestion(draft, 'noul'))) },
+            h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', onclick: () => rebuild(() => draft.questions.push(edits.newQuestion(draft, 'noul'))) },
               icon('plus'), 'Add question'),
           ),
         ),

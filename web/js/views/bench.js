@@ -65,7 +65,7 @@ function situationField(value, id, onText, suggest, pictures = null) {
     h('label', { for: id }, 'Situation'),
     completing(
       h('textarea', { class: 'oc-input ms-situation', id, rows: '4', 'data-fid': `${id}`, oninput: (e) => onText(e.target.value) }, value),
-      { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }),
+      { suggest, pool: 'situation', row: { label: 'Recent:', items: (s) => s.recent('situation') } }),
   );
   if (!pictures) return text;
   return pictures.attach(h('div', { class: 'ms-situation-zone' }, text, pictures.element()));
@@ -188,7 +188,7 @@ export function createBenchView(deps = {}) {
       situationField(state.a.state, 'bench-situation', typing((v) => model.setState(v)), suggest, picturesA),
       h('div', { class: 'ms-cards' }, questionCards(state.a, wrapOps(opsForA(model)), { idPrefix: 'bench-a', suggest })),
       h('div', { class: 'oc-row' },
-        h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', disabled: state.a.questions.length >= LIMITS.questions, onclick: () => model.addQuestion('noul') },
+        h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'add-question', onclick: () => model.addQuestion('noul') },
           icon('plus'), 'Add question'),
       ),
     );

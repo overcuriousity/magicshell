@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(SUM(length(CAST(body AS BLOB))), 0) AS \"n!: i64\" FROM setups WHERE user_id = ? AND id != ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9b16bd1b56218019334402d9559681bb906919c59e025e7ea96ee3210b475f1e"
+}

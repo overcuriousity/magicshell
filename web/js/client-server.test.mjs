@@ -173,3 +173,18 @@ test('stopping the call rejects as stopped, not as a network failure', async () 
   controller.abort();
   await fails(pending, 'stopped');
 });
+
+test('a run over maxBytes is refused before sending', async () => {
+  const seen = [];
+  const big = { ...run, state: 'x'.repeat(1024 * 1024) };
+  await fails(createServerClient(stub(200, '{}', seen), undefined, { maxBytes: 1024 * 1024 }).run(big), 'validation', 'This run is too large for this server (1 MB).');
+  assert.equal(seen.length, 0);
+});
+
+test('the longest refusal the server sends is shown, not replaced', async () => {
+  const { serverSentence } = await import('./run-error.js');
+  const prefix = 'The model endpoint refused this run: ';
+  const refusal = `${prefix}${'ä'.repeat(300 - prefix.length - 2)}….`;
+  assert.equal(refusal.length, 300);
+  assert.equal(serverSentence(refusal, 502), refusal);
+});

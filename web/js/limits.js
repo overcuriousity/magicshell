@@ -1,19 +1,6 @@
-// Limits shared by the browser and the Rust server (src/ mirrors these numbers).
+// The app's own limits, on its own data only; nothing about a run is limited here (the endpoint
+// judges that). src/ mirrors these numbers.
 export const LIMITS = {
-  questions: 8,
-  questionText: 500,
-  key: 30,
-  minOptions: 2,
-  maxOptions: 8,
-  optionName: 40,
-  description: 200,
-  minLevels: 2,
-  maxLevels: 10,
-  level: 200,
-  state: 8000,
   setupName: 60,
-  pictures: 4,
-  pictureBytes: 300 * 1024,
-  picturesBytes: 600 * 1024,
   previewChars: 4000,
 };

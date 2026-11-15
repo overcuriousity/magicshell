@@ -171,3 +171,14 @@ test('neutral names are single letters for as many options as a question can hav
   const q = neutralNames({ state: '', questions: [{ key: 'k', type: 'choice', text: 't', options }] }).questions[0];
   assert.deepEqual(q.options.map((o) => o.name), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 });
+
+test('neutral names go on past Z like spreadsheet columns', async () => {
+  const { neutralName } = await import('./variants.js');
+  assert.deepEqual([0, 25, 26, 27, 701, 702].map(neutralName), ['A', 'Z', 'AA', 'AB', 'ZZ', 'AAA']);
+});
+
+test('thirty options get thirty different neutral names', () => {
+  const options = Array.from({ length: 30 }, (_, i) => ({ id: `o${i}`, name: `n${i}`, description: '' }));
+  const q = neutralNames({ state: '', questions: [{ key: 'q', type: 'choice', text: 'Q', options }] }).questions[0];
+  assert.equal(new Set(q.options.map((o) => o.name)).size, 30);
+});

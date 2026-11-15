@@ -4,6 +4,21 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.13] - 2026-11-15
+
+### Changed
+
+- magicshell sets no limits of its own on a request any more. Questions per run (was 8), options per choice (was 2 to 8), levels per score (was 2 to 10), the length of every text (situation 8,000, question 500, option 40, description and level 200), the form of a question key (was 1 to 30 of `a-z`, `0-9`, `_`) and the number and size of pictures (was 4, 300 KB each, 600 KB together) are now the model's to judge. The checks left are what a request cannot be built without.
+- When the endpoint refuses a request, its own message is shown (`The model endpoint refused this run: questions.q1: "criteria" must be an array of 2 to 10 levels.`) instead of "answered with an error (400)".
+- Option colours repeat after the eighth option; every bar keeps its name and number. Neutral names in the variant run go on past Z as AA, AB, ….
+- `[app] max_pictures` sets no limit when it is not set (was 4); 0 still turns pictures off.
+- Pictures are encoded once at quality 0.85, without stepping the quality down to fit 300 KB.
+- History keeps entries and "Why?" results of any size the request limit lets through (was 64 KB and 40 KB). So that listing stays bounded, each account keeps up to four times `max_request_mb` of history, newest first (older entries go, as past the 500th), and up to twice `max_request_mb` of setups ("Setups are full. Delete a setup before adding another.").
+
+### Added
+
+- `[app] max_request_mb` (default 16): the largest request the server reads and the largest answer it reads from the model. It replaces the fixed 960 KB for a run and 64 KB for history and setups. The browser says "This run is too large for this server" before sending one that does not fit. The nginx template's `client_max_body_size` is now `16m`; raise it on an existing nginx to match.
+
 ## [2026.11.12] - 2026-11-15
 
 ### Fixed

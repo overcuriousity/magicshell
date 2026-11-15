@@ -12,7 +12,6 @@ export function validateSetup(setup) {
   if (name === '') return 'Name the setup.';
   if (len(name) > LIMITS.setupName) return 'Keep the setup name to 60 characters or fewer.';
   const state = typeof setup.sampleState === 'string' ? setup.sampleState : '';
-  if (len(state) > LIMITS.state) return 'Shorten the situation to 8,000 characters or fewer.';
   const questions = Array.isArray(setup.questions) ? setup.questions : [];
   if (!questions.every(isObject)) return NOT_SETUPS;
   return validateRun({ state: '', questions }, { allowEmptyText: true });

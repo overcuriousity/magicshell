@@ -11,22 +11,6 @@ use serde_json::{Map, Number, Value};
 
 use crate::error::AppError;
 
-const MAX_QUESTIONS: usize = 8;
-const MAX_QUESTION_TEXT: usize = 500;
-const MAX_KEY: usize = 30;
-const MIN_OPTIONS: usize = 2;
-const MAX_OPTIONS: usize = 8;
-const MAX_OPTION_NAME: usize = 40;
-const MAX_DESCRIPTION: usize = 200;
-const MIN_LEVELS: usize = 2;
-const MAX_LEVELS: usize = 10;
-const MAX_LEVEL: usize = 200;
-const MAX_STATE: usize = 8000;
-/// Pictures per run; a server may allow fewer (`[app] max_pictures`).
-pub const MAX_PICTURES: usize = 4;
-/// Decoded bytes of one picture, and of all pictures of a run together.
-const MAX_PICTURE_BYTES: usize = 300 * 1024;
-const MAX_PICTURES_BYTES: usize = 600 * 1024;
 const PICTURE_PREFIX: &str = "data:image/jpeg;base64,";
 
 const BAD_ANSWER: &str = "The model endpoint sent an answer this app does not understand.";
@@ -117,19 +101,12 @@ pub fn word_count(s: &str) -> usize {
     s.split(is_js_space).filter(|w| !w.is_empty()).count()
 }
 
-fn len(s: &str) -> usize {
-    s.chars().count()
-}
-
-/// The decoded size of a picture the page may send: a JPEG data URL of at most
-/// `MAX_PICTURE_BYTES`. The pixels are not looked at.
-fn picture_bytes(url: &str) -> Option<usize> {
-    let data = url.strip_prefix(PICTURE_PREFIX)?;
-    if data.len() > MAX_PICTURE_BYTES.div_ceil(3) * 4 {
-        return None;
-    }
-    let bytes = STANDARD.decode(data).ok()?;
-    (bytes.len() <= MAX_PICTURE_BYTES && bytes.starts_with(&[0xFF, 0xD8, 0xFF])).then_some(bytes.len())
+/// Whether `url` is a picture the page may send: a JPEG data URL that decodes. Its size is bounded
+/// by the request body limit, not here; the pixels are not looked at.
+fn picture_ok(url: &str) -> bool {
+    url.strip_prefix(PICTURE_PREFIX)
+        .and_then(|data| STANDARD.decode(data).ok())
+        .is_some_and(|bytes| bytes.starts_with(&[0xFF, 0xD8, 0xFF]))
 }
 
 fn invalid(sentence: impl Into<String>) -> Result<(), AppError> {
@@ -144,40 +121,20 @@ impl Run {
     }
 
     /// `validate`, optionally allowing a question with no text (a saved setup may keep one).
+    /// Only what the request needs is checked; how many and how long is the endpoint's to judge.
     pub fn validate_questions(&self, allow_empty_text: bool) -> Result<(), AppError> {
-        let count = self.questions.len();
-        if count < 1 {
+        if self.questions.is_empty() {
             return invalid("Add at least one question.");
         }
-        if count > MAX_QUESTIONS {
-            return invalid(format!("Use at most {MAX_QUESTIONS} questions."));
-        }
-        if len(&self.state) > MAX_STATE {
-            return invalid("Shorten the situation to 8,000 characters or fewer.");
-        }
-        if self.images.len() > MAX_PICTURES {
-            return invalid(format!("Use at most {MAX_PICTURES} pictures."));
-        }
-        let mut together = 0;
-        for image in &self.images {
-            let Some(bytes) = picture_bytes(image) else {
-                return invalid("A picture in this request cannot be read. Add it again.");
-            };
-            together += bytes;
-        }
-        if together > MAX_PICTURES_BYTES {
-            return invalid("These pictures are too large together. Remove one first.");
+        if !self.images.iter().all(|image| picture_ok(image)) {
+            return invalid("A picture in this request cannot be read. Add it again.");
         }
         let mut seen = HashSet::new();
         if !self.questions.iter().all(|q| seen.insert(q.key.as_str())) {
             return invalid("Name each question differently.");
         }
-        let key_ok = |k: &str| {
-            let n = len(k);
-            (1..=MAX_KEY).contains(&n) && k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        };
-        if let Some(q) = self.questions.iter().find(|q| !key_ok(&q.key)) {
-            return invalid(format!("Key \"{}\": use 1 to {MAX_KEY} lower-case letters, digits or _.", q.key));
+        if self.questions.iter().any(|q| trim(&q.key).is_empty()) {
+            return invalid("Give every question a key.");
         }
         self.questions.iter().try_for_each(|q| q.validate(allow_empty_text))
     }
@@ -185,12 +142,8 @@ impl Run {
 
 impl Question {
     fn validate(&self, allow_empty_text: bool) -> Result<(), AppError> {
-        let text = trim(&self.text);
-        if text.is_empty() && !allow_empty_text {
+        if trim(&self.text).is_empty() && !allow_empty_text {
             return invalid("Type a question first.");
-        }
-        if len(text) > MAX_QUESTION_TEXT {
-            return invalid("Keep each question to 500 characters or fewer.");
         }
         match self.kind {
             Kind::Choice => self.validate_options(),
@@ -200,22 +153,9 @@ impl Question {
     }
 
     fn validate_options(&self) -> Result<(), AppError> {
-        let options = &self.options;
-        if options.len() < MIN_OPTIONS {
-            return invalid(format!("Add at least {MIN_OPTIONS} options."));
-        }
-        if options.len() > MAX_OPTIONS {
-            return invalid(format!("Use at most {MAX_OPTIONS} options."));
-        }
-        let names: Vec<&str> = options.iter().map(|o| trim(&o.name)).collect();
+        let names: Vec<&str> = self.options.iter().map(|o| trim(&o.name)).collect();
         if names.iter().any(|n| n.is_empty()) {
             return invalid("Name every option.");
-        }
-        if names.iter().any(|n| len(n) > MAX_OPTION_NAME) {
-            return invalid("Keep each option to 40 characters or fewer.");
-        }
-        if options.iter().any(|o| len(trim(&o.description)) > MAX_DESCRIPTION) {
-            return invalid("Keep each description to 200 characters or fewer.");
         }
         let mut seen = HashSet::new();
         for n in names {
@@ -227,19 +167,8 @@ impl Question {
     }
 
     fn validate_levels(&self) -> Result<(), AppError> {
-        let levels = &self.levels;
-        if levels.len() < MIN_LEVELS {
-            return invalid(format!("Add at least {MIN_LEVELS} levels."));
-        }
-        if levels.len() > MAX_LEVELS {
-            return invalid(format!("Use at most {MAX_LEVELS} levels."));
-        }
-        let texts: Vec<&str> = levels.iter().map(|l| trim(&l.text)).collect();
-        if texts.iter().any(|t| t.is_empty()) {
+        if self.levels.iter().any(|l| trim(&l.text).is_empty()) {
             return invalid("Describe every level.");
-        }
-        if texts.iter().any(|t| len(t) > MAX_LEVEL) {
-            return invalid("Keep each level to 200 characters or fewer.");
         }
         Ok(())
     }

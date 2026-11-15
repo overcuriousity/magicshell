@@ -47,7 +47,7 @@ export function thumbs(parts, { sizes = false, small = false } = {}) {
     }));
 }
 
-// get(): the pictures held now; set(list): the new list; limits: { max, edge } from the server;
+// get(): the pictures held now; set(list): the new list; limits: { max, edge, budget } from the server;
 // notify(text, opts) for problems; announce(text) for screen readers; id prefixes the data-fids.
 export function createPictureField({ get, set, limits, notify, announce = () => {}, codec = browserCodec(), id }) {
   // Adds wait for each other: a second paste while the first picture is still being shrunk is
@@ -57,7 +57,7 @@ export function createPictureField({ get, set, limits, notify, announce = () => 
   // Adds what fits and says what did not. `set` rebuilds the form, so nothing here is kept.
   async function addNow(files) {
     const before = get();
-    const { pictures, problems } = await addFiles(files, before, { max: limits.max, edge: limits.edge, uid: () => crypto.randomUUID(), ...codec });
+    const { pictures, problems } = await addFiles(files, before, { max: limits.max, edge: limits.edge, budget: limits.budget, uid: () => crypto.randomUUID(), ...codec });
     const fresh = pictures.slice(before.length);
     if (fresh.length > 0) {
       // Onto what is held now: a picture removed while these were shrunk stays removed.

@@ -17,8 +17,9 @@ use crate::kit::OcError;
 use crate::systemone::{Question, Run};
 
 const MAX_SETUPS: i64 = 100;
+/// Setups keep this many times `[app] max_request_mb` per user, so listing them stays bounded.
+const KEPT_REQUESTS: i64 = 2;
 const MAX_NAME: usize = 60;
-const MAX_STATE: usize = 8000;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -30,7 +31,7 @@ pub struct Setup {
 }
 
 impl Setup {
-    /// Name first, then the sample situation, then the questions like a run (an empty question
+    /// Name first, then the questions like a run (an empty question
     /// text is allowed: the built-in "Yes or no" setup has one).
     fn validate(&self) -> Result<(), AppError> {
         let name = self.name.trim();
@@ -39,9 +40,6 @@ impl Setup {
         }
         if name.chars().count() > MAX_NAME {
             return Err(AppError::Invalid("Keep the setup name to 60 characters or fewer.".into()));
-        }
-        if self.sample_state.chars().count() > MAX_STATE {
-            return Err(AppError::Invalid("Shorten the situation to 8,000 characters or fewer.".into()));
         }
         Run { state: String::new(), images: Vec::new(), questions: self.questions.clone() }.validate_questions(true)
     }
@@ -88,6 +86,18 @@ pub async fn put(
         if count >= MAX_SETUPS {
             return Err(AppError::Invalid("Delete a setup before adding another.".into()));
         }
+    }
+    let others = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(length(CAST(body AS BLOB))), 0) AS "n!: i64" FROM setups WHERE user_id = ? AND id != ?"#,
+        user.id,
+        id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(OcError::from)?;
+    let budget = KEPT_REQUESTS * i64::try_from(st.max_body_bytes).map_err(OcError::internal)?;
+    if others + i64::try_from(text.len()).map_err(OcError::internal)? > budget {
+        return Err(AppError::Invalid("Setups are full. Delete a setup before adding another.".into()));
     }
     sqlx::query!(
         "INSERT INTO setups (id, user_id, name, body) VALUES (?, ?, ?, ?) \

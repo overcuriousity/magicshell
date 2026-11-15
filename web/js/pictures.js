@@ -5,11 +5,10 @@ import { LIMITS } from './limits.js';
 import { RunError } from './run-error.js';
 import { dataUrlBytes } from './systemone.js';
 
-const QUALITIES = [0.85, 0.7, 0.5];
+const QUALITY = 0.85;
 // Preview attempts as [edge, quality], until one fits LIMITS.previewChars.
 const PREVIEWS = [[96, 0.6], [96, 0.4], [64, 0.4]];
 
-export const TOO_LARGE = 'This picture is too large even after shrinking.';
 export const TOO_LARGE_TOGETHER = 'These pictures are too large together. Remove one first.';
 export const UNREADABLE = 'This picture cannot be read. Try a JPEG or PNG.';
 const leftOut = (max) => (max === 1 ? 'Only 1 picture fits. The others were left out.' : `Only ${max} pictures fit. The others were left out.`);
@@ -33,18 +32,15 @@ async function preview(source, encode) {
 // encode resolves to a JPEG data URL. Resolves to { id, url, width, height, bytes, preview }.
 export async function shrink(source, { edge, encode, uid }) {
   const { width, height } = targetSize(source.width, source.height, edge);
-  for (const quality of QUALITIES) {
-    const url = await encode(source, width, height, quality);
-    const bytes = dataUrlBytes(url);
-    if (bytes === null) throw new RunError(UNREADABLE, 'validation');
-    if (bytes <= LIMITS.pictureBytes) return { id: uid(), url, width, height, bytes, preview: await preview(source, encode) };
-  }
-  throw new RunError(TOO_LARGE, 'validation');
+  const url = await encode(source, width, height, QUALITY);
+  const bytes = dataUrlBytes(url);
+  if (bytes === null) throw new RunError(UNREADABLE, 'validation');
+  return { id: uid(), url, width, height, bytes, preview: await preview(source, encode) };
 }
 
-// Adds `files` to the pictures already `held`, in order, as far as the count and the run's byte
-// budget allow. Resolves to the new list and one sentence per kind of problem.
-export async function addFiles(files, held, { max, edge, decode, encode, uid }) {
+// Adds `files` to the pictures already `held`, in order, as far as the count (`max`, Infinity for
+// none) and the run's byte `budget` allow. Resolves to the new list and one sentence per kind of problem.
+export async function addFiles(files, held, { max, edge, budget, decode, encode, uid }) {
   const pictures = [...held];
   const problems = new Set();
   for (const file of files) {
@@ -62,7 +58,7 @@ export async function addFiles(files, held, { max, edge, decode, encode, uid }) 
     try {
       const picture = await shrink(source, { edge, encode, uid });
       const together = pictures.reduce((sum, p) => sum + p.bytes, picture.bytes);
-      if (together > LIMITS.picturesBytes) problems.add(TOO_LARGE_TOGETHER);
+      if (together > budget) problems.add(TOO_LARGE_TOGETHER);
       else pictures.push(picture);
     } catch (e) {
       problems.add(e instanceof RunError ? e.message : UNREADABLE);
@@ -131,7 +127,8 @@ const kb = (bytes) => `${Math.max(1, Math.round(bytes / 1024))} KB`;
 // "1 of 4 · 768×576 · 84 KB", "2 of 4 · 212 KB together", or '' without pictures.
 export function picturesLine(pictures, max) {
   if (pictures.length === 0) return '';
-  const count = `${pictures.length} of ${max}`;
+  const n = pictures.length;
+  const count = Number.isFinite(max) ? `${n} of ${max}` : `${n} ${n === 1 ? 'picture' : 'pictures'}`;
   if (pictures.length === 1) return `${count} · ${pictures[0].width}×${pictures[0].height} · ${kb(pictures[0].bytes)}`;
   return `${count} · ${kb(pictures.reduce((sum, p) => sum + p.bytes, 0))} together`;
 }

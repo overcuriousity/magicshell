@@ -157,3 +157,47 @@ async fn a_redirect_from_the_endpoint_is_not_followed() {
     assert_eq!(err.to_string(), "The model endpoint answered with an error (302). Try again later.");
     assert!(target.requests.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn a_400_with_an_error_message_shows_that_message() {
+    let body = r#"{"error":{"code":400,"message":"questions.q1: \"criteria\" must be an array of 2 to 10 levels","type":"invalid_request_error"}}"#;
+    let err = error_of(FakeReply::status(400, body)).await;
+    assert!(matches!(err, AppError::Upstream(_)));
+    assert_eq!(
+        err.to_string(),
+        r#"The model endpoint refused this run: questions.q1: "criteria" must be an array of 2 to 10 levels."#
+    );
+}
+
+#[tokio::test]
+async fn a_400_with_plain_text_shows_the_text() {
+    let err = error_of(FakeReply::status(400, "  \"state\" must be provided\n")).await;
+    assert_eq!(err.to_string(), r#"The model endpoint refused this run: "state" must be provided."#);
+}
+
+#[tokio::test]
+async fn a_400_with_a_string_error_shows_it_and_keeps_its_full_stop() {
+    let err = error_of(FakeReply::status(422, r#"{"error":"Too many options."}"#)).await;
+    assert_eq!(err.to_string(), "The model endpoint refused this run: Too many options.");
+}
+
+#[tokio::test]
+async fn a_400_with_an_empty_body_keeps_the_general_sentence() {
+    let err = error_of(FakeReply::status(400, "")).await;
+    assert_eq!(err.to_string(), "The model endpoint answered with an error (400). Try again later.");
+}
+
+#[tokio::test]
+async fn a_long_refusal_is_cut_so_the_whole_sentence_fits_300_characters() {
+    let err = error_of(FakeReply::status(400, "ä".repeat(1000))).await;
+    let text = err.to_string();
+    assert_eq!(text.chars().count(), 300);
+    assert!(text.starts_with("The model endpoint refused this run: ää"));
+    assert!(text.ends_with("ä…."));
+}
+
+#[tokio::test]
+async fn a_refusal_over_several_lines_becomes_one_line() {
+    let err = error_of(FakeReply::status(400, "questions.q1:\n  \"criteria\" is wrong\r\n\ttry again")).await;
+    assert_eq!(err.to_string(), r#"The model endpoint refused this run: questions.q1: "criteria" is wrong try again."#);
+}

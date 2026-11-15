@@ -12,8 +12,13 @@ const load = (prefix) =>
 
 test('invalid fixtures give their sentence', () => {
   const all = load('invalid-');
-  assert.ok(all.length >= 20);
+  assert.ok(all.length >= 8);
   for (const [name, f] of all) assert.equal(validateRun(f.run), f.expected_error, name);
+});
+
+test('a run far past the old limits passes', () => {
+  const [[, f]] = load('request-unbounded');
+  assert.equal(validateRun(f.run), null);
 });
 
 test('a valid run passes', () => {

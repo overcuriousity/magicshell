@@ -1,6 +1,5 @@
 // Checks runs before they are sent and the server's replies. See fixtures/systemone for the shared cases.
-import { LIMITS } from './limits.js';
-import { isObject, len, trimmed } from './util.js';
+import { isObject, trimmed } from './util.js';
 
 const BAD_ANSWER = 'The model endpoint sent an answer this app does not understand.';
 const BAD_PICTURE = 'A picture in this request cannot be read. Add it again.';
@@ -18,31 +17,23 @@ export function dataUrlBytes(url) {
 }
 
 
-const KEY = new RegExp(`^[a-z0-9_]{1,${LIMITS.key}}$`);
-export const keyOk = (k) => KEY.test(k);
-const badKey = (k) => `Key "${k}": use 1 to ${LIMITS.key} lower-case letters, digits or _.`;
+// A key becomes a JSON object key; any text but blank will do.
+export const keyOk = (k) => typeof k === 'string' && k.trim() !== '';
 
 // Returns the first problem as a sentence, or null. The first sentence in the list wins:
 // run-level checks first, then each question in order with its own checks in list order.
+// Only what the request needs is checked; how many and how long is the endpoint's to judge.
 export function validateRun(run, { allowEmptyText = false } = {}) {
   const questions = run.questions;
   if (questions.length < 1) return 'Add at least one question.';
-  if (questions.length > LIMITS.questions) return `Use at most ${LIMITS.questions} questions.`;
-  if (len(run.state) > LIMITS.state) return 'Shorten the situation to 8,000 characters or fewer.';
   // A run in the page holds `pictures`; on the wire they are `images`.
   const images = run.images ?? (run.pictures ?? []).map((p) => p.url);
-  if (images.length > LIMITS.pictures) return `Use at most ${LIMITS.pictures} pictures.`;
-  let together = 0;
   for (const image of images) {
-    const bytes = dataUrlBytes(image);
-    if (bytes === null || bytes > LIMITS.pictureBytes || !image.startsWith(`${PICTURE_PREFIX}/9j/`)) return BAD_PICTURE;
-    together += bytes;
+    if (dataUrlBytes(image) === null || !image.startsWith(`${PICTURE_PREFIX}/9j/`)) return BAD_PICTURE;
   }
-  if (together > LIMITS.picturesBytes) return 'These pictures are too large together. Remove one first.';
   const keys = questions.map((q) => q.key);
   if (new Set(keys).size !== keys.length) return 'Name each question differently.';
-  const bad = keys.find((k) => !keyOk(k));
-  if (bad !== undefined) return badKey(bad);
+  if (!keys.every(keyOk)) return 'Give every question a key.';
   for (const q of questions) {
     const problem = validateQuestion(q, allowEmptyText);
     if (problem) return problem;
@@ -51,31 +42,17 @@ export function validateRun(run, { allowEmptyText = false } = {}) {
 }
 
 function validateQuestion(q, allowEmptyText) {
-  const text = trimmed(q.text);
-  if (text === '' && !allowEmptyText) return 'Type a question first.';
-  if (len(text) > LIMITS.questionText) return 'Keep each question to 500 characters or fewer.';
+  if (trimmed(q.text) === '' && !allowEmptyText) return 'Type a question first.';
   if (q.type === 'choice') {
-    const options = q.options ?? [];
-    if (options.length < LIMITS.minOptions) return `Add at least ${LIMITS.minOptions} options.`;
-    if (options.length > LIMITS.maxOptions) return `Use at most ${LIMITS.maxOptions} options.`;
-    const names = options.map((o) => trimmed(o.name));
+    const names = (q.options ?? []).map((o) => trimmed(o.name));
     if (names.some((n) => n === '')) return 'Name every option.';
-    if (names.some((n) => len(n) > LIMITS.optionName)) return 'Keep each option to 40 characters or fewer.';
-    if (options.some((o) => len(trimmed(o.description)) > LIMITS.description)) {
-      return 'Keep each description to 200 characters or fewer.';
-    }
     const seen = new Set();
     for (const n of names) {
       if (seen.has(n)) return `Use each option only once: "${n}".`;
       seen.add(n);
     }
   } else if (q.type === 'score') {
-    const levels = q.levels ?? [];
-    if (levels.length < LIMITS.minLevels) return `Add at least ${LIMITS.minLevels} levels.`;
-    if (levels.length > LIMITS.maxLevels) return `Use at most ${LIMITS.maxLevels} levels.`;
-    const texts = levels.map((l) => trimmed(l.text));
-    if (texts.some((t) => t === '')) return 'Describe every level.';
-    if (texts.some((t) => len(t) > LIMITS.level)) return 'Keep each level to 200 characters or fewer.';
+    if ((q.levels ?? []).some((l) => trimmed(l.text) === '')) return 'Describe every level.';
   }
   return null;
 }

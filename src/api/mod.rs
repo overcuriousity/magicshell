@@ -20,10 +20,7 @@ use crate::limit::Limiter;
 use crate::preheat::Preheat;
 use crate::upstream::Upstream;
 
-/// The body `POST /api/run` takes: 600 KB of pictures as base64 and the rest of the run, under the
-/// 1 MB of the shipped nginx template.
-pub const RUN_BODY_BYTES: usize = 960 * 1024;
-/// The body every other route takes.
+/// The body of the routes that carry no run: sign-in, password, sign-out, preheat.
 const BODY_BYTES: usize = 64 * 1024;
 
 pub struct ApiState {
@@ -38,10 +35,12 @@ pub struct ApiState {
     pub oidc: Option<Arc<Oidc>>,
     /// The cooldown of `POST /api/preheat`; `None` when `[app] preheat` is off or in open mode.
     pub preheat: Option<Preheat>,
-    /// Pictures a run may carry on this server; 0 is off.
-    pub max_pictures: usize,
+    /// Pictures a run may carry on this server; 0 is off, `None` is no limit.
+    pub max_pictures: Option<usize>,
     /// The edge the page shrinks pictures to.
     pub picture_max_edge: u32,
+    /// The body of the routes that carry a run or a setup (`[app] max_request_mb`).
+    pub max_body_bytes: usize,
 }
 
 pub struct Why {
@@ -50,16 +49,18 @@ pub struct Why {
 }
 
 pub fn router(state: Arc<ApiState>) -> Router {
-    let mut router = Router::new().route("/api/config", get(config::get));
+    // Routes that carry no run keep the small limit; the rest take `[app] max_request_mb`.
+    let mut small = Router::new();
+    let mut large = Router::new().route("/api/run", post(run::post));
     if state.preheat.is_some() {
-        router = router.route("/api/preheat", post(run::preheat));
+        small = small.route("/api/preheat", post(run::preheat));
     }
     if state.pool.is_some() {
-        router = router
+        small = small
             .route("/api/auth/sign-in", post(auth::sign_in).layer(rate_limit(10, 5)))
             .route("/api/auth/password", post(auth::change_password).layer(rate_limit(10, 5)));
         if state.oidc.is_some() {
-            router = router
+            small = small
                 .route(
                     "/auth/oidc/start",
                     get(oidc::start)
@@ -73,16 +74,21 @@ pub fn router(state: Arc<ApiState>) -> Router {
                         .layer(map_response(oidc::no_store)),
                 );
         }
-        router = router
-            .route("/api/auth/sign-out", post(auth::sign_out))
+        small = small.route("/api/auth/sign-out", post(auth::sign_out));
+        large = large
             .route("/api/setups", get(setups::list))
             .route("/api/setups/{id}", put(setups::put).delete(setups::delete))
             .route("/api/history", get(history::list).delete(history::clear))
             .route("/api/history/{id}", put(history::put).delete(history::delete));
         if state.why.is_some() {
-            router = router.route("/api/why", post(run::post_why));
+            large = large.route("/api/why", post(run::post_why));
         }
     }
-    // Only a run carries pictures; everything else keeps the small limit.
-    router.layer(RequestBodyLimitLayer::new(BODY_BYTES)).route("/api/run", post(run::post)).with_state(state)
+    let large = large.layer(RequestBodyLimitLayer::new(state.max_body_bytes));
+    Router::new()
+        .route("/api/config", get(config::get))
+        .merge(small)
+        .layer(RequestBodyLimitLayer::new(BODY_BYTES))
+        .merge(large)
+        .with_state(state)
 }

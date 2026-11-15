@@ -26,9 +26,11 @@ pub struct Upstream {
     url: String,
     key: Option<Secret>,
     model: String,
+    max_reply_bytes: usize,
 }
 
-/// System One replies are a few KB; a longer body is not read to its end.
+/// System One replies are a few KB; a longer body is not read to its end. A server sets its own
+/// with [`Upstream::with_max_reply_bytes`].
 const MAX_REPLY_BYTES: usize = 1024 * 1024;
 
 fn upstream_error(sentence: &str) -> AppError {
@@ -61,10 +63,40 @@ fn status_error(status: StatusCode, pictures: bool) -> AppError {
     }
 }
 
-async fn read_capped(mut response: reqwest::Response, pictures: bool) -> Result<Vec<u8>, AppError> {
+const REFUSED: &str = "The model endpoint refused this run: ";
+/// The longest sentence the page shows as the server's own (`serverSentence` in `web/js/run-error.js`).
+const MAX_SENTENCE: usize = 300;
+
+/// The sentence for a run the endpoint refused, from what it says is wrong: `{"error":{"message":…}}`,
+/// `{"error":"…"}`, or a body that is not JSON as text. One line, cut so the whole sentence fits
+/// `MAX_SENTENCE`; `None` when the endpoint says nothing.
+fn refusal(bytes: &[u8]) -> Option<String> {
+    let text = match serde_json::from_slice::<Value>(bytes) {
+        Ok(json) => match &json["error"] {
+            Value::String(s) => s.clone(),
+            error => error["message"].as_str()?.to_owned(),
+        },
+        Err(_) => String::from_utf8_lossy(bytes).into_owned(),
+    };
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        return None;
+    }
+    let room = MAX_SENTENCE - REFUSED.chars().count();
+    let ends = text.ends_with(['.', '!', '?']);
+    let mut message = text;
+    if message.chars().count() + usize::from(!ends) > room {
+        message = message.chars().take(room - 2).collect::<String>() + "….";
+    } else if !ends {
+        message.push('.');
+    }
+    Some(format!("{REFUSED}{message}"))
+}
+
+async fn read_capped(mut response: reqwest::Response, max: usize, pictures: bool) -> Result<Vec<u8>, AppError> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| transport_error(&e, pictures))? {
-        if bytes.len() + chunk.len() > MAX_REPLY_BYTES {
+        if bytes.len() + chunk.len() > max {
             return Err(upstream_error(
                 "The model endpoint sent an answer that is too large. Check the server configuration.",
             ));
@@ -81,7 +113,14 @@ impl Upstream {
                 |_| upstream_error("The model endpoint client could not be set up. Check the server configuration."),
             )?;
         let url = format!("{}/systemone", endpoint.as_str().trim_end_matches('/'));
-        Ok(Self { client, url, key, model })
+        Ok(Self { client, url, key, model, max_reply_bytes: MAX_REPLY_BYTES })
+    }
+
+    /// The longest answer read from the endpoint.
+    #[must_use]
+    pub fn with_max_reply_bytes(mut self, bytes: usize) -> Self {
+        self.max_reply_bytes = bytes;
+        self
     }
 
     pub async fn run(&self, run: &Run) -> Result<Reply, AppError> {
@@ -97,8 +136,13 @@ impl Upstream {
         let started = Instant::now();
         let response = request.send().await.map_err(|e| transport_error(&e, pictures))?;
         let status = response.status();
-        let bytes = read_capped(response, pictures).await?;
+        let bytes = read_capped(response, self.max_reply_bytes, pictures).await?;
         let upstream_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        if matches!(status.as_u16(), 400 | 422)
+            && let Some(sentence) = refusal(&bytes)
+        {
+            return Err(AppError::Upstream(sentence));
+        }
         if !status.is_success() {
             return Err(status_error(status, pictures));
         }

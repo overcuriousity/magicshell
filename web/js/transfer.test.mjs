@@ -9,12 +9,12 @@ const counter = () => {
 };
 const good = { name: 'Mine', sampleState: 'text', questions: [{ key: 'q1', type: 'noul', text: '' }] };
 
-test('validateSetup checks name, sample state, then the questions', () => {
+test('validateSetup checks the name, then the questions', () => {
   assert.equal(validateSetup({ ...good, name: '  ' }), 'Name the setup.');
   assert.equal(validateSetup({ ...good, name: 'x'.repeat(61) }), 'Keep the setup name to 60 characters or fewer.');
-  assert.equal(validateSetup({ ...good, sampleState: 'x'.repeat(8001) }), 'Shorten the situation to 8,000 characters or fewer.');
   assert.equal(validateSetup({ ...good, questions: [] }), 'Add at least one question.');
-  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: 'x'.repeat(501) }] }), 'Keep each question to 500 characters or fewer.');
+  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: '  ' }] }), null);
+  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: 'x'.repeat(5000) }] }), null);
   assert.equal(validateSetup(good), null);
 });
 
@@ -55,4 +55,8 @@ test('validateSetup answers a sentence, not a TypeError, for questions of the wr
   assert.equal(validateSetup({ name: 'x', questions: 'no' }), 'Add at least one question.');
   assert.equal(validateSetup({ name: 'x' }), 'Add at least one question.');
   assert.equal(validateSetup({ name: 'x', questions: [null] }), 'This file does not hold magicshell setups.');
+});
+
+test('an imported setup with a 20,000-character situation is kept', () => {
+  assert.equal(validateSetup({ ...good, sampleState: 'x'.repeat(20000) }), null);
 });

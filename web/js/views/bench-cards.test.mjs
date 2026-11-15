@@ -116,10 +116,10 @@ test('a key the run does not accept is marked invalid while typing', () => {
   const [card] = questionCards(run(), ops);
   const key = byFid(card, 'q0:key');
   assert.equal(key.getAttribute('aria-invalid'), null);
-  key.value = 'q3-h';
+  key.value = '   ';
   key.dispatch('input');
   assert.equal(key.getAttribute('aria-invalid'), 'true');
-  key.value = 'q3_h';
+  key.value = 'Q3 – h/ü';
   key.dispatch('input');
   assert.equal(key.getAttribute('aria-invalid'), null);
 });
@@ -197,4 +197,17 @@ test('a description prefers the one used with the name in its row', () => {
   desc.selectionStart = desc.selectionEnd = desc.value.length;
   desc.dispatch('focus');
   assert.ok(asked.includes('tech'), `asked ${JSON.stringify(asked)}`);
+});
+
+test('a list never stops taking rows and keeps at least one', () => {
+  const { ops } = recordingOps();
+  const options = Array.from({ length: 12 }, (_, i) => ({ id: `o${i}`, name: `n${i}`, description: '' }));
+  const [card] = questionCards({ state: '', questions: [{ key: 'q0', type: 'choice', text: 'Q', options }] }, ops);
+  assert.equal(byFid(card, 'q0:option:add')?.getAttribute('disabled') ?? byFid(card, 'q0:add')?.getAttribute('disabled'), null);
+  const [one] = questionCards({ state: '', questions: [{ key: 'q0', type: 'choice', text: 'Q', options: [options[0]] }] }, ops);
+  const remove = all(one, (n) => (n.getAttribute('data-fid') ?? '').endsWith(':remove'))[0];
+  assert.notEqual(remove.getAttribute('disabled'), null);
+  const [two] = questionCards({ state: '', questions: [{ key: 'q0', type: 'choice', text: 'Q', options: options.slice(0, 2) }] }, ops);
+  const removes = all(two, (n) => (n.getAttribute('data-fid') ?? '').endsWith(':remove'));
+  assert.equal(removes[0].getAttribute('disabled'), null);
 });

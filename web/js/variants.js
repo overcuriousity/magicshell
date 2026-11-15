@@ -15,8 +15,12 @@ export const withoutDescriptions = (run) =>
     return q;
   });
 
-// A, B, C… by position; a question has at most LIMITS.maxOptions (8) options, well within A to Z.
-export const neutralName = (i) => String.fromCharCode(65 + i);
+// A, B, C… by position, then AA, AB… as spreadsheet columns go on past Z.
+export function neutralName(i) {
+  let name = '';
+  for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
+  return name;
+}
 
 export const neutralNames = (run) =>
   mapQuestions(run, (q) => {
