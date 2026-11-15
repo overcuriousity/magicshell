@@ -67,6 +67,14 @@ export function createSettingsView() {
     );
   }
 
+  function similar(ctx) {
+    if (!ctx.similar) return null;
+    return h('section', { class: 'ms-settings__part', 'aria-labelledby': 'settings-similar' },
+      h('h2', { class: 'oc-text-section', id: 'settings-similar' }, 'Similar questions'),
+      h('p', {}, `Question texts go to the embedding model ${ctx.similar.model} so the guide can suggest options and scales from similar earlier questions. The resulting vectors are kept in this browser, not on the server.`),
+    );
+  }
+
   function account(ctx) {
     const name = ctx.user?.username ?? '';
     const current = h('input', { type: 'password', class: 'oc-input', id: 'pw-current', name: 'current', autocomplete: 'current-password', required: true });
@@ -116,6 +124,7 @@ export function createSettingsView() {
         h('header', { class: 'oc-page-head' }, h('h1', { class: 'oc-text-page', tabindex: '-1' }, 'Settings')),
         ctx.mode === 'accounts' && ctx.user ? account(ctx) : null,
         look(),
+        similar(ctx),
       ].filter(Boolean));
       window.addEventListener(LOOK_EVENT, sync);
     },

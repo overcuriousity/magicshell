@@ -34,6 +34,107 @@ const memoryStore = ({ history = [], setups = [] } = {}) => {
 
 const fire = entry('a', '2026-11-12T10:00:00Z', 'Printer is on fire');
 
+const similarDouble = () => {
+  const updates = [];
+  let options = null;
+  const service = { update: (data) => updates.push(data) };
+  return {
+    updates,
+    service,
+    options: () => options,
+    createService(args) { options = args; return service; },
+  };
+};
+
+const similarOptions = (similar) => ({
+  builtin: [{ id: 'builtin', name: 'Built in', questions: [] }],
+  similar: { client: {}, config: { id: 'c', min: 0.75, owner: 'open' } },
+  createService: similar.createService,
+});
+
+test('similar sources share the cached history and setups, including built-ins', async () => {
+  const saved = { id: 'saved', name: 'Saved', questions: [] };
+  const store = memoryStore({ history: [fire], setups: [saved] });
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  assert.equal(wrapped.similar, similar.service);
+  const expected = {
+    history: [fire],
+    setups: [{ id: 'builtin', name: 'Built in', questions: [] }, saved],
+  };
+  assert.deepEqual(await similar.options().sources(), expected);
+  assert.deepEqual(await similar.options().sources(), expected);
+  assert.equal(store.calls.listHistory, 1);
+  assert.equal(store.calls.listSetups, 1);
+});
+
+test('successful history writes and their undo update similar sources without another read', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const other = entry('b', '2026-11-13T10:00:00Z', 'Scanner is on fire');
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [fire]);
+  await wrapped.saveEntry(other);
+  assert.deepEqual(similar.updates.at(-1).history, [fire, other]);
+  await wrapped.deleteEntry('a');
+  assert.deepEqual(similar.updates.at(-1).history, [other]);
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [other, fire]);
+  await wrapped.clearHistory();
+  assert.deepEqual(similar.updates.at(-1).history, []);
+  await wrapped.saveEntry(fire);
+  assert.deepEqual(similar.updates.at(-1).history, [fire]);
+  assert.equal(store.calls.listHistory, 1);
+  assert.equal(store.calls.listSetups, 1);
+});
+
+test('successful setup writes and their undo update similar sources with built-ins', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const saved = { id: 'saved', name: 'Saved', questions: [] };
+  await wrapped.saveSetup(saved);
+  assert.deepEqual(similar.updates.at(-1).setups, [
+    { id: 'builtin', name: 'Built in', questions: [] }, saved,
+  ]);
+  await wrapped.deleteSetup(saved.id);
+  assert.deepEqual(similar.updates.at(-1).setups, [{ id: 'builtin', name: 'Built in', questions: [] }]);
+  await wrapped.saveSetup(saved);
+  assert.deepEqual(similar.updates.at(-1).setups, [
+    { id: 'builtin', name: 'Built in', questions: [] }, saved,
+  ]);
+});
+
+test('a failed write does not update similar sources', async () => {
+  const store = memoryStore();
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  const count = similar.updates.length;
+  assert.equal(count, 1);
+  store.failWrite = true;
+  await assert.rejects(wrapped.saveEntry(fire), /write failed/);
+  assert.equal(similar.updates.length, count);
+});
+
+test('a refresh updates similar sources after the read succeeds', async () => {
+  const store = memoryStore({ history: [fire] });
+  const similar = similarDouble();
+  const wrapped = withSuggestions(store, similarOptions(similar));
+  await wrapped.suggest.load();
+  await store.deleteEntry(fire.id);
+  await wrapped.suggest.refresh();
+  assert.deepEqual(similar.updates.at(-1).history, []);
+});
+
+test('similarity is off without a config', () => {
+  const wrapped = withSuggestions(memoryStore());
+  assert.equal(wrapped.similar, null);
+});
+
 test('reads history and setups once, however often load is called', async () => {
   const store = memoryStore();
   const wrapped = withSuggestions(store);
