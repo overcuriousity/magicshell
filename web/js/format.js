@@ -3,7 +3,11 @@ export const prob = (p) => p.toFixed(2);
 
 export const pct = (p) => `${Math.round(p * 100)} %`;
 
-export const scoreText = (score) => score.toFixed(1);
+// A score counted from 1, as people number steps; the wire value counts from 0.
+export const stepText = (score) => (score + 1).toFixed(1);
+
+// The exact place of a score, e.g. "step 1.7 of 2".
+export const stepPlace = (score, count) => `step ${stepText(score)} of ${count}`;
 
 // The level a score is closest to: round half to even, clamped to the levels.
 export function nearestLevel(score, count) {

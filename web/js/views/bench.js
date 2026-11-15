@@ -263,6 +263,7 @@ export function createBenchView(deps = {}) {
         suggest,
         fidPrefix: 'b',
         slotsFor: (q) => colorSlots(state.ranA?.questions.find((x) => x.key === q.key), q),
+        spreadFor: (q) => state.ranA?.questions.find((x) => x.key === q.key)?.levels?.length ?? null,
       })),
     );
     hosts.variantRun.replaceChildren(

@@ -1,6 +1,6 @@
 // Why?: how far each word of a situation moves a decision model's answer. Pure logic;
 // the runner and the views build on these functions.
-import { nearestLevel, noulIsYes, pct, scoreText } from './format.js';
+import { nearestLevel, noulIsYes, pct, stepText } from './format.js';
 import { trimmed } from './util.js';
 
 // How many words are asked between two saves of a running Why?.
@@ -141,10 +141,10 @@ function signedNumber(value, text) {
   return value > 0 ? `+${text}` : `${MINUS}${text.replace('-', '')}`;
 }
 
-// A measured value as shown: "47 %" for choice and yes/no, "2.2" for a score.
-export const valueText = (question, v) => (question.type === 'score' ? scoreText(v) : pct(v));
+// A measured value as shown: "47 %" for choice and yes/no, "3.2" (counted from 1) for a score.
+export const valueText = (question, v) => (question.type === 'score' ? stepText(v) : pct(v));
 
-// A change as shown: "−26" (percentage points) or "+0.4" (score).
+// A change as shown: "−26" (percentage points) or "+0.4" (steps).
 export function changeText(question, delta) {
   if (question.type === 'score') return signedNumber(delta, delta.toFixed(1));
   const points = Math.round(delta * 100);
@@ -158,17 +158,17 @@ export function flipName(question, flip) {
   return flip ? 'Yes' : 'No';
 }
 
-// The name of what is measured: the picked option, "score" or "yes".
+// The name of what is measured: the picked option, "step" or "yes".
 export function measuredName(question, pick) {
   if (question.type === 'choice') return trimmed(question.options[pick].name);
-  return question.type === 'score' ? 'score' : 'yes';
+  return question.type === 'score' ? 'step' : 'yes';
 }
 
 const FLIP_LEAD = { choice: 'pick', score: 'nearest', noul: 'answer' };
 
 // The numbers line of one word, e.g. "without it: sushi 47 % → 21 % (−26), pick becomes pizza".
 export function describe(question, info) {
-  const label = question.type === 'score' ? '' : `${measuredName(question, info.pick)} `;
+  const label = `${measuredName(question, info.pick)} `;
   const values = `${valueText(question, info.before)} → ${valueText(question, info.after)}`;
   const head = `without it: ${label}${values} (${changeText(question, info.delta)})`;
   if (info.flip === undefined) return head;

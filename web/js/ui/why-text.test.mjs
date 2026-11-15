@@ -163,7 +163,7 @@ test('the table lists the strongest words with before, after and change', () => 
     ['people ⇄ pizza', '47 % → 47 %', '±0'],
   ]);
   assert.equal(whyTableLabel(dinner, base.dinner), 'Strongest words · sushi was 47 %');
-  assert.equal(whyTableLabel(urgency, base.urgency), 'Strongest words · score was 2.2');
+  assert.equal(whyTableLabel(urgency, base.urgency), 'Strongest words · step was 3.2');
   assert.equal(whyTableLabel(wet, base.wet), 'Strongest words · yes was 94 %');
 });
 

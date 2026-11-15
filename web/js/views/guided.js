@@ -22,7 +22,7 @@ const SPINNER_AFTER_MS = 400;
 const ASK_KINDS = [
   { id: 'noul', label: 'a yes-or-no question', hint: 'The model answers yes or no' },
   { id: 'choice', label: 'a choice between options', hint: 'You name the options, it picks one' },
-  { id: 'score', label: 'for a rating', hint: 'A rating on a scale' },
+  { id: 'score', label: 'for a rating', hint: 'You set the levels, it picks one' },
   { id: 'other', label: 'something else', hint: 'Opens the bench' },
 ];
 const CONTEXT_LABEL = 'Additional context (optional)';
@@ -212,7 +212,8 @@ export function createGuidedView() {
     const setText = (id, text) => model.setLevels(model.state.levels.map((l) => (l.id === id ? { ...l, text } : l)));
     parts.push(
       h('p', { class: 'oc-field__label ms-guide__levels-lead', 'aria-hidden': 'true' }, 'Levels, lowest first'),
-      h('ol', { class: 'ms-guide__levels', 'aria-label': 'Levels, lowest first' },
+      h('p', { class: 'ms-guide__levels-note', id: 'levels-note' }, 'It picks one of these, never a value between them.'),
+      h('ol', { class: 'ms-guide__levels', 'aria-label': 'Levels, lowest first', 'aria-describedby': 'levels-note' },
         levels.map((l, i) =>
           h('li', { class: 'oc-row' },
             h('span', { class: `ms-dot ${levelClass(i, levels.length)}`, 'aria-hidden': 'true' }),

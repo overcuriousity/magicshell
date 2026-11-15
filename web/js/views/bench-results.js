@@ -41,7 +41,7 @@ function deltaLine(qa, d) {
   // The pick of A or B could not be matched to an option, so whether it changed is not known.
   if (d.pickChanged === null) parts.push(icon('info', 'row'), h('span', {}, 'pick not compared'));
   let change = null;
-  if (qa.type === 'score' && d.scoreDelta !== null && d.scoreDelta !== undefined) change = signed(d.scoreDelta);
+  if (qa.type === 'score' && d.scoreDelta !== null && d.scoreDelta !== undefined) change = `${signed(d.scoreDelta)} steps`;
   if (qa.type === 'noul') change = `yes ${signed(d.delta)}`;
   if (change) parts.push(h('span', {}, d.pickChanged ? `· ${change}` : change));
   return parts.length ? h('div', { class: 'ms-delta' }, parts) : null;

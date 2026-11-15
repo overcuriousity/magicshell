@@ -6,7 +6,7 @@
 // column (.ms-bars--delta) with the change beside each number; opts.colors gives the rows
 // the colour slots of another order (a variant keeps each option's and level's colour from A), and
 // for levels opts.colorCount the number of levels those slots are spread over (A's count).
-import { nearestLevel, noulIsYes, pct, prob, scoreText, signed } from '../format.js';
+import { nearestLevel, noulIsYes, pct, prob, signed, stepPlace } from '../format.js';
 import { levelClass, optionClass } from './colors.js';
 import { h } from './dom.js';
 import { icon } from './icons.js';
@@ -76,7 +76,7 @@ export function scoreResult(question, answer, opts = {}) {
   return h(
     'div',
     { class: 'ms-answer' },
-    pickLine(`${scoreText(answer.score)} · ${texts[nearest]}`, answer.confidence, opts),
+    pickLine(`${texts[nearest]} · ${stepPlace(answer.score, count)}`, answer.confidence, opts),
     mark,
     h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: color(i) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),

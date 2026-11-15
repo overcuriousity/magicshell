@@ -1,6 +1,6 @@
-// The pictures of a situation: thumbnails with a remove button each, one button that opens the
-// device's own picker (on a phone: camera or gallery), and a line with the count and size. Dropping
-// files on the situation and pasting a picture into it add pictures too.
+// The pictures of a situation: thumbnails with a remove button each, a button that opens the
+// device's own picker, on touch screens one that opens the camera, and a line with the count and
+// size. Dropping files on the situation and pasting a picture into it add pictures too.
 import { addFiles, browserCodec, kilobytes, picturesLine } from '../pictures.js';
 import { h } from './dom.js';
 import { icon } from './icons.js';
@@ -82,28 +82,33 @@ export function createPictureField({ get, set, limits, notify, announce = () => 
   function element() {
     const pictures = get();
     const full = isFull(pictures, limits.max);
-    const input = h('input', {
+    const fileInput = (attrs) => h('input', {
       type: 'file',
       accept: 'image/*',
-      multiple: limits.max > 1,
       hidden: true,
       tabindex: '-1',
       'aria-hidden': 'true',
+      ...attrs,
       onchange: (e) => {
         const files = [...e.target.files];
         e.target.value = '';
         add(files);
       },
     });
-    const button = h('button', {
+    const opener = (input, cls, fid, content) => h('button', {
       type: 'button',
-      class: 'oc-btn',
-      'data-fid': `${id}:add`,
+      class: cls,
+      'data-fid': fid,
       'aria-disabled': full ? 'true' : null,
       onclick: () => {
         if (!isFull(get(), limits.max)) input.click();
       },
-    }, icon('plus'), addLabel(pictures.length));
+    }, ...content);
+    const input = fileInput({ multiple: limits.max > 1 });
+    // Phone browsers may leave the camera out of a picker that takes several files; `capture` opens it.
+    const cameraInput = fileInput({ capture: 'environment' });
+    const button = opener(input, 'oc-btn', `${id}:add`, [icon('plus'), addLabel(pictures.length)]);
+    const camera = opener(cameraInput, 'oc-btn ms-pictures__camera', `${id}:camera`, [icon('camera'), 'Take photo']);
     const line = picturesLine(pictures, limits.max);
     return h('div', { class: 'ms-pictures' },
       pictures.length > 0
@@ -123,8 +128,10 @@ export function createPictureField({ get, set, limits, notify, announce = () => 
         : null,
       h('div', { class: 'ms-pictures__add' },
         full ? null : h('span', { class: 'ms-pictures__hint' }, 'Drop pictures here, paste one, or'),
+        camera,
         button,
         input,
+        cameraInput,
       ),
       line ? h('p', { class: 'ms-pictures__line' }, full ? `${line} · ${FULL}` : line) : null,
     );

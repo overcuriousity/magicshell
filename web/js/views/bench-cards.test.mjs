@@ -126,6 +126,27 @@ test('option dots take the colour slots given (B keeps A\'s colours)', () => {
   assert.deepEqual(dots.map((d) => d.getAttribute('class')), ['ms-dot opt-3', 'ms-dot opt-1', 'ms-dot opt-4']);
 });
 
+const scoreRun = (texts) => ({
+  state: '',
+  questions: [{ key: 'q1', type: 'score', text: 'R', levels: texts.map((text, i) => ({ id: `l${i}`, text })) }],
+});
+const dotClasses = (card) => all(card, (n) => (n.getAttribute('class') ?? '').startsWith('ms-dot')).map((d) => d.getAttribute('class'));
+
+test('level rows lead with the ramp colour, not a number beside the name', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(scoreRun(['0', '255']), ops);
+  assert.deepEqual(dotClasses(card), ['ms-dot lvl-1', 'ms-dot lvl-4']);
+  assert.equal(all(card, (n) => n.getAttribute('class') === 'ms-row__index').length, 0);
+});
+
+test('level dots in B spread A\'s slots over A\'s number of levels', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(scoreRun(['low', 'high']), ops, { locked: true, slotsFor: () => [0, 3], spreadFor: () => 4 });
+  assert.deepEqual(dotClasses(card), ['ms-dot lvl-1', 'ms-dot lvl-4']);
+  const [mid] = questionCards(scoreRun(['low', 'mid']), ops, { locked: true, slotsFor: () => [0, 1], spreadFor: () => 4 });
+  assert.deepEqual(dotClasses(mid), ['ms-dot lvl-1', 'ms-dot lvl-2']);
+});
+
 // A suggestion source that offers nothing; `asked` records every pairedName it was given.
 function stubSuggest(asked = []) {
   const current = { rest: (_pool, _text, o) => { asked.push(o?.pairedName); return ''; }, recent: () => [], frequent: () => [] };

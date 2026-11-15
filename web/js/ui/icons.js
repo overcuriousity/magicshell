@@ -34,6 +34,8 @@ const PATHS = {
   danger: [['circle', { cx: 12, cy: 12, r: 10 }], p('m15 9-6 6'), p('m9 9 6 6')],
   info: [['circle', { cx: 12, cy: 12, r: 10 }], p('M12 16v-4'), p('M12 8h.01')],
   plus: [p('M5 12h14'), p('M12 5v14')],
+  // Lucide camera (the manifest has no icon for taking a photo)
+  camera: [p('M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'), ['circle', { cx: 12, cy: 13, r: 3 }]],
   // Lucide image (the manifest has no icon for a picture)
   picture: [['rect', { width: 18, height: 18, x: 3, y: 3, rx: 2, ry: 2 }], ['circle', { cx: 9, cy: 9, r: 2 }], p('m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21')],
   // The kinds of question in the guide. Lucide toggle-right, list-checks, gauge, sliders-horizontal.

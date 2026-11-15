@@ -154,3 +154,24 @@ test('a file dropped beside the situation does not open in place of the app', ()
     assert.equal(text.prevented, false, type);
   }
 });
+
+test('a camera button opens a capture input; the picker input takes several files', () => {
+  const node = (tag) => ({
+    tagName: tag, attrs: {}, kids: [], listeners: {},
+    setAttribute(k, v) { this.attrs[k] = v; },
+    addEventListener(t, fn) { this.listeners[t] = fn; },
+    append(...n) { this.kids.push(...n); },
+  });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: node, createElementNS: (_ns, tag) => node(tag), createTextNode: (t) => ({ text: t }) };
+  try {
+    const el = field().f.element();
+    const all = (n, out = []) => { if (n?.tagName) { out.push(n); n.kids.forEach((k) => all(k, out)); } return out; };
+    const inputs = all(el).filter((n) => n.tagName === 'input');
+    assert.deepEqual(inputs.map((i) => [i.attrs.capture ?? null, i.attrs.multiple ?? null]), [[null, ''], ['environment', null]]);
+    const camera = all(el).find((n) => n.attrs['data-fid'] === 't:camera');
+    assert.ok(camera.attrs.class.includes('ms-pictures__camera'));
+  } finally {
+    globalThis.document = saved;
+  }
+});
