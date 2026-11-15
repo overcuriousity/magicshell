@@ -2,6 +2,7 @@ pub mod api;
 pub mod app;
 pub mod assets;
 pub mod config;
+pub mod embed;
 pub mod error;
 pub mod kit;
 pub mod limit;
