@@ -21,6 +21,7 @@ class FakeNode {
     this.attributes.set(k, String(v));
     if (k === 'value') this.value = String(v);
   }
+  removeAttribute(k) { this.attributes.delete(k); }
   hasAttribute(k) { return this.attributes.has(k); }
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   append(...nodes) {
@@ -108,6 +109,19 @@ test('a key is committed once, on change, not again on blur', () => {
   assert.deepEqual(calls, [['renameQuestion', 'dinner', 'where']]);
   key.dispatch('blur');
   assert.equal(calls.length, 1);
+});
+
+test('a key the run does not accept is marked invalid while typing', () => {
+  const { ops } = recordingOps();
+  const [card] = questionCards(run(), ops);
+  const key = byFid(card, 'q0:key');
+  assert.equal(key.getAttribute('aria-invalid'), null);
+  key.value = 'q3-h';
+  key.dispatch('input');
+  assert.equal(key.getAttribute('aria-invalid'), 'true');
+  key.value = 'q3_h';
+  key.dispatch('input');
+  assert.equal(key.getAttribute('aria-invalid'), null);
 });
 
 test('plain Enter in the key field does not commit early', () => {

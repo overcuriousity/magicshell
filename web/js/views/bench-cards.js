@@ -7,6 +7,7 @@ import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
+import { keyOk } from '../systemone.js';
 
 const TYPES = [
   { id: 'choice', label: 'choice' },
@@ -138,6 +139,12 @@ function card(q, index, count, ops, locked, slots, spread, { idPrefix, fidPrefix
     autocomplete: 'off',
     spellcheck: 'false',
     readonly: locked,
+    // Red while the key is not one the run accepts; the error under Save says why.
+    'aria-invalid': keyOk(q.key) ? null : 'true',
+    oninput: (e) => {
+      if (keyOk(e.target.value.trim())) e.target.removeAttribute('aria-invalid');
+      else e.target.setAttribute('aria-invalid', 'true');
+    },
     // A word taken from the grey suggestion ends in a `change` too: the helper sends one when the
     // browser does not.
     onchange: (e) => commitKey(e.target),
