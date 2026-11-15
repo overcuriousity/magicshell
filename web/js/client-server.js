@@ -73,6 +73,22 @@ export function createServerClient(fetchFn, now = () => performance.now(), { max
   return {
     run: (run, opts) => post('api/run', run, opts),
     why: (run) => post('api/why', run),
+    async embed(texts) {
+      const reply = await send(fetchFn, 'api/embed', JSON.stringify({ texts }));
+      const response = await reply.text().catch(() => '');
+      if (!reply.ok) throw new RunError(sentence(response, reply.status), KINDS[reply.status] ?? 'upstream');
+      let body;
+      try {
+        body = JSON.parse(response);
+      } catch {
+        throw new RunError('The model endpoint sent an answer this app does not understand.', 'upstream');
+      }
+      if (!Array.isArray(body?.vectors) || !body.vectors.every((vector) =>
+        Array.isArray(vector) && vector.every((value) => Number.isFinite(value)))) {
+        throw new RunError('The model endpoint sent an answer this app does not understand.', 'upstream');
+      }
+      return body.vectors;
+    },
     async signIn(username, password) {
       await expectNoContent(await send(fetchFn, 'api/auth/sign-in', JSON.stringify({ username, password })));
     },
