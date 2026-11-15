@@ -206,6 +206,14 @@ async fn a_reply_over_the_configured_cap_is_rejected() {
 }
 
 #[tokio::test]
+async fn an_over_cap_refusal_body_does_not_replace_the_refusal() {
+    let fake = fake_upstream(vec![FakeReply::status(400, "x".repeat(32))]).await;
+    let err = embedding(fake.url, None).with_max_reply_bytes(8).embed(&["dinner".into()]).await.unwrap_err();
+    assert!(matches!(err, AppError::Invalid(_)));
+    assert_eq!(err.to_string(), "The embedding endpoint refused these texts.");
+}
+
+#[tokio::test]
 async fn a_trailing_slash_on_the_endpoint_is_ignored() {
     let fake = fake_upstream(vec![FakeReply::ok(r#"{"data":[{"embedding":[1.0]}]}"#)]).await;
     let url: url::Url = format!("{}/", fake.url).parse().unwrap();

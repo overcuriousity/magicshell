@@ -121,10 +121,10 @@ impl Embedding {
         }
         let response = request.send().await.map_err(|e| transport_error(&e))?;
         let status = response.status();
-        let bytes = read_capped(response, self.max_reply_bytes).await?;
         if !status.is_success() {
             return Err(status_error(status));
         }
+        let bytes = read_capped(response, self.max_reply_bytes).await?;
         parse_reply(&bytes, texts.len())
     }
 }
