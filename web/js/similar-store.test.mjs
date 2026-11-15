@@ -214,6 +214,21 @@ test('initialization claims before reading and removes other configs and stale s
   assert.deepEqual(service.options('Query?'), ['yes']);
 });
 
+test('initialization from persisted vectors notifies the view without embedding', async () => {
+  const vectors = memoryVectorStore();
+  await vectors.claim(config.owner);
+  await vectors.put(vectorRecord('query?', new Float32Array([1, 0])));
+  await vectors.put(vectorRecord('dinner?', new Float32Array([1, 0])));
+  const data = { history: [entry('2026-11-01T00:00:00Z', choice('Dinner?', 'pizza'))], setups: [] };
+  let embeds = 0;
+  let changes = 0;
+  const service = makeService(async () => { embeds += 1; return [[1, 0]]; }, data, vectors);
+  await service.load('Query?', () => { changes += 1; });
+  assert.equal(embeds, 0);
+  assert.equal(changes, 1);
+  assert.deepEqual(service.options('Query?'), ['pizza']);
+});
+
 test('network, limit and upstream failures persist nothing and retry once after 30 seconds', async (t) => {
   for (const [name, kind] of [['network', 'network'], ['429', 'limit'], ['502', 'upstream']]) {
     await t.test(name, async () => {

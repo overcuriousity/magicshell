@@ -212,6 +212,7 @@ export function createSimilarService({
         await initializing;
         if (atGeneration !== generation || !active) return;
         if (memory.has(active.key)) active.query = memory.get(active.key);
+        if (active.query) notify(atGeneration);
         await runBatches(atGeneration, retrying);
       } catch {
         // Loading suggestions is best effort; the guide never waits for it.
