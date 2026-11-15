@@ -4,6 +4,14 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Changed
+
+- A score's result names the nearest level only, in the bench and in History as in the guided view. Its exact place, counted from 1 (`step 1.7 of 2`), is the name's tooltip on hover or keyboard focus and is read out after it. The bench showed the number counted from 0, which disagreed with level names such as `1` to `5`.
+- "Why?" counts a score's steps from 1 as well (`step 3.2 → 2.4`), and a variant's change of a score reads `+0.30 steps`.
+- Bench level rows lead with the level's colour instead of a number from 0, which stood beside level names that are numbers themselves.
+- The guided view says what a rating does ("You set the levels, it picks one"), and under your own levels that the model picks one of them, never a value between them.
+- The colour dots of options and levels have the same outline as the bars, so the lightest level shows on the light background.
+
 ## [2026.11.10] - 2026-11-14
 
 ### Fixed

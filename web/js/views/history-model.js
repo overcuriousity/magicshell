@@ -1,7 +1,7 @@
 // History's state and actions, without any DOM: the entries newest first, remove and clear with
 // an undo, the headline of an entry and the time it is shown with.
 import { requestText } from '../client-server.js';
-import { nearestLevel, noulIsYes, scoreText } from '../format.js';
+import { nearestLevel, noulIsYes } from '../format.js';
 import { levelClass, optionClass } from '../ui/colors.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -35,7 +35,7 @@ export function headline(entry) {
     const levels = (q.levels ?? []).map((l) => l.text.trim());
     const nearest = nearestLevel(a.score, levels.length);
     const level = levels[nearest] ?? '';
-    return { text, answer: entry.guided ? level : `${scoreText(a.score)} · ${level}`, cls: levelClass(nearest, levels.length) };
+    return { text, answer: level, cls: levelClass(nearest, levels.length) };
   }
   return { text, answer: noulIsYes(a.noul) ? 'Yes' : 'No', cls: 'ms-accent' };
 }

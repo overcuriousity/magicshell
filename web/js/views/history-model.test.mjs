@@ -73,7 +73,7 @@ test('the headline falls back to the situation and names Yes, No and levels', ()
     reply: { answers: { q1: { type: 'score', score: 2.2, probabilities: [0, 0, 1], confidence: 0.5 } } },
   });
   assert.equal(headline(score(true)).answer, 'good');
-  assert.equal(headline(score(false)).answer, '2.2 · good');
+  assert.equal(headline(score(false)).answer, 'good');
 });
 
 test('benchResult puts the latency into the reply', () => {

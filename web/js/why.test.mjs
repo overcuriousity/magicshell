@@ -225,10 +225,10 @@ test('describe writes the numbers line per type', () => {
   assert.equal(describe(dinner, info(dinner, 0.4725)), 'without it: sushi 47\u00a0% → 47\u00a0% (±0)');
   assert.equal(
     describe(urgency, info(urgency, 1.4296, 1)),
-    'without it: 2.2 → 1.4 (−0.8), nearest becomes Can wait a week',
+    'without it: step 3.2 → 2.4 (−0.8), nearest becomes Can wait a week',
   );
-  assert.equal(describe(urgency, info(urgency, 2.2496)), 'without it: 2.2 → 2.2 (±0)');
-  assert.equal(describe(urgency, info(urgency, 2.6296)), 'without it: 2.2 → 2.6 (+0.4)');
+  assert.equal(describe(urgency, info(urgency, 2.2496)), 'without it: step 3.2 → 3.2 (±0)');
+  assert.equal(describe(urgency, info(urgency, 2.6296)), 'without it: step 3.2 → 3.6 (+0.4)');
   assert.equal(
     describe(wet, info(wet, 0.4137, false)),
     'without it: yes 94\u00a0% → 41\u00a0% (−53), answer becomes No',

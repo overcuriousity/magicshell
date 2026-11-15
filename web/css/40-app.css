@@ -40,7 +40,7 @@
 }
 
 /* A colour dot beside a name; decoration, the name carries the meaning. */
-.ms-dot { display: inline-block; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--k); }
+.ms-dot { display: inline-block; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--k); outline: 1px solid var(--k-outline, transparent); outline-offset: -1px; }
 
 .ms-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ms-chip {
@@ -206,7 +206,6 @@
 .ms-row { align-items: start; }
 .ms-row__lead { align-items: center; min-height: var(--ms-field-h); }
 .ms-row__acts { margin-top: calc((var(--ms-field-h) - var(--ms-row-h)) / 2); }
-.ms-row__index { color: var(--color-fg-muted); font-family: var(--font-mono); font-size: var(--text-micro); }
 @container setup (max-width: 34rem) {
   /* Stacked rows: the head names the list, and each description carries its own lead. */
   .ms-rows__head { grid-template-columns: 1rem minmax(0, 1fr); }
@@ -449,6 +448,7 @@
 /* Footer: one quiet line at the end of the page, as in bitvault. */
 .ms-footer { margin-top: var(--space-6); padding-block: var(--space-3); color: var(--color-fg-muted); font-size: var(--text-micro); text-align: center; }
 .ms-guide__levels-lead { margin: 0; }
+.ms-guide__levels-note { margin: 0; color: var(--color-fg-muted); font-size: var(--text-dense); }
 
 /* Why?: the situation with every word shaded by how far leaving it out moved the answer. The
    direction is the diverging pair (towards the pick, away from it), the size is five steps; the

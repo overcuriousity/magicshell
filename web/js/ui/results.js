@@ -6,7 +6,7 @@
 // column (.ms-bars--delta) with the change beside each number; opts.colors gives the rows
 // the colour slots of another order (a variant keeps each option's and level's colour from A), and
 // for levels opts.colorCount the number of levels those slots are spread over (A's count).
-import { nearestLevel, noulIsYes, pct, prob, scoreText, signed } from '../format.js';
+import { nearestLevel, noulIsYes, pct, prob, signed, stepPlace } from '../format.js';
 import { levelClass, optionClass } from './colors.js';
 import { h } from './dom.js';
 import { icon } from './icons.js';
@@ -20,11 +20,15 @@ function setWidth(el, p) {
   return el;
 }
 
-function pickLine(name, confidence, opts) {
+// `exact`, for a score, is its exact place: a tooltip on hover or focus and read out after the name.
+function pickLine(name, confidence, opts, exact = null) {
+  const label = exact
+    ? h('span', { class: 'ms-pick__name', tabindex: '0', 'data-oc-tip': exact }, name, h('span', { class: 'oc-sr-only' }, `, ${exact}`))
+    : h('span', { class: 'ms-pick__name' }, name);
   return h(
     'div',
     { class: 'ms-pick' },
-    h('span', { class: 'ms-pick__name' }, name),
+    label,
     h('span', { class: 'ms-pick__meta' }, `confidence ${num(confidence, opts)}`),
   );
 }
@@ -76,7 +80,7 @@ export function scoreResult(question, answer, opts = {}) {
   return h(
     'div',
     { class: 'ms-answer' },
-    pickLine(`${scoreText(answer.score)} · ${texts[nearest]}`, answer.confidence, opts),
+    pickLine(texts[nearest], answer.confidence, opts, stepPlace(answer.score, count)),
     mark,
     h('div', { class: 'ms-scale', 'aria-hidden': 'true' }, texts.map((_, i) => h('span', { class: color(i) }))),
     h('div', { class: 'ms-ends' }, h('span', null, texts[0]), h('span', null, texts[count - 1])),

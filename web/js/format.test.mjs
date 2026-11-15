@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { noulIsYes, nearestLevel, pct, prob, scoreText, signed } from './format.js';
+import { noulIsYes, nearestLevel, pct, prob, signed, stepPlace, stepText } from './format.js';
 
 test('prob has two decimals', () => {
   assert.equal(prob(0.805), '0.81');
@@ -13,9 +13,13 @@ test('pct rounds and uses a non-breaking space', () => {
   assert.equal(pct(0), '0 %');
 });
 
-test('scoreText has one decimal', () => {
-  assert.equal(scoreText(2.2296282454039096), '2.2');
-  assert.equal(scoreText(3), '3.0');
+test('stepText counts from 1 with one decimal', () => {
+  assert.equal(stepText(2.2296282454039096), '3.2');
+  assert.equal(stepText(0), '1.0');
+});
+
+test('stepPlace names the step and the number of steps', () => {
+  assert.equal(stepPlace(0.7, 2), 'step 1.7 of 2');
 });
 
 test('nearestLevel rounds half to even and clamps', () => {

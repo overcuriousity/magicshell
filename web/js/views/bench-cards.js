@@ -2,7 +2,7 @@
 // `ops` edits one run (A through the model, B through editVariant); `locked` keeps type, key and the
 // set of questions fixed, as B must keep them to be compared with A.
 import { LIMITS } from '../limits.js';
-import { optionClass } from '../ui/colors.js';
+import { levelClass, optionClass } from '../ui/colors.js';
 import { completing } from '../ui/complete.js';
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -61,13 +61,13 @@ const KINDS = {
 };
 
 // One row of a choice or score list: its leading mark, inputs, and move and remove buttons.
-function listRow(kind, ref, item, i, count, ops, fq, slot, suggest) {
+// `spread`: the number of levels the colour slots are spread over (A's count in B's editor).
+function listRow(kind, ref, item, i, count, ops, fq, slot, spread, suggest) {
   const { many, min, remove } = KINDS[kind];
   const f = `${fq}:${kind}:${item.id}`;
   const edit = (patch) => ops.updateItem(many, ref.key, item.id, patch);
-  const lead = kind === 'option'
-    ? h('span', { class: `ms-dot ${optionClass(slot)}`, 'aria-hidden': 'true' })
-    : h('span', { class: 'ms-row__index', 'aria-hidden': 'true' }, String(i));
+  const dot = kind === 'option' ? optionClass(slot) : levelClass(Math.min(slot, spread - 1), spread);
+  const lead = h('span', { class: `ms-dot ${dot}`, 'aria-hidden': 'true' });
   // The row's name as typed, for the description to ask which one went with it.
   let name = item.name;
   const fields = kind === 'option'
@@ -94,7 +94,7 @@ function listRow(kind, ref, item, i, count, ops, fq, slot, suggest) {
   );
 }
 
-function list(kind, q, ref, ops, fq, slots, suggest) {
+function list(kind, q, ref, ops, fq, slots, spread, suggest) {
   const { many, max, add } = KINDS[kind];
   const items = q[many];
   const head = kind === 'option'
@@ -102,7 +102,7 @@ function list(kind, q, ref, ops, fq, slots, suggest) {
     : [h('span', { class: 'ms-row__name' }, 'Levels, lowest first')];
   return h('div', { class: 'ms-rows' },
     h('div', { class: kind === 'option' ? 'ms-rows__head' : 'ms-rows__head ms-rows__head--level', 'aria-hidden': 'true' }, head),
-    items.map((item, i) => listRow(kind, ref, item, i, items.length, ops, fq, slots?.[i] ?? i, suggest)),
+    items.map((item, i) => listRow(kind, ref, item, i, items.length, ops, fq, slots?.[i] ?? i, spread ?? items.length, suggest)),
     h('div', { class: 'ms-rows__foot' },
       h('button', {
         type: 'button',
@@ -117,7 +117,7 @@ function list(kind, q, ref, ops, fq, slots, suggest) {
 
 // fq: the card's focus prefix by position, so focus finds its way back after a rebuild; ids take
 // the editor's prefix as well, so A's and B's cards never share one.
-function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix, suggest }) {
+function card(q, index, count, ops, locked, slots, spread, { idPrefix, fidPrefix, suggest }) {
   // The key is renamed on change, not per keystroke; every handler reads the key the card holds now.
   const ref = { key: q.key };
   const fq = `${fidPrefix}q${index}`;
@@ -163,15 +163,16 @@ function card(q, index, count, ops, locked, slots, { idPrefix, fidPrefix, sugges
       h('label', { for: textId }, 'Question'),
       textInput(q.text, 'Question', `${fq}:text`, (v) => ops.updateText(ref.key, v), { id: textId, complete: { suggest, pool: 'question', limit: LIMITS.questionText } }),
     ),
-    q.type === 'choice' ? list('option', q, ref, ops, fq, slots, suggest) : null,
-    q.type === 'score' ? list('level', q, ref, ops, fq, slots, suggest) : null,
+    q.type === 'choice' ? list('option', q, ref, ops, fq, slots, null, suggest) : null,
+    q.type === 'score' ? list('level', q, ref, ops, fq, slots, spread, suggest) : null,
   );
 }
 
-// slotsFor(q): colour positions for q's rows (B's editor takes them from A), or null for position.
+// slotsFor(q): colour positions for q's rows (B's editor takes them from A), or null for position;
+// spreadFor(q): the number of levels those positions are spread over (A's), or null for q's own.
 // idPrefix and fidPrefix: unique per editor on the page, so A's and B's cards share no id and focus
 // returns to the editor it was in.
 // suggest: the store's suggestion source; without it the fields are plain inputs.
-export function questionCards(run, ops, { locked = false, slotsFor = () => null, idPrefix = 'bench', fidPrefix = '', suggest = null } = {}) {
-  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q), { idPrefix, fidPrefix, suggest }));
+export function questionCards(run, ops, { locked = false, slotsFor = () => null, spreadFor = () => null, idPrefix = 'bench', fidPrefix = '', suggest = null } = {}) {
+  return run.questions.map((q, i) => card(q, i, run.questions.length, ops, locked, slotsFor(q), spreadFor(q), { idPrefix, fidPrefix, suggest }));
 }
