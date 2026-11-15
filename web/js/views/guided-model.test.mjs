@@ -704,3 +704,10 @@ test('stop frees the guide without a result', () => {
   assert.equal(model.state.result, null);
   assert.equal(model.state.error, null);
 });
+
+test('the ninth option is added', () => {
+  const { model } = make();
+  model.setKind('choice');
+  for (let i = 1; i <= 9; i++) model.addOption(`Option ${i}`);
+  assert.equal(model.state.options.length, 9);
+});

@@ -294,7 +294,7 @@ export function servicesFor(config) {
   const takes = p && (p.max === null || (Number.isInteger(p.max) && p.max > 0)) && Number.isInteger(p.edge);
   const requestBytes = Number.isInteger(config.max_request_bytes) ? config.max_request_bytes : DEFAULT_REQUEST_BYTES;
   const pictures = takes ? { max: p.max ?? Infinity, edge: p.edge, budget: Math.floor((requestBytes * 3) / 4) - 64 * 1024 } : null;
-  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures };
+  return { mode, model: config.model, user: config.user, version: config.version, why: accounts ? config.why : null, sso: accounts ? (config.sso ?? null) : null, preheat: config.preheat === true, pictures, maxRequestBytes: requestBytes };
 }
 
 // Every store call that fails because the session ran out calls onAuthLost, and still fails.
@@ -403,7 +403,7 @@ async function boot(shell) {
     services.store = serverStore(fetchFn, onAuthLost);
   };
 
-  services.client = createServerClient(fetchFn);
+  services.client = createServerClient(fetchFn, undefined, { maxBytes: services.maxRequestBytes });
   services.store = mode === 'accounts' ? serverStore(fetchFn, onAuthLost) : browserStoreWithSuggestions(kept, { onNotSaving: warnNotSaving, onTrimmed: warnTrimmed });
   if (mode === 'accounts') {
     Object.assign(services, accountsActions(services, { userChanged, navigate, asked: () => shellApi.asked(), session }));

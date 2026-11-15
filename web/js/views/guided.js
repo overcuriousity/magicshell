@@ -2,7 +2,6 @@
 // with percentages. No sentence about the answer, no types, tokens, model names or latency.
 // Typing edits the model quietly; other changes rebuild the step, and focus finds its way back by
 // data-fid (or to the heading when the step changed).
-import { LIMITS } from '../limits.js';
 import { lostNotice } from '../pictures.js';
 import { HREF } from '../routes.js';
 import { SCALES } from '../setups-builtin.js';
@@ -77,12 +76,11 @@ export function createGuidedView() {
       class: 'oc-input',
       id: 'guide-context',
       rows: '3',
-      maxlength: String(LIMITS.state),
       'data-fid': 'context',
       oninput: typing((e) => model.setContext(e.target.value)),
     }, state.context);
     const text = h('div', { class: 'oc-field' }, h('label', { for: 'guide-context' }, CONTEXT_LABEL),
-      completing(area, { suggest, pool: 'situation', limit: LIMITS.state, row: { label: 'Recent:', items: (s) => s.recent('situation') } }));
+      completing(area, { suggest, pool: 'situation', row: { label: 'Recent:', items: (s) => s.recent('situation') } }));
     if (!pictures) return text;
     return pictures.attach(h('div', { class: 'ms-situation-zone' }, text, pictures.element()));
   }
@@ -130,7 +128,6 @@ export function createGuidedView() {
         class: 'oc-input',
         value: state.question,
         autocomplete: 'off',
-        maxlength: String(LIMITS.questionText),
         'data-fid': 'question',
         'aria-labelledby': 'guide-lead',
         oninput: typing((e) => model.setQuestion(e.target.value)),
@@ -139,13 +136,13 @@ export function createGuidedView() {
           e.preventDefault();
           model.next();
         },
-      }), { suggest, pool: 'question', limit: LIMITS.questionText, row: { label: 'Recent:', items: (s) => s.recent('question') } }),
+      }), { suggest, pool: 'question', row: { label: 'Recent:', items: (s) => s.recent('question') } }),
       contextField(state),
     ];
   }
 
   function optionsPart(state) {
-    const input = h('input', { type: 'text', class: 'oc-input', id: 'guide-option-new', 'data-fid': 'option-new', autocomplete: 'off', maxlength: String(LIMITS.optionName) });
+    const input = h('input', { type: 'text', class: 'oc-input', id: 'guide-option-new', 'data-fid': 'option-new', autocomplete: 'off' });
     const add = () => {
       model.addOption(input.value);
       root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
@@ -156,7 +153,6 @@ export function createGuidedView() {
         add();
       }
     });
-    const full = state.options.length >= LIMITS.maxOptions;
     return [
       h('ul', { class: 'ms-chips ms-guide__chips', 'aria-label': 'Options' },
         state.options.map((o, i) =>
@@ -177,12 +173,11 @@ export function createGuidedView() {
           ),
         ),
       ),
-      full ? null : h('div', { class: 'oc-field' },
+      h('div', { class: 'oc-field' },
         h('label', { for: 'guide-option-new' }, 'New option'),
         h('div', { class: 'oc-row ms-guide__add' }, completing(input, {
           suggest,
           pool: 'option',
-          limit: LIMITS.optionName,
           row: {
             label: 'Often used:',
             items: (s) => s.frequent('option', 5, model.state.options.map((o) => o.name)),
@@ -218,15 +213,15 @@ export function createGuidedView() {
           h('li', { class: 'oc-row' },
             h('span', { class: `ms-dot ${levelClass(i, levels.length)}`, 'aria-hidden': 'true' }),
             completing(
-              h('input', { type: 'text', class: 'oc-input', value: l.text, 'aria-label': `Level ${i + 1}`, 'data-fid': `level:${l.id}`, autocomplete: 'off', maxlength: String(LIMITS.level), oninput: typing((e) => setText(l.id, e.target.value)) }),
-              { suggest, pool: 'level', limit: LIMITS.level }),
+              h('input', { type: 'text', class: 'oc-input', value: l.text, 'aria-label': `Level ${i + 1}`, 'data-fid': `level:${l.id}`, autocomplete: 'off', oninput: typing((e) => setText(l.id, e.target.value)) }),
+              { suggest, pool: 'level' }),
             h('button', {
               type: 'button',
               class: 'oc-btn oc-btn--icon oc-btn--row',
               'aria-label': 'Remove level',
               'data-oc-tip': 'Remove level',
               'data-fid': `level-remove:${l.id}`,
-              disabled: levels.length <= LIMITS.minLevels,
+              disabled: levels.length <= 1,
               onclick: () => model.setLevels(model.state.levels.filter((x) => x.id !== l.id)),
             }, icon('x', 'row')),
           ),
@@ -237,7 +232,6 @@ export function createGuidedView() {
           type: 'button',
           class: 'oc-btn',
           'data-fid': 'level-add',
-          disabled: levels.length >= LIMITS.maxLevels,
           onclick: () => model.setLevels([...model.state.levels, { id: uid(), text: '' }]),
         }, icon('plus'), 'Add level'),
       ),

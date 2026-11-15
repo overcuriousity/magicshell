@@ -3,7 +3,6 @@
 // the result. What was entered is kept in sessionStorage so it survives sign-in and reload;
 // the result is not.
 import { hasPictures } from '../client-server.js';
-import { LIMITS } from '../limits.js';
 import { pictureMemory } from '../pictures.js';
 import { SCALES } from '../setups-builtin.js';
 import { isObject } from '../util.js';
@@ -158,7 +157,7 @@ export function createGuidedModel({
     setQuestion: (text) => edit(() => { state.question = text; }),
     addOption(name) {
       const trimmed = String(name ?? '').trim();
-      if (!trimmed || state.options.length >= LIMITS.maxOptions) return;
+      if (!trimmed) return;
       edit(() => { state.options.push({ id: uuid(), name: trimmed, description: '' }); });
     },
     removeOption: (id) => edit(() => { state.options = state.options.filter((o) => o.id !== id); }),

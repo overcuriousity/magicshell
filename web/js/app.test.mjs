@@ -307,3 +307,10 @@ test('servicesFor passes the picture limits through, or null when the server tak
   assert.equal(servicesFor({ ...base, pictures: { max: 0, edge: 768 } }).pictures, null);
   assert.equal(servicesFor({ ...base, pictures: 'yes' }).pictures, null);
 });
+
+test('services carry the request size, 16 MB when the server does not name it', async () => {
+  const { servicesFor } = await import('./app.js');
+  const base = { mode: 'open', model: 'm', user: null, version: null, why: null };
+  assert.equal(servicesFor({ ...base, max_request_bytes: 1048576 }).maxRequestBytes, 1048576);
+  assert.equal(servicesFor(base).maxRequestBytes, 16 * 1024 * 1024);
+});
