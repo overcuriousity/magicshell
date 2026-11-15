@@ -68,7 +68,7 @@ export function withSuggestions(store, {
 
   const load = () => {
     if (loading) return loading;
-    if (failedAt !== null && now() - failedAt < RETRY_MS) return false;
+    if (failedAt !== null && now() - failedAt < RETRY_MS) return Promise.resolve(false);
     failedAt = null;
     loading = read().then(() => true).catch(() => {
       // Offer nothing, and let a load after RETRY_MS try again.

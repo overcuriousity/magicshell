@@ -274,6 +274,22 @@ test('a failed read offers nothing and is tried again after a while, not by ever
   assert.equal(store.calls.listHistory, 2);
 });
 
+test('a cooldown load stays a thenable resolving false until the same retry time', async () => {
+  const store = memoryStore({ history: [fire] });
+  store.failRead = 1;
+  let t = 0;
+  const wrapped = withSuggestions(store, { now: () => t });
+  assert.equal(await wrapped.suggest.load(), false);
+  t = 29_999;
+  const cooling = wrapped.suggest.load();
+  assert.equal(typeof cooling.then, 'function');
+  assert.equal(await cooling, false);
+  assert.equal(store.calls.listHistory, 1);
+  t = 30_000;
+  assert.equal(await wrapped.suggest.load(), true);
+  assert.equal(store.calls.listHistory, 2);
+});
+
 test('refresh reads again and keeps the old copy until then, or when it fails', async () => {
   const other = entry('b', '2026-11-12T11:00:00Z', 'Projector hums');
   const store = memoryStore({ history: [fire, other] });
