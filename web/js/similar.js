@@ -162,7 +162,7 @@ export function rankScales(sources, vectors, query, { min = 0.75, current = [], 
   if (!query) return [];
   const found = candidates(sources, vectors, query, min, (source) => source.scales, (scale) => scaleKey(scale.levels));
   return [...found.values()]
-    .filter((candidate) => !list(current).some((levels) => sameLevels(levels, candidate.levels)))
+    .filter((candidate) => !sameLevels(current, candidate.levels))
     .sort(better)
     .slice(0, limit)
     .map((candidate) => candidate.levels);

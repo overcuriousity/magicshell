@@ -134,7 +134,13 @@ test('scale identity is ordered and case-insensitive, and the current scale is o
     entry('2026-11-02T00:00:00Z', score('Two?', 'Bad', 'Good')),
   ] });
   const vectors = new Map(sources.map((s) => [s.key, vector(0.9)]));
-  assert.deepEqual(rankScales(sources, vectors, query, { current: [['LOW', 'high']] }), [['Bad', 'Good']]);
+  assert.deepEqual(rankScales(sources, vectors, query, { current: ['LOW', 'high'] }), [['Bad', 'Good']]);
+});
+
+test('rankScales accepts the current scale as one levels string array', () => {
+  const sources = questionSources({ history: [entry('2026-11-01T00:00:00Z', score('One?', 'Low', 'High'))] });
+  const vectors = new Map(sources.map((s) => [s.key, vector(0.9)]));
+  assert.deepEqual(rankScales(sources, vectors, query, { current: ['LOW', 'high'] }), []);
 });
 
 test('option exclusions ignore case and defaults return the top five in deterministic order', () => {
