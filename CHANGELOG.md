@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.11] - 2026-11-15
+
 ### Changed
 
 - The bench shows a score as the nearest level and its exact place counted from 1 and out of the number of levels (`255 · step 1.7 of 2`). It showed the number counted from 0 (`0.7 · 255`), which disagreed with level names such as `1` to `5` and read as a value on the scale. History names the nearest level only, as the guided view does.
