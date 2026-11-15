@@ -488,3 +488,41 @@ async fn an_entry_keeps_more_than_four_previews() {
     let e = entry_with_pictures("e1", six);
     assert_eq!(put(&app, "/api/history/e1", &e, Some(&ada)).await.status(), 204);
 }
+
+/// Ada, signed in, on a server with `max_request_mb = 1`: history keeps 4 MB, setups 2 MB.
+async fn ada_with_one_mb() -> (TestApp, String) {
+    let app = spawn(&format!("{ACCOUNTS}max_request_mb = 1\n")).await;
+    add_user(&app, "ada", PASSWORD).await;
+    let ada = sign_in(&app, "ada", PASSWORD).await;
+    (app, ada)
+}
+
+#[tokio::test]
+async fn history_keeps_four_times_the_request_size_and_trims_the_oldest() {
+    let (app, ada) = ada_with_one_mb().await;
+    for i in 0..6 {
+        let mut e = entry(&format!("e{i}"), &format!("2026-11-13T10:00:0{i}Z"));
+        e["run"]["state"] = json!("s".repeat(900 * 1024));
+        assert_eq!(put(&app, &format!("/api/history/e{i}"), &e, Some(&ada)).await.status(), 204, "e{i}");
+    }
+    let got = list(&app, "/api/history", &ada).await;
+    let ids: Vec<&str> = got.iter().map(|e| e["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["e5", "e4", "e3", "e2"]);
+}
+
+#[tokio::test]
+async fn setups_keep_twice_the_request_size() {
+    let (app, ada) = ada_with_one_mb().await;
+    let big = |id: &str| {
+        let mut s = setup(id, id);
+        s["sampleState"] = json!("x".repeat(900 * 1024));
+        s
+    };
+    assert_eq!(put(&app, "/api/setups/a", &big("a"), Some(&ada)).await.status(), 204);
+    assert_eq!(put(&app, "/api/setups/b", &big("b"), Some(&ada)).await.status(), 204);
+    let res = put(&app, "/api/setups/c", &big("c"), Some(&ada)).await;
+    assert_eq!(res.status(), 422);
+    assert_eq!(res.text().await.unwrap(), "Setups are full. Delete a setup before adding another.");
+    // Replacing one in place is measured without its old version.
+    assert_eq!(put(&app, "/api/setups/b", &big("b"), Some(&ada)).await.status(), 204);
+}

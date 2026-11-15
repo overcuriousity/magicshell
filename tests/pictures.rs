@@ -247,3 +247,12 @@ fn picture_keys_outside_their_range_are_refused() {
         );
     }
 }
+
+#[test]
+fn the_example_config_sets_no_picture_limit() {
+    let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/config.example.toml")).unwrap();
+    let cfg: OcConfig = Figment::new().merge(Toml::string(&text)).extract().unwrap();
+    let app = AppConfig::from_config(&cfg).unwrap();
+    assert_eq!(app.max_pictures, None);
+    assert_eq!(app.max_request_mb, 16);
+}

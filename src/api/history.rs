@@ -20,6 +20,9 @@ use crate::kit::OcError;
 use crate::systemone::Run;
 
 const MAX_ENTRIES: i64 = 500;
+/// History keeps this many times `[app] max_request_mb` per user, newest first, so listing it stays
+/// bounded although one entry may be as large as a request.
+const KEPT_REQUESTS: i64 = 4;
 /// A preview is a small JPEG data URL; an entry has at most one per picture of its run.
 const MAX_PREVIEW_CHARS: usize = 4000;
 const PREVIEW_PREFIX: &str = "data:image/jpeg;base64,";
@@ -171,6 +174,17 @@ pub async fn put(
          (SELECT id FROM history WHERE user_id = ?1 ORDER BY at DESC, id DESC LIMIT ?2)",
         user.id,
         MAX_ENTRIES
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(OcError::from)?;
+    let budget = KEPT_REQUESTS * i64::try_from(st.max_body_bytes).map_err(OcError::internal)?;
+    sqlx::query!(
+        "DELETE FROM history WHERE user_id = ?1 AND id IN (SELECT id FROM (SELECT id, \
+         SUM(length(CAST(body AS BLOB))) OVER (ORDER BY at DESC, id DESC) AS total \
+         FROM history WHERE user_id = ?1) WHERE total > ?2)",
+        user.id,
+        budget
     )
     .execute(&mut *tx)
     .await

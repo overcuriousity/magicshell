@@ -188,10 +188,16 @@ async fn a_400_with_an_empty_body_keeps_the_general_sentence() {
 }
 
 #[tokio::test]
-async fn a_long_refusal_is_cut_to_300_characters() {
+async fn a_long_refusal_is_cut_so_the_whole_sentence_fits_300_characters() {
     let err = error_of(FakeReply::status(400, "ä".repeat(1000))).await;
     let text = err.to_string();
-    let message = text.strip_prefix("The model endpoint refused this run: ").unwrap();
-    assert_eq!(message.chars().count(), 302, "300 characters, the ellipsis and the full stop");
-    assert!(message.ends_with("ä…."));
+    assert_eq!(text.chars().count(), 300);
+    assert!(text.starts_with("The model endpoint refused this run: ää"));
+    assert!(text.ends_with("ä…."));
+}
+
+#[tokio::test]
+async fn a_refusal_over_several_lines_becomes_one_line() {
+    let err = error_of(FakeReply::status(400, "questions.q1:\n  \"criteria\" is wrong\r\n\ttry again")).await;
+    assert_eq!(err.to_string(), r#"The model endpoint refused this run: questions.q1: "criteria" is wrong try again."#);
 }

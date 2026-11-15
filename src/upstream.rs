@@ -63,11 +63,13 @@ fn status_error(status: StatusCode, pictures: bool) -> AppError {
     }
 }
 
-/// The longest refusal shown, in characters.
-const MAX_REFUSAL: usize = 300;
+const REFUSED: &str = "The model endpoint refused this run: ";
+/// The longest sentence the page shows as the server's own (`serverSentence` in `web/js/run-error.js`).
+const MAX_SENTENCE: usize = 300;
 
-/// What the endpoint says is wrong with a run it refused: `{"error":{"message":…}}`,
-/// `{"error":"…"}`, or a body that is not JSON as text. Trimmed and cut to `MAX_REFUSAL`.
+/// The sentence for a run the endpoint refused, from what it says is wrong: `{"error":{"message":…}}`,
+/// `{"error":"…"}`, or a body that is not JSON as text. One line, cut so the whole sentence fits
+/// `MAX_SENTENCE`; `None` when the endpoint says nothing.
 fn refusal(bytes: &[u8]) -> Option<String> {
     let text = match serde_json::from_slice::<Value>(bytes) {
         Ok(json) => match &json["error"] {
@@ -76,18 +78,19 @@ fn refusal(bytes: &[u8]) -> Option<String> {
         },
         Err(_) => String::from_utf8_lossy(bytes).into_owned(),
     };
-    let text = text.trim();
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.is_empty() {
         return None;
     }
-    let mut message: String = text.chars().take(MAX_REFUSAL).collect();
-    if text.chars().count() > MAX_REFUSAL {
-        message.push('…');
-    }
-    if !message.ends_with(['.', '!', '?']) {
+    let room = MAX_SENTENCE - REFUSED.chars().count();
+    let ends = text.ends_with(['.', '!', '?']);
+    let mut message = text;
+    if message.chars().count() + usize::from(!ends) > room {
+        message = message.chars().take(room - 2).collect::<String>() + "….";
+    } else if !ends {
         message.push('.');
     }
-    Some(message)
+    Some(format!("{REFUSED}{message}"))
 }
 
 async fn read_capped(mut response: reqwest::Response, max: usize, pictures: bool) -> Result<Vec<u8>, AppError> {
@@ -136,9 +139,9 @@ impl Upstream {
         let bytes = read_capped(response, self.max_reply_bytes, pictures).await?;
         let upstream_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         if matches!(status.as_u16(), 400 | 422)
-            && let Some(message) = refusal(&bytes)
+            && let Some(sentence) = refusal(&bytes)
         {
-            return Err(AppError::Upstream(format!("The model endpoint refused this run: {message}")));
+            return Err(AppError::Upstream(sentence));
         }
         if !status.is_success() {
             return Err(status_error(status, pictures));

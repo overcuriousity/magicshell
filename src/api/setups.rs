@@ -17,6 +17,8 @@ use crate::kit::OcError;
 use crate::systemone::{Question, Run};
 
 const MAX_SETUPS: i64 = 100;
+/// Setups keep this many times `[app] max_request_mb` per user, so listing them stays bounded.
+const KEPT_REQUESTS: i64 = 2;
 const MAX_NAME: usize = 60;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,6 +86,18 @@ pub async fn put(
         if count >= MAX_SETUPS {
             return Err(AppError::Invalid("Delete a setup before adding another.".into()));
         }
+    }
+    let others = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(length(CAST(body AS BLOB))), 0) AS "n!: i64" FROM setups WHERE user_id = ? AND id != ?"#,
+        user.id,
+        id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(OcError::from)?;
+    let budget = KEPT_REQUESTS * i64::try_from(st.max_body_bytes).map_err(OcError::internal)?;
+    if others + i64::try_from(text.len()).map_err(OcError::internal)? > budget {
+        return Err(AppError::Invalid("Setups are full. Delete a setup before adding another.".into()));
     }
     sqlx::query!(
         "INSERT INTO setups (id, user_id, name, body) VALUES (?, ?, ?, ?) \

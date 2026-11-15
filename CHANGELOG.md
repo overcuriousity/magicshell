@@ -11,7 +11,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - Option colours repeat after the eighth option; every bar keeps its name and number. Neutral names in the variant run go on past Z as AA, AB, ….
 - `[app] max_pictures` sets no limit when it is not set (was 4); 0 still turns pictures off.
 - Pictures are encoded once at quality 0.85, without stepping the quality down to fit 300 KB.
-- History keeps entries and "Why?" results of any size the request limit lets through (was 64 KB and 40 KB).
+- History keeps entries and "Why?" results of any size the request limit lets through (was 64 KB and 40 KB). So that listing stays bounded, each account keeps up to four times `max_request_mb` of history, newest first (older entries go, as past the 500th), and up to twice `max_request_mb` of setups ("Setups are full. Delete a setup before adding another.").
 
 ### Added
 
