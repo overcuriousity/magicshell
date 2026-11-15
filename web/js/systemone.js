@@ -18,6 +18,10 @@ export function dataUrlBytes(url) {
 }
 
 
+const KEY = new RegExp(`^[a-z0-9_]{1,${LIMITS.key}}$`);
+export const keyOk = (k) => KEY.test(k);
+const badKey = (k) => `Key "${k}": use 1 to ${LIMITS.key} lower-case letters, digits or _.`;
+
 // Returns the first problem as a sentence, or null. The first sentence in the list wins:
 // run-level checks first, then each question in order with its own checks in list order.
 export function validateRun(run, { allowEmptyText = false } = {}) {
@@ -37,8 +41,8 @@ export function validateRun(run, { allowEmptyText = false } = {}) {
   if (together > LIMITS.picturesBytes) return 'These pictures are too large together. Remove one first.';
   const keys = questions.map((q) => q.key);
   if (new Set(keys).size !== keys.length) return 'Name each question differently.';
-  const keyOk = new RegExp(`^[a-z0-9_]{1,${LIMITS.key}}$`);
-  if (!keys.every((k) => keyOk.test(k))) return 'Name each question with 1 to 30 lower-case letters, digits or _.';
+  const bad = keys.find((k) => !keyOk(k));
+  if (bad !== undefined) return badKey(bad);
   for (const q of questions) {
     const problem = validateQuestion(q, allowEmptyText);
     if (problem) return problem;

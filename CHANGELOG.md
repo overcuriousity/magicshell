@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [2026.11.12] - 2026-11-15
+
+### Fixed
+
+- A key the app does not accept names itself in the error (`Key "q3-h": use 1 to 30 lower-case letters, digits or _.`), and its field shows red while you type. The error said "Name each question with …", which read as being about the question text, and did not say which key was wrong.
+
 ## [2026.11.11] - 2026-11-15
 
 ### Changed

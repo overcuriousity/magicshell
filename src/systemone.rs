@@ -176,8 +176,8 @@ impl Run {
             let n = len(k);
             (1..=MAX_KEY).contains(&n) && k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
         };
-        if !self.questions.iter().all(|q| key_ok(&q.key)) {
-            return invalid("Name each question with 1 to 30 lower-case letters, digits or _.");
+        if let Some(q) = self.questions.iter().find(|q| !key_ok(&q.key)) {
+            return invalid(format!("Key \"{}\": use 1 to {MAX_KEY} lower-case letters, digits or _.", q.key));
         }
         self.questions.iter().try_for_each(|q| q.validate(allow_empty_text))
     }
