@@ -12,6 +12,7 @@ import { icon } from '../ui/icons.js';
 import { picker } from '../ui/menu.js';
 import { inlineError } from '../ui/notice.js';
 import { busyNote, createPictureField, thumbs } from '../ui/picture-field.js';
+import { picksRow } from '../ui/picks.js';
 import { answerResult, guidedVerdict } from '../ui/results.js';
 import { createGuidedModel, takeGuidedRun } from './guided-model.js';
 import { createWhyPanel, whyButton } from './why-panel.js';
@@ -34,6 +35,7 @@ export function createGuidedView() {
   let root = null;
   let ctx = null;
   let suggest = null;
+  let similar = null;
   let off = null;
   let quiet = false;
   let spinner = false;
@@ -136,17 +138,20 @@ export function createGuidedView() {
           e.preventDefault();
           model.next();
         },
-      }), { suggest, pool: 'question', row: { label: 'Recent:', items: (s) => s.recent('question') } }),
+      }), { suggest, pool: 'question' }),
       contextField(state),
     ];
   }
 
   function optionsPart(state) {
     const input = h('input', { type: 'text', class: 'oc-input', id: 'guide-option-new', 'data-fid': 'option-new', autocomplete: 'off' });
-    const add = () => {
-      model.addOption(input.value);
+    const current = state.options.map((option) => option.name);
+    const similarNames = similar?.options(state.question, current) ?? [];
+    const pick = (text) => {
+      model.addOption(text);
       root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
     };
+    const add = () => pick(input.value);
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
@@ -178,13 +183,15 @@ export function createGuidedView() {
         h('div', { class: 'oc-row ms-guide__add' }, completing(input, {
           suggest,
           pool: 'option',
+          similarRow: {
+            label: 'From similar questions:',
+            items: () => similarNames,
+            onPick: pick,
+          },
           row: {
             label: 'Often used:',
-            items: (s) => s.frequent('option', 5, model.state.options.map((o) => o.name)),
-            onPick: (t) => {
-              model.addOption(t);
-              root.querySelector('[data-fid="option-new"]')?.focus({ preventScroll: true });
-            },
+            items: (s) => s.frequent('option', 5, [...current, ...similarNames]),
+            onPick: pick,
           },
         }), h('button', { type: 'button', class: 'oc-btn', 'data-fid': 'option-add', onclick: add }, icon('plus'), 'Add'))),
     ];
@@ -196,7 +203,16 @@ export function createGuidedView() {
       h('option', { value: 'own', selected: state.scaleId === 'own' }, 'My own'));
     const control = picker(select);
     (control.querySelector?.('button') ?? control).setAttribute('data-fid', 'scale');
-    const parts = [h('div', { class: 'ms-guide__kind' }, control)];
+    const similarScales = similar?.scales(state.question, model.currentScale()) ?? [];
+    const row = picksRow({
+      label: 'From similar questions:',
+      items: () => similarScales.map((levels) => ({ text: levels.join(' · '), value: levels })),
+      onPick: (levels) => model.useScale(levels),
+      fid: 'similar-scale',
+      limit: 3,
+    });
+    row.el.classList.add('ms-guide__similar-row');
+    const parts = [h('div', { class: 'ms-guide__kind' }, control), row.el];
     if (state.scaleId !== 'own') {
       const texts = SCALES.find((s) => s.id === state.scaleId).levels;
       parts.push(h('ul', { class: 'ms-chips ms-guide__chips', 'aria-label': 'Levels' },
@@ -338,6 +354,14 @@ export function createGuidedView() {
 
   function render(state, { rebuild = false } = {}) {
     const stepChanged = state.step !== lastStep;
+    if (stepChanged && state.step === 3) {
+      const question = state.question;
+      similar?.load(question, () => {
+        if (model?.state.step === 3 && model.state.question === question) {
+          render(model.state, { rebuild: true });
+        }
+      });
+    }
     const ended = trackBusy(state);
     const fid = root.contains(document.activeElement) ? document.activeElement.getAttribute('data-fid') : null;
     // A picture arriving rebuilds the step under a field being typed in: the caret goes back too.
@@ -385,6 +409,7 @@ export function createGuidedView() {
       root = el;
       ctx = context;
       suggest = ctx.store?.suggest;
+      similar = ctx.store?.similar;
       suggest?.load();
       spinner = false;
       lastBusy = false;
