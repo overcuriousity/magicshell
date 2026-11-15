@@ -17,7 +17,10 @@ use super::auth::SignedIn;
 use super::storage::{check_id, pool_of, read_body};
 use crate::error::AppError;
 use crate::kit::OcError;
-use crate::systemone::{MAX_PICTURES, Run};
+use crate::systemone::Run;
+
+// Until pictures lose their own count (Task 4).
+const MAX_PICTURES: usize = 4;
 
 const MAX_ENTRIES: i64 = 500;
 const MAX_STORED: usize = 64 * 1024;

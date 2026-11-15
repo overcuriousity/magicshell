@@ -98,13 +98,13 @@ async fn saving_a_setup_again_replaces_it() {
 }
 
 #[tokio::test]
-async fn a_setup_with_one_option_is_refused() {
+async fn a_setup_with_an_unnamed_option_is_refused() {
     let (app, ada, _bob) = two_users().await;
     let mut bad = setup("s1", "Bad");
-    bad["questions"][0]["options"] = json!([{"id": "o1", "name": "ops"}]);
+    bad["questions"][0]["options"] = json!([{"id": "o1", "name": "ops"}, {"id": "o2", "name": "  "}]);
     let res = put(&app, "/api/setups/s1", &bad, Some(&ada)).await;
     assert_eq!(res.status(), 422);
-    assert_eq!(res.text().await.unwrap(), "Add at least 2 options.");
+    assert_eq!(res.text().await.unwrap(), "Name every option.");
     assert!(list(&app, "/api/setups", &ada).await.is_empty());
 }
 

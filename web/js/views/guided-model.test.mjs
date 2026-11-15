@@ -99,7 +99,7 @@ test('a yes-or-no question becomes a noul run with the context as the situation'
   });
 });
 
-test('a choice needs two options before asking', async () => {
+test('a choice with one option can be asked', async () => {
   const { model, client } = make();
   model.setKind('choice');
   model.next();
@@ -108,16 +108,8 @@ test('a choice needs two options before asking', async () => {
   model.addOption('Pizza');
   model.addOption('   ');
   await model.ask();
-  assert.equal(model.state.error, 'Add at least 2 options.');
-  assert.equal(client.calls.length, 0);
-  assert.equal(model.state.step, 3);
-  model.addOption('Sushi');
-  assert.equal(model.state.error, null);
-  await model.ask();
   assert.equal(client.calls.length, 1);
-  assert.equal(model.state.step, 'result');
-  assert.deepEqual(client.calls[0].questions[0].options.map((o) => o.name), ['Pizza', 'Sushi']);
-  assert.equal(model.state.result.answer.choice, 'Sushi');
+  assert.deepEqual(client.calls[0].questions[0].options.map((o) => o.name), ['Pizza']);
 });
 
 test('options are removed by id', () => {

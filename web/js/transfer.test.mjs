@@ -14,7 +14,8 @@ test('validateSetup checks name, sample state, then the questions', () => {
   assert.equal(validateSetup({ ...good, name: 'x'.repeat(61) }), 'Keep the setup name to 60 characters or fewer.');
   assert.equal(validateSetup({ ...good, sampleState: 'x'.repeat(8001) }), 'Shorten the situation to 8,000 characters or fewer.');
   assert.equal(validateSetup({ ...good, questions: [] }), 'Add at least one question.');
-  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: 'x'.repeat(501) }] }), 'Keep each question to 500 characters or fewer.');
+  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: '  ' }] }), null);
+  assert.equal(validateSetup({ ...good, questions: [{ key: 'q1', type: 'noul', text: 'x'.repeat(5000) }] }), null);
   assert.equal(validateSetup(good), null);
 });
 

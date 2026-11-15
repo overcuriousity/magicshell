@@ -116,10 +116,10 @@ test('a key the run does not accept is marked invalid while typing', () => {
   const [card] = questionCards(run(), ops);
   const key = byFid(card, 'q0:key');
   assert.equal(key.getAttribute('aria-invalid'), null);
-  key.value = 'q3-h';
+  key.value = '   ';
   key.dispatch('input');
   assert.equal(key.getAttribute('aria-invalid'), 'true');
-  key.value = 'q3_h';
+  key.value = 'Q3 – h/ü';
   key.dispatch('input');
   assert.equal(key.getAttribute('aria-invalid'), null);
 });

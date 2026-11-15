@@ -3,7 +3,8 @@ use url::Url;
 
 use crate::kit::OcError;
 use crate::kit::config::{OcConfig, OidcConfig, Secret};
-use crate::systemone::MAX_PICTURES;
+// Until pictures lose their own count (Task 4).
+const MAX_PICTURES: usize = 4;
 
 fn runs_per_minute() -> u32 {
     60
