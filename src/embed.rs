@@ -66,9 +66,22 @@ fn parse_reply(bytes: &[u8], expected: usize) -> Result<Vec<Vec<f64>>, AppError>
     if data.len() != expected {
         return Err(bad_reply());
     }
-    let mut vectors = Vec::with_capacity(data.len());
+    let indexed = data.first().is_some_and(|item| item.get("index").is_some());
+    if data.iter().any(|item| item.get("index").is_some() != indexed) {
+        return Err(bad_reply());
+    }
+    let mut vectors = vec![None; expected];
     let mut dimensions = None;
-    for item in data {
+    for (offset, item) in data.iter().enumerate() {
+        let position = if indexed {
+            item["index"]
+                .as_u64()
+                .and_then(|index| usize::try_from(index).ok())
+                .filter(|index| *index < expected)
+                .ok_or_else(bad_reply)?
+        } else {
+            offset
+        };
         let entries = item["embedding"].as_array().ok_or_else(bad_reply)?;
         if entries.is_empty() || dimensions.is_some_and(|size| size != entries.len()) {
             return Err(bad_reply());
@@ -79,9 +92,13 @@ fn parse_reply(bytes: &[u8], expected: usize) -> Result<Vec<Vec<f64>>, AppError>
             let number = entry.as_f64().filter(|number| number.is_finite()).ok_or_else(bad_reply)?;
             vector.push(number);
         }
-        vectors.push(vector);
+        let slot = &mut vectors[position];
+        if slot.is_some() {
+            return Err(bad_reply());
+        }
+        *slot = Some(vector);
     }
-    Ok(vectors)
+    vectors.into_iter().collect::<Option<Vec<_>>>().ok_or_else(bad_reply)
 }
 
 impl Embedding {

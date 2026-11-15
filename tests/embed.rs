@@ -66,6 +66,40 @@ async fn vectors_keep_array_order_and_f64_precision() {
 }
 
 #[tokio::test]
+async fn explicitly_indexed_vectors_are_restored_to_input_order() {
+    let fake = fake_upstream(vec![FakeReply::ok(
+        r#"{"data":[{"embedding":[3.0],"index":2},{"embedding":[1.0],"index":0},{"embedding":[2.0],"index":1}]}"#,
+    )])
+    .await;
+    let got = embedding(fake.url, None).embed(&["first".into(), "second".into(), "third".into()]).await.unwrap();
+    assert_eq!(got, vec![vec![1.0], vec![2.0], vec![3.0]]);
+}
+
+#[tokio::test]
+async fn mixed_index_presence_is_rejected() {
+    for body in [
+        r#"{"data":[{"embedding":[1.0],"index":0},{"embedding":[2.0]}]}"#,
+        r#"{"data":[{"embedding":[1.0]},{"embedding":[2.0],"index":1}]}"#,
+    ] {
+        assert_bad_reply(body).await;
+    }
+}
+
+#[tokio::test]
+async fn invalid_duplicate_and_out_of_range_indexes_are_rejected() {
+    for body in [
+        r#"{"data":[{"embedding":[1.0],"index":0},{"embedding":[2.0],"index":0}]}"#,
+        r#"{"data":[{"embedding":[1.0],"index":0},{"embedding":[2.0],"index":2}]}"#,
+        r#"{"data":[{"embedding":[1.0],"index":-1},{"embedding":[2.0],"index":1}]}"#,
+        r#"{"data":[{"embedding":[1.0],"index":0.5},{"embedding":[2.0],"index":1}]}"#,
+        r#"{"data":[{"embedding":[1.0],"index":"0"},{"embedding":[2.0],"index":1}]}"#,
+        r#"{"data":[{"embedding":[1.0],"index":null},{"embedding":[2.0],"index":1}]}"#,
+    ] {
+        assert_bad_reply(body).await;
+    }
+}
+
+#[tokio::test]
 async fn refused_texts_are_invalid_for_400_422_and_500() {
     for status in [400, 422, 500] {
         let err = error_of(FakeReply::status(status, "private upstream detail")).await;

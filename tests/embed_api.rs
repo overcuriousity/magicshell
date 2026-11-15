@@ -49,6 +49,19 @@ async fn an_open_request_returns_one_vector_per_input_in_order() {
 }
 
 #[tokio::test]
+async fn reversed_upstream_indexes_are_restored_to_input_order() {
+    let (app, _fake) = open_app(
+        vec![FakeReply::ok(r#"{"data":[{"embedding":[2.0,0.0],"index":1},{"embedding":[1.0,0.0],"index":0}]}"#)],
+        "",
+    )
+    .await;
+    let res = post_json(&app, "/api/embed", &json!({"texts":["first","second"]}), None).await;
+    assert_eq!(res.status(), 200);
+    let body: Value = res.json().await.unwrap();
+    assert_eq!(body, json!({"vectors":[[1.0,0.0],[2.0,0.0]]}));
+}
+
+#[tokio::test]
 async fn a_signed_in_request_returns_vectors() {
     let fake = fake_upstream(vec![FakeReply::ok(r#"{"data":[{"embedding":[0.5,1.0]}]}"#)]).await;
     let toml = format!("{}embedding_model = \"e\"\n", support::ACCOUNTS);
